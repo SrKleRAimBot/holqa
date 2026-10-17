@@ -31,7 +31,7 @@ describe("Semaphore", () => {
     const controller = new AbortController();
     const waiting = semaphore.acquire(controller.signal);
     controller.abort(new Error("stop"));
-    expect(waiting).rejects.toThrow("stop");
+    await expect(waiting).rejects.toThrow("stop");
     expect(semaphore.waiting).toBe(0);
     release();
     expect(semaphore.held).toBe(0);
