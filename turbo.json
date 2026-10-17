@@ -1,0 +1,74 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "stream",
+  "globalDependencies": [
+    "tsconfig.base.json",
+    "tooling/tsconfig.package.json",
+    ".bun-version"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!tests/**", "!README.md"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/eslint.config.mjs"],
+      "outputs": []
+    },
+    "lint:fix": {
+      "cache": false
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test:watch": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "clean": {
+      "cache": false
+    },
+    "//#typecheck:repo": {
+      "inputs": ["scripts/**", "eslint.config.mjs", "tsconfig.json"],
+      "outputs": []
+    },
+    "//#lint:repo": {
+      "inputs": [
+        "*",
+        "scripts/**",
+        "tooling/**",
+        "docs/**",
+        "skills/**",
+        ".agents/**",
+        ".claude/**",
+        ".changeset/**",
+        ".github/**",
+        "examples/*/*.{ts,mts,js,mjs,json}",
+        "examples/*/src/**",
+        "!**/node_modules/**"
+      ],
+      "outputs": []
+    },
+    "//#agents:check": {
+      "inputs": [".agents/**", ".claude/**", "AGENTS.md", "CLAUDE.md", "scripts/agents-sync.ts"],
+      "outputs": []
+    },
+    "//#boundaries:check": {
+      "dependsOn": [],
+      "inputs": ["packages/**/package.json", "packages/**/src/**", "examples/*/package.json", "scripts/check-boundaries.ts"],
+      "outputs": []
+    }
+  }
+}

@@ -1,0 +1,36 @@
+name: Bug report
+description: Report incorrect behavior in an implemented part of Holqa or its tooling.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Holqa is in early development. Please check [docs/roadmap.md](https://github.com/SrKleRAimBot/holqa/blob/main/docs/roadmap.md) first: many documented capabilities are planned, not implemented.
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Minimal commands or code that reproduce the problem.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Relevant output
+      description: Error messages or diagnostics. `--json` output is especially helpful. Remove any secrets.
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Output of `node --version`, `pnpm --version`, `bun --version`, and your OS.
+    validations:
+      required: true

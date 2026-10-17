@@ -1,0 +1,17 @@
+name: Documentation issue
+description: Report inaccurate, unclear, or missing documentation.
+labels: [documentation]
+body:
+  - type: input
+    id: location
+    attributes:
+      label: Page or file
+      description: Path or link to the affected documentation.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is wrong or missing?
+    validations:
+      required: true

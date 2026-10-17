@@ -1,0 +1,106 @@
+---
+name: holqa-architecture
+description: Orientation to Holqa's architecture for contributors - the application resource graph, the separation of resource definitions, handlers, and infrastructure bindings, the package map and allowed dependency directions, compiler versus runtime responsibilities, runtime drivers versus provisioning providers and capability validation, and the Implemented/Accepted design/Proposed/Planned status model. Use before any architectural change, when adding or moving a package or module, when deciding where new code belongs, or when unsure whether a capability already exists.
+---
+
+# Holqa architecture
+
+## Purpose
+
+Holqa is an open-source, TypeScript-native, infrastructure-agnostic application infrastructure framework. It is at the **bootstrap stage**: almost all of the architecture is design, not code. This skill helps you place work correctly and avoid describing or building against things that do not exist.
+
+## When to use
+
+- Before changing package responsibilities, dependency directions, or public contracts.
+- When deciding which package a new module belongs in.
+- When a task mentions resources, handlers, providers, the compiler, the runtime, or the manifest.
+- When unsure whether something is implemented.
+
+## Step 0: read the docs first
+
+Before any architectural change, read in this order and cite what you relied on:
+
+1. [docs/architecture/status-model.md](../../../docs/architecture/status-model.md): what is Implemented today.
+2. [docs/architecture/overview.md](../../../docs/architecture/overview.md) and [package-boundaries.md](../../../docs/architecture/package-boundaries.md).
+3. The concept doc for the area ([resource-graph](../../../docs/concepts/resource-graph.md), [infrastructure-providers](../../../docs/concepts/infrastructure-providers.md), [triggers-and-execution](../../../docs/concepts/triggers-and-execution.md), [type-safety-and-schemas](../../../docs/concepts/type-safety-and-schemas.md), [security](../../../docs/concepts/security.md)).
+4. Relevant ADRs in [docs/architecture/decisions/](../../../docs/architecture/decisions/README.md).
+
+If your change contradicts an accepted ADR, stop and propose a new ADR instead of silently diverging.
+
+## Core model (Accepted design, not implemented)
+
+An application declares a **resource graph**: logical resources (HTTP APIs, RPC procedures, queues, buckets, schedules, static sites, secrets, variables, external connections), their contracts, and the handlers that interact with them. A conventional `infra.ts` is the registry (illustrative; proposed API).
+
+Three concerns stay separate:
+
+| Concern | Answers | Example (illustrative) |
+| --- | --- | --- |
+| Resource definitions | What exists and what guarantees it needs | `queue({ id: "order-processing", message: schema, delivery: { maxAttempts: 5 } })` |
+| Operations and handlers | How application code uses resources and reacts to events | `resources.orders.consume({ id: "orders.process", handler })` |
+| Infrastructure bindings | How a provider or local runtime fulfills the requirements | a local queue emulator or a message broker binding |
+
+Invariants to preserve in every design:
+
+- Resources have explicit, stable IDs (`ResourceId`), independent of TypeScript property names.
+- Declarations are declarative and deterministic; no provisioning side effects at definition time.
+- Deleting a declaration never authorizes deleting physical infrastructure.
+- Types are inferred from source; runtime validation is mandatory at trust boundaries.
+- Unsupported capabilities fail explicitly; nothing is silently downgraded.
+
+## Package map
+
+| Package | Responsibility | Status | May depend on |
+| --- | --- | --- | --- |
+| `@holqa/core` | Neutral contracts: `Result`, `Diagnostic`, `diagnosticCodes`, `ResourceId` | **Implemented** (foundations) | none |
+| `@holqa/compiler` | Canonical JSON today; analysis, manifest IR, diagnostics later | **Implemented** (`canonicalJsonStringify` only) | core |
+| `@holqa/cli` | `holqa` bin: `--help`, `--version`, `--json`; proposed commands report `HOLQA_CLI_NOT_IMPLEMENTED` | **Implemented** (help/version only) | core, compiler, local, runtime-bun |
+| `@holqa/sdk` | Public developer SDK (`defineApp`, resource helpers) | Planned | core |
+| `@holqa/client` | Browser-safe generated-client runtime | Planned | core |
+| `@holqa/runtime-bun` | Bun execution and invocation adapters | Planned | core |
+| `@holqa/local` | Local execution and resource emulation | Planned | core, runtime-bun |
+| `@holqa/testing` | Deterministic test utilities | Planned | core, sdk, local, runtime-bun |
+| `packages/integrations/*` | Zod, Valibot, Effect, oRPC, TanStack Query adapters | Planned (names undecided) | core, sdk, client |
+
+Planned packages are directories with a README only. Enforcement: `scripts/check-boundaries.ts` (`pnpm boundaries:check`) and `no-restricted-imports` in `eslint.config.mjs`. `core`, `compiler`, `sdk`, `client` never import `bun`, `bun:*`, `node:*`; `sdk`/`client` never import compiler, runtime, local, cli, or testing.
+
+### Where does new code go?
+
+- A contract, type, or diagnostic every layer needs → `core` (must stay runtime-neutral and dependency-free).
+- Analysis, normalization, manifest construction, deterministic serialization → `compiler`.
+- Anything that executes handlers or uses Bun APIs → `runtime-bun` (planned) or `cli`.
+- Emulation of queues/storage/schedules → `local` (planned).
+- Developer-facing builders and typed handles → `sdk` (planned).
+- Framework-specific glue → `packages/integrations/<name>` (planned).
+
+Creating a planned package is an architectural change: it needs a `package.json`, real tests, an `allowedDependencies` entry, docs updates, and usually an ADR.
+
+## Compiler vs. runtime (ADR 0007)
+
+The compiler turns declarations and handlers into a deterministic, versioned, infrastructure-neutral **manifest**, executable artifacts, generated clients, and structured diagnostics. The runtime executes handlers against bindings. They share contracts through `core` only. Compilation and bundling are separate concerns. Today only canonical JSON exists; the manifest schema does not.
+
+The compiler must never evaluate user configuration unsandboxed while claiming the evaluation is secure.
+
+## Providers and capabilities (ADR 0005)
+
+- **Runtime driver**: performs operations (send, get, put) at run time. Must not need provisioning permissions.
+- **Provisioning provider** (optional): creates and reconciles physical infrastructure.
+- Bindings declare capabilities; the logical resource declares requirements; mismatches produce diagnostics.
+- No provider-specific configuration bags in the core resource model. No provider is implemented.
+
+## Status model
+
+Use exactly **Implemented**, **Accepted design**, **Proposed**, **Planned**. Promoting something to Implemented requires code, tests, and doc updates (status model table, reference pages, roadmap) in the same change. When unsure, choose the weaker status.
+
+## Verification checklist
+
+- [ ] I read the status model, the relevant concept doc, and related ADRs before changing architecture.
+- [ ] New code lives in the package whose responsibility matches, and dependency directions are respected.
+- [ ] No provider-specific types or configuration entered neutral packages.
+- [ ] No unimplemented capability is described or exported as working.
+- [ ] Architectural decisions are recorded as a new or superseding ADR.
+- [ ] `pnpm boundaries:check` and `pnpm check` pass, and I reported the real results.
+
+## References
+
+- Local: [docs/architecture/overview.md](../../../docs/architecture/overview.md), [docs/architecture/compiler.md](../../../docs/architecture/compiler.md), [docs/architecture/package-boundaries.md](../../../docs/architecture/package-boundaries.md), [docs/architecture/status-model.md](../../../docs/architecture/status-model.md), [docs/concepts/application-model.md](../../../docs/concepts/application-model.md), [docs/roadmap.md](../../../docs/roadmap.md), ADRs [0003](../../../docs/architecture/decisions/0003-explicit-resource-declarations.md), [0004](../../../docs/architecture/decisions/0004-stable-logical-resource-identities.md), [0005](../../../docs/architecture/decisions/0005-infrastructure-independent-resource-contracts.md), [0007](../../../docs/architecture/decisions/0007-separate-compiler-and-runtime.md)
+- Related skills: `resource-contracts`, `framework-integration`, `safe-refactoring`, `security-boundaries`
