@@ -15,6 +15,8 @@ What exists today:
 - `@holqa/compiler`: deterministic canonical JSON serialization, the foundation for the future manifest.
 - `@holqa/cli`: a `holqa` binary that prints help and version information and reports structured diagnostics (with `--json`) for commands that are not implemented.
 
+Disposable prototypes from the [M0 milestone](milestones/m0/index.md) live in [`experiments/`](../experiments/README.md); they are not part of the framework.
+
 Everything else (the SDK, compiler pipeline, runtime, local development environment, clients, integrations, and providers) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
 
 ## Where to start
@@ -60,12 +62,24 @@ Everything else (the SDK, compiler pipeline, runtime, local development environm
 | [0003](architecture/decisions/0003-explicit-resource-declarations.md) | Explicit resource declarations |
 | [0004](architecture/decisions/0004-stable-logical-resource-identities.md) | Stable logical resource identities |
 | [0005](architecture/decisions/0005-infrastructure-independent-resource-contracts.md) | Infrastructure-independent resource contracts |
-| [0006](architecture/decisions/0006-standard-schema-and-portable-schema-representation.md) | Standard Schema and portable schema representation |
+| [0006](architecture/decisions/0006-standard-schema-and-portable-schema-representation.md) | Standard Schema and portable schema representation (superseded by 0016) |
 | [0007](architecture/decisions/0007-separate-compiler-and-runtime.md) | Separate compiler and runtime |
 | [0008](architecture/decisions/0008-agent-instructions-and-skills.md) | Agent instructions and skills |
 | [0009](architecture/decisions/0009-test-placement-and-typescript-standards.md) | Test placement and TypeScript standards |
 | [0010](architecture/decisions/0010-typescript-6-until-tooling-supports-7.md) | TypeScript 6 until tooling supports 7 |
 | [0011](architecture/decisions/0011-path-aliases-in-library-packages.md) | Path aliases in library packages |
+| [0012](architecture/decisions/0012-source-inferred-types-and-reply-helpers.md) | Source-inferred types and reply helpers |
+| [0013](architecture/decisions/0013-descriptor-protocol-in-core.md) | A descriptor protocol in `@holqa/core` |
+| [0014](architecture/decisions/0014-evaluation-based-manifest-extraction.md) | Evaluation-based manifest extraction |
+| [0015](architecture/decisions/0015-runtime-generations-and-reload.md) | Runtime generations and reload |
+| [0016](architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md) | Schema adapters and conversion fidelity |
+| [0017](architecture/decisions/0017-package-layers-after-m0.md) | Package layers after M0 |
+
+## Milestones
+
+| Document | Summary |
+| --- | --- |
+| [M0: foundation and architecture validation](milestones/m0/index.md) | Baseline report, experiment results, accepted decisions, and the backlog that follows. |
 
 ## Integrations
 
@@ -86,6 +100,7 @@ Everything else (the SDK, compiler pipeline, runtime, local development environm
 | [Packages](reference/packages.md) | Every package, its status, purpose, and entry points. |
 | [Diagnostic codes](reference/diagnostic-codes.md) | Implemented `HOLQA_*` codes and the stability policy. |
 | [CLI](reference/cli.md) | Implemented flags, exit codes, JSON output, and proposed commands. |
+| [API design specification](reference/api-design.md) | Proposed public APIs for applications, resources, handlers, schema adapters and bindings. |
 
 ## Contributing
 

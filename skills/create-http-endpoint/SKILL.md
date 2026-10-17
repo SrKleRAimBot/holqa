@@ -51,11 +51,11 @@ export default resources.api.route({
     404: z.object({ error: z.literal("not_found") })
   },
   docs: { summary: "Fetch one order owned by the caller" },
-  handler: async ({ params, user }) => {
+  handler: async ({ params, user, reply }) => {
     const order = await findOrder(params.orderId, user.id);
     if (!order)
-      return { status: 404, body: { error: "not_found" } };
-    return { status: 200, body: { id: order.id, status: order.status, total: order.total } };
+      return reply(404, { error: "not_found" });
+    return reply(200, { id: order.id, status: order.status, total: order.total });
   }
 });
 ```

@@ -38,15 +38,15 @@ Do not run `bun install`, `npm install` or `yarn`. They create competing lockfil
 | `pnpm build` | `turbo run build`: runs tsdown in each package and emits ESM `.js` plus bundled `.d.ts` into `dist/`. Dependencies build first (`^build`). Cached. |
 | `pnpm dev` | `turbo run dev`: `tsdown --watch` in every package. Persistent and uncached. |
 | `pnpm typecheck` | `turbo run typecheck typecheck:repo`: `tsc --noEmit` per package (sources **and** tests, so type-level tests are checked), plus `tsc` over root `scripts/`. Builds dependencies first. |
-| `pnpm lint` | `turbo run lint lint:repo`: `eslint .` per package, plus a root ESLint pass over everything outside `packages/` and `examples/package-smoke/` (scripts, config, JSON and YAML, agent files). |
+| `pnpm lint` | `turbo run lint lint:repo`: `eslint .` per package, plus a root ESLint pass over everything outside `packages/`, `experiments/`, `examples/package-smoke/` and `examples/commerce/` (scripts, config, JSON and YAML, agent files). |
 | `pnpm lint:fix` | `eslint . --fix` over the whole repository in one process (not through Turborepo). |
-| `pnpm test` | `turbo run test`: `bun test` per package, including `examples/package-smoke`. Builds dependencies first. |
+| `pnpm test` | `turbo run test`: `bun test` per package, including `examples/package-smoke`, `examples/commerce` and the M0 experiments. Builds dependencies first. |
 | `pnpm test:watch` | `bun test --watch` per package. Persistent. Use it with `--filter` (see below). |
 | `pnpm clean` | Deletes `dist/` and `.turbo/` in each package, then the root `node_modules/.cache` and `.turbo`. |
 | `pnpm check` | Every gate in one Turborepo run: `build typecheck typecheck:repo lint lint:repo test agents:check boundaries:check`. CI runs this. Run it before opening a pull request. |
 | `pnpm agents:sync` | Copies `.agents/rules` and `.agents/skills` into `.claude/` and deletes stale mirror files. See [agent instructions](agent-instructions.md). |
 | `pnpm agents:check` | Fails if `.claude/` has drifted from `.agents/` or if `CLAUDE.md` does not import `@AGENTS.md`. |
-| `pnpm boundaries:check` | Runs `scripts/check-boundaries.ts`: allowed dependency directions, `workspace:` protocol, no package or module cycles, every `@holqa/*` import declared, no tests in `src/`. |
+| `pnpm boundaries:check` | Runs `scripts/check-boundaries.ts`: allowed dependency directions (including the `experiments/*` mirror table), `workspace:` protocol, no package or module cycles, every `@holqa/*` import declared, no tests in `src/`. |
 | `pnpm changeset` | Records a change for release notes and versioning. See [releasing](releasing.md). |
 
 ## Running tasks for one package
@@ -84,9 +84,11 @@ holqa/
 │   └── integrations/{zod,valibot,effect,orpc,tanstack-query}/   planned: README only
 ├── examples/
 │   ├── package-smoke/   consumes built packages, checks dist output (runs in pnpm test)
+│   ├── commerce/        reference application, tested against the M0 experiments
 │   ├── basic-backend/   illustrative application structure (does not run)
 │   └── fullstack-vite/  illustrative application structure (does not run)
-├── docs/                architecture, concepts, ADRs, reference, contributor guides
+├── experiments/         disposable M0 prototypes (model, sdk, compiler, runtime-bun, schema-adapters)
+├── docs/                architecture, concepts, ADRs, reference, milestones, contributor guides
 ├── skills/              public Agent Skills for Holqa users (not mirrored)
 ├── .agents/             canonical contributor rules and skills
 ├── .claude/             generated mirror of .agents/ + Claude-only files

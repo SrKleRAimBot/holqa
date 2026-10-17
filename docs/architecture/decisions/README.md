@@ -24,12 +24,18 @@ Once an ADR is accepted, it is not rewritten. To change a decision, write a new 
 | [0003](0003-explicit-resource-declarations.md) | Explicit, declarative resource declarations | Accepted (not implemented) | 2026-10-17 |
 | [0004](0004-stable-logical-resource-identities.md) | Stable logical resource identities | Accepted (only identifier validation is implemented) | 2026-10-17 |
 | [0005](0005-infrastructure-independent-resource-contracts.md) | Infrastructure-independent resource contracts | Proposed | 2026-10-17 |
-| [0006](0006-standard-schema-and-portable-schema-representation.md) | Standard Schema and a portable schema representation | Proposed | 2026-10-17 |
+| [0006](0006-standard-schema-and-portable-schema-representation.md) | Standard Schema and a portable schema representation | Superseded by [0016](0016-schema-adapters-and-conversion-fidelity.md) | 2026-10-17 |
 | [0007](0007-separate-compiler-and-runtime.md) | Separate compiler and runtime | Accepted (not implemented) | 2026-10-17 |
 | [0008](0008-agent-instructions-and-skills.md) | Agent instructions and skill organization | Accepted | 2026-10-17 |
 | [0009](0009-test-placement-and-typescript-standards.md) | Test placement and TypeScript standards | Accepted | 2026-10-17 |
 | [0010](0010-typescript-6-until-tooling-supports-7.md) | TypeScript 6 until the toolchain supports TypeScript 7 | Accepted | 2026-10-17 |
 | [0011](0011-path-aliases-in-library-packages.md) | `@/` path aliases in library packages | Accepted | 2026-10-17 |
+| [0012](0012-source-inferred-types-and-reply-helpers.md) | Source-inferred types and reply helpers | Accepted (validated in M0, not implemented) | 2026-10-17 |
+| [0013](0013-descriptor-protocol-in-core.md) | A descriptor protocol in `@holqa/core` | Accepted (validated in M0, not implemented) | 2026-10-17 |
+| [0014](0014-evaluation-based-manifest-extraction.md) | Evaluation-based manifest extraction | Accepted (validated in M0, not implemented) | 2026-10-17 |
+| [0015](0015-runtime-generations-and-reload.md) | Runtime generations and reload | Accepted (validated in M0, not implemented) | 2026-10-17 |
+| [0016](0016-schema-adapters-and-conversion-fidelity.md) | Schema adapters and conversion fidelity | Accepted (validated in M0, not implemented) | 2026-10-17 |
+| [0017](0017-package-layers-after-m0.md) | Package layers after M0 | Accepted (existing rows enforced) | 2026-10-17 |
 
 ## Adding an ADR
 

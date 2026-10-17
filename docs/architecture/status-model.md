@@ -29,6 +29,8 @@ Only the following items carry the **Implemented** label. Everything else in the
 
 See [packages reference](../reference/packages.md), [CLI reference](../reference/cli.md), and [diagnostic codes](../reference/diagnostic-codes.md) for details.
 
+The disposable M0 prototypes under [`experiments/`](../../experiments/README.md) and the [`commerce` example](../../examples/commerce/README.md) built on them run and are tested, but they are **not** Implemented framework capabilities. They are evidence for Accepted design decisions (ADRs 0012–0017), and no framework API may be described as existing because an experiment exercises it.
+
 ## How documents use the labels
 
 ### Status line

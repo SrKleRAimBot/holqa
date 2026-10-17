@@ -57,8 +57,8 @@ The compiler must understand `infra.ts` and handler modules. If it does so by im
 Holqa's position:
 
 - **The compiler must not execute user configuration code unsandboxed while claiming that evaluation is secure.** If declarations are evaluated, documentation and tooling must state that building an application runs its code with the privileges of the build process, exactly like running its tests.
-- Declarations are designed to be pure and deterministic ([ADR 0003](../architecture/decisions/0003-explicit-resource-declarations.md)) so that evaluation *can* be constrained, and so that static analysis remains an option.
-- The analysis strategy (static analysis, evaluation in an isolated process, or a combination) is an open design question for the [compiler](../architecture/compiler.md). Whatever is chosen, its trust model will be documented explicitly.
+- Declarations are designed to be pure and deterministic ([ADR 0003](../architecture/decisions/0003-explicit-resource-declarations.md)) so that evaluation *can* be constrained. Static analysis is limited to a partial index for editors and agents ([ADR 0014](../architecture/decisions/0014-evaluation-based-manifest-extraction.md)).
+- **Accepted design** ([ADR 0014](../architecture/decisions/0014-evaluation-based-manifest-extraction.md)): the compiler's host evaluates `infra.ts` and handler modules, so compiling an application runs its code. M0 validated evaluation-based extraction, and that secret values never reach the manifest, in a disposable prototype. Running analysis in a separate process with an allowlisted environment (no secrets) is accepted design and was **not** prototyped. It reduces exposure; it is not a sandbox.
 - Building an untrusted repository is equivalent to running untrusted code unless and until a real sandbox is implemented and documented.
 
 The implemented canonical JSON serializer contributes a narrow guarantee: it rejects functions, symbols, class instances, `undefined`, non-finite numbers, and cycles, so executable values cannot be smuggled into a manifest as data.

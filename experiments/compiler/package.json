@@ -1,0 +1,41 @@
+{
+  "name": "@holqa/experiment-compiler",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Disposable M0 experiment: deterministic manifest extraction from resource and handler descriptors.",
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@holqa/compiler": "workspace:*",
+    "@holqa/core": "workspace:*",
+    "@holqa/experiment-model": "workspace:*"
+  },
+  "devDependencies": {
+    "@holqa/experiment-schema-adapters": "workspace:*",
+    "@holqa/experiment-sdk": "workspace:*",
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  }
+}

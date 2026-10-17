@@ -51,9 +51,9 @@ The compiler must detect at least: duplicate identifiers, invalid references, in
 
 ## Analysis and untrusted code
 
-Stage 1 must decide how to read `infra.ts`. Options include static analysis of the TypeScript source, evaluating the module in an isolated process, or a combination. This is an **open design question**.
+Stage 1 obtains the application by **evaluating** `infra.ts` and the handler modules in a host process, then passes the resulting descriptors to the runtime-neutral compiler (**Accepted design**, [ADR 0014](decisions/0014-evaluation-based-manifest-extraction.md)). M0 found that static analysis cannot recover imported or composed schemas; it remains useful only as a partial index for editors. See the [compilation experiment](../../experiments/compiler/README.md) for the measured results.
 
-Constraint: **the compiler must not execute arbitrary user configuration code unsandboxed while claiming that evaluation is secure.** If evaluation is used, the documentation will say plainly that compiling an application runs its code. Declarations are designed to be pure and deterministic ([ADR 0003](decisions/0003-explicit-resource-declarations.md)) to keep both strategies viable. See [security](../concepts/security.md#untrusted-build-time-execution).
+Constraint: **the compiler must not execute arbitrary user configuration code unsandboxed while claiming that evaluation is secure.** Because the compiler evaluates modules ([ADR 0014](decisions/0014-evaluation-based-manifest-extraction.md)), the documentation says plainly that compiling an application runs its code. Declarations are pure and deterministic ([ADR 0003](decisions/0003-explicit-resource-declarations.md)) so that evaluation stays predictable. See [security](../concepts/security.md#untrusted-build-time-execution).
 
 ## Compile vs. bundle
 

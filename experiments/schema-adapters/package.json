@@ -1,0 +1,56 @@
+{
+  "name": "@holqa/experiment-schema-adapters",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Disposable M0 experiment: Zod and Valibot adapters that normalize schemas for the compiler without coupling the model to either library.",
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test",
+    "clean": "rm -rf dist .turbo"
+  },
+  "peerDependencies": {
+    "@valibot/to-json-schema": "^1.8.0",
+    "valibot": "^1.5.0",
+    "zod": "^4.6.7"
+  },
+  "peerDependenciesMeta": {
+    "@valibot/to-json-schema": {
+      "optional": true
+    },
+    "valibot": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@holqa/experiment-model": "workspace:*"
+  },
+  "devDependencies": {
+    "@holqa/experiment-sdk": "workspace:*",
+    "@types/bun": "catalog:",
+    "@valibot/to-json-schema": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "valibot": "catalog:",
+    "zod": "catalog:"
+  }
+}

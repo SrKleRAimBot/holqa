@@ -36,10 +36,16 @@ export const config = app.env;
 import { drizzle } from "drizzle-orm/node-postgres";
 import { config } from "../infra";
 
-export const db = drizzle(config.DATABASE_URL);
+let instance: ReturnType<typeof drizzle> | undefined;
+
+/** Creates the client on first use, inside a handler. */
+export function db() {
+  instance ??= drizzle(config.DATABASE_URL);
+  return instance;
+}
 ```
 
-Handlers import `db` and use Drizzle normally. Holqa does not wrap or proxy queries.
+Handlers call `db()` and use Drizzle normally. The client is created lazily because the compiler evaluates handler modules without configuration; reading `config.DATABASE_URL` at module top level would fail analysis ([ADR 0014](../architecture/decisions/0014-evaluation-based-manifest-extraction.md)). Holqa does not wrap or proxy queries.
 
 Whether external databases become an explicit resource kind (for example `database.external({ id: "main-db" })`) so that they appear in the manifest and can participate in capability checks is **Proposed**.
 

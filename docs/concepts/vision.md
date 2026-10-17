@@ -20,7 +20,7 @@ Holqa's central abstraction is the **application resource graph**: an applicatio
 | --- | --- |
 | Explicit, declarative infrastructure | Resources are declared as data in `infra.ts`, with stable identifiers, not created by imperative provisioning calls ([ADR 0003](../architecture/decisions/0003-explicit-resource-declarations.md)). |
 | End-to-end type inference | Handler and client types are inferred from the declarations, not maintained in parallel. |
-| Portable schema contracts and runtime validation | Schemas are expressed through Standard Schema and normalized into a portable representation; data is validated at trust boundaries ([ADR 0006](../architecture/decisions/0006-standard-schema-and-portable-schema-representation.md)). |
+| Portable schema contracts and runtime validation | Schemas are expressed through Standard Schema and normalized into a portable representation; data is validated at trust boundaries ([ADR 0016](../architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md)). |
 | Event-driven functions | HTTP, RPC, queues, storage events, and schedules share one handler model. |
 | A unified, typed resource graph | One model connects resources, triggers, handlers, and dependencies. |
 | Extensible providers and runtime drivers | Logical requirements are fulfilled by interchangeable bindings ([ADR 0005](../architecture/decisions/0005-infrastructure-independent-resource-contracts.md)). |

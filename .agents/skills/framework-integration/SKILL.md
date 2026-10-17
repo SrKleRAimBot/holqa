@@ -46,7 +46,7 @@ Holqa must compose with the TypeScript ecosystem rather than replace it. Every i
 
 ### Designing an integration
 
-1. Read [docs/integrations/index.md](../../../docs/integrations/index.md), [docs/concepts/type-safety-and-schemas.md](../../../docs/concepts/type-safety-and-schemas.md), and ADR 0006.
+1. Read [docs/integrations/index.md](../../../docs/integrations/index.md), [docs/concepts/type-safety-and-schemas.md](../../../docs/concepts/type-safety-and-schemas.md), and ADR 0016 (which supersedes ADR 0006).
 2. Write the design as a Proposed section in `docs/integrations/` or a Proposed ADR: the user-facing API (labeled illustrative), the Holqa contract it maps to, unsupported features, and the package's dependencies.
 3. Confirm the Holqa contract it depends on exists. Most integrations need `@holqa/sdk` or `@holqa/client`, which are Planned; do not create fake versions of those to unblock an integration.
 
@@ -97,5 +97,5 @@ The adapter's only job is to pass Fetch `Request`/`Response` objects through; Ho
 - oRPC: https://orpc.unnoq.com; Hono: https://hono.dev
 - TanStack Query: https://tanstack.com/query/latest; TanStack Router: https://tanstack.com/router/latest; TanStack Start: https://tanstack.com/start/latest
 - Vite: https://vite.dev; Drizzle: https://orm.drizzle.team; Prisma: https://www.prisma.io/docs; OpenTelemetry JS: https://opentelemetry.io/docs/languages/js/
-- Local: [docs/integrations/index.md](../../../docs/integrations/index.md), [docs/architecture/package-boundaries.md](../../../docs/architecture/package-boundaries.md), [ADR 0006](../../../docs/architecture/decisions/0006-standard-schema-and-portable-schema-representation.md)
+- Local: [docs/integrations/index.md](../../../docs/integrations/index.md), [docs/architecture/package-boundaries.md](../../../docs/architecture/package-boundaries.md), [ADR 0016](../../../docs/architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md)
 - Related skills: `holqa-architecture`, `resource-contracts`, `typescript-library`

@@ -42,13 +42,13 @@ export default resources.api.route({
   use: [requireUser],
   body: z.object({ contentType: z.enum(["image/png", "image/jpeg"]) }),
   responses: { 200: z.object({ url: z.string().url(), key: z.string() }) },
-  handler: async ({ body, user }) => {
+  handler: async ({ body, user, reply }) => {
     const key = `incoming/${user.id}/${crypto.randomUUID()}`;  // server-chosen key
     const url = await resources.uploads.signedUploadUrl(key, {
       contentType: body.contentType,
       expiresIn: 300
     });
-    return { status: 200, body: { url, key } };
+    return reply(200, { url, key });
   }
 });
 ```

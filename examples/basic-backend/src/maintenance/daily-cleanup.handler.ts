@@ -1,6 +1,6 @@
 // Illustrative example: uses the proposed Holqa API, which is not implemented yet. This file is not type-checked or executed.
 import { resources } from "../../infra";
-import { sql } from "../db";
+import { getSql } from "../db";
 
 /** Number of days a rejected upload record is kept before cleanup removes it. */
 const retentionDays = 30;
@@ -13,6 +13,7 @@ const retentionDays = 30;
 export default resources.cleanup.handle({
   id: "maintenance.daily-cleanup",
   handler: async ({ scheduledTime, log }) => {
+    const sql = getSql();
     const cutoff = new Date(scheduledTime.getTime() - retentionDays * 24 * 60 * 60 * 1000);
 
     const removed = await sql`DELETE FROM uploads WHERE status = 'rejected' AND created_at < ${cutoff} RETURNING object_key`;

@@ -1,6 +1,6 @@
 # Type safety and schemas
 
-> **Status:** Proposed — not implemented. Source-based inference and mandatory runtime validation at trust boundaries are accepted direction. Building on Standard Schema with a normalized internal representation is **Proposed** in [ADR 0006](../architecture/decisions/0006-standard-schema-and-portable-schema-representation.md) until validated with Zod and one other library. No schema handling, normalization, or client generation exists yet.
+> **Status:** Proposed — not implemented. Source-based inference and mandatory runtime validation at trust boundaries are accepted direction. Building on Standard Schema with library-specific adapters that produce JSON Schema plus fidelity metadata is **Accepted design** in [ADR 0016](../architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md) (superseding ADR 0006), validated with Zod and Valibot in a disposable M0 experiment. No schema handling, normalization, or client generation exists yet.
 
 Type safety is one of Holqa's defining characteristics. Holqa connects resources and operations with strict TypeScript types **and** runtime schemas, because static types alone cannot protect data that crosses a process, network, or time boundary.
 
@@ -74,7 +74,7 @@ Standard Schema covers validation and type inference. The compiler and runtime n
 | Compatibility checking | To compare a new contract against a previously deployed one. |
 | Unsupported-schema reporting | To fail explicitly when a schema cannot be represented. |
 
-So Holqa defines a **normalized internal schema representation**: a portable, JSON-serializable description produced from each schema by a library-specific adapter. The compiler stores it in the manifest (serialized with the implemented canonical JSON serializer) and uses it for fingerprints, documentation, and compatibility checks. The exact representation is **Proposed**.
+So Holqa defines a **normalized internal schema representation**: a portable, JSON-serializable description produced from each schema by a library-specific adapter. The compiler stores it in the manifest (serialized with the implemented canonical JSON serializer) and uses it for fingerprints, documentation, and compatibility checks. The representation is **Accepted design** ([ADR 0016](../architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md)): JSON Schema draft 2020-12 per side (input and output), plus fidelity, runtime-only constraints and the converter's library version.
 
 ## Honest limits of normalization
 
