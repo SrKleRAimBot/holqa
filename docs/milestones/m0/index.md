@@ -48,7 +48,9 @@ Result: 42 of 42 tasks successful, 0 cached, 6.3 s (final run after review fixes
 | `@holqa/experiment-runtime-bun` | 45 |
 | `@holqa/example-commerce` | 8 |
 
-Environment for this run: Node.js 22.23.3 (the earlier 22.20.0 installation disappeared during M0), Bun 1.3.13, pnpm 12.14.0, TypeScript 6.0.3.
+CI ran the same gate on [pull request #2](https://github.com/SrKleRAimBot/holqa/pull/2) ([run 39039140660](https://github.com/SrKleRAimBot/holqa/actions/runs/39039140660)) on `ubuntu-latest`, with `pnpm install --frozen-lockfile` followed by `pnpm check`. The "Quality gates" job passed in 1 min 9 s: 42 of 42 tasks, 0 cached, with the same per-package test counts and 0 failures. CI covers the `package-smoke` export checks (built `dist/` output, no unresolved aliases, the `holqa` bin). publint and Are the Types Wrong still run only locally ([backlog](backlog.md) HB-01).
+
+Environment for the local run: Node.js 22.23.3 (the earlier 22.20.0 installation disappeared during M0), Bun 1.3.13, pnpm 12.14.0, TypeScript 6.0.3.
 
 ## Compatibility impact
 

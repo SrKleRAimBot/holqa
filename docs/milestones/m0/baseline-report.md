@@ -64,7 +64,7 @@ M0 changed repository tooling so that the experiments could be checked like the 
 - `package.json` (`lint:repo`): ignores `experiments/**` and `examples/commerce/**`, which lint themselves as workspace packages.
 - `.gitignore`: ignores `experiments/*/.tmp/`.
 
-The gate was re-run after these changes; see the [M0 summary](index.md#validation).
+The gate was re-run after these changes, locally and in CI; see the [M0 summary](index.md#validation).
 
 ## Related
 
