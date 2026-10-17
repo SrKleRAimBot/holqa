@@ -6,18 +6,20 @@ The central abstraction is the **application resource graph**: a declarative des
 
 ## Project status
 
-> **Holqa is at the bootstrap stage. There is no installable release, and the framework described in these documents does not exist yet.**
+> **Holqa is at an early stage. There is no installable release, and most of the framework described in these documents does not exist yet.**
 
 What exists today:
 
 - A pnpm + Turborepo monorepo with strict TypeScript, ESLint, Bun tests, and enforced package boundaries.
-- `@holqa/core`: `Result`, structured `Diagnostic` values, a diagnostic code registry, and validated `ResourceId`s.
+- `@holqa/core`: `Result`, structured `Diagnostic` values, a diagnostic code registry, validated `ResourceId`s, and the descriptor protocol and runtime binding contract behind the resource model.
+- `@holqa/sdk`: `defineApp`, resource declarations (`queue`, `bucket`, `schedule`, `http.api`), configuration (`secret`, `variable`), typed resource handles inferred from source, and handler registration for queues, buckets and schedules. Nothing executes handlers yet.
+- `@holqa/testing`: compile-time type assertions.
 - `@holqa/compiler`: deterministic canonical JSON serialization, the foundation for the future manifest.
 - `@holqa/cli`: a `holqa` binary that prints help and version information and reports structured diagnostics (with `--json`) for commands that are not implemented.
 
 Disposable prototypes from the [M0 milestone](milestones/m0/index.md) live in [`experiments/`](../experiments/README.md); they are not part of the framework.
 
-Everything else (the SDK, compiler pipeline, runtime, local development environment, clients, integrations, and providers) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
+Everything else (HTTP routes, the compiler pipeline, runtime, local development environment, clients, integrations, and providers) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
 
 ## Where to start
 
@@ -35,6 +37,8 @@ Everything else (the SDK, compiler pipeline, runtime, local development environm
 | --- | --- |
 | [Vision](concepts/vision.md) | Purpose, goals, non-goals, and design philosophy. |
 | [Application model](concepts/application-model.md) | `defineApp`, `infra.ts`, logical resources, typed handles, resource lifecycles. |
+| [Resource identity](concepts/resource-identity.md) | Identifier rules, aliases versus identities, compile-time and run-time checks. |
+| [Composing applications](concepts/composing-applications.md) | Splitting registries across modules, resource groups, cross-module types. |
 | [Resource graph](concepts/resource-graph.md) | How resources, triggers, handlers, and dependencies form one model. |
 | [Type safety and schemas](concepts/type-safety-and-schemas.md) | Source-based inference, Standard Schema, runtime validation, compatibility. |
 | [Triggers and execution](concepts/triggers-and-execution.md) | HTTP, RPC, queues, storage events, schedules, and the Bun execution model. |
@@ -49,6 +53,7 @@ Everything else (the SDK, compiler pipeline, runtime, local development environm
 | --- | --- |
 | [Overview](architecture/overview.md) | Layers and how packages map to them. |
 | [Package boundaries](architecture/package-boundaries.md) | Package responsibilities, allowed dependency directions, enforcement. |
+| [Resource model](architecture/resource-model.md) | Descriptors, kind registries, handler metadata, runtime binding, dependency architecture. |
 | [Compiler](architecture/compiler.md) | Compilation pipeline, manifest principles, diagnostics. |
 | [Status model](architecture/status-model.md) | The Implemented / Accepted design / Proposed / Planned vocabulary. |
 | [Architecture decision records](architecture/decisions/README.md) | Index of ADRs and the [ADR template](architecture/decisions/template.md). |
@@ -74,6 +79,9 @@ Everything else (the SDK, compiler pipeline, runtime, local development environm
 | [0015](architecture/decisions/0015-runtime-generations-and-reload.md) | Runtime generations and reload |
 | [0016](architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md) | Schema adapters and conversion fidelity |
 | [0017](architecture/decisions/0017-package-layers-after-m0.md) | Package layers after M0 |
+| [0018](architecture/decisions/0018-typed-kind-registries-in-the-descriptor-protocol.md) | Typed kind registries in the descriptor protocol |
+| [0019](architecture/decisions/0019-declaration-time-validation.md) | Declaration-time validation in the SDK |
+| [0020](architecture/decisions/0020-runtime-binding-resolution.md) | Runtime binding resolution |
 
 ## Milestones
 

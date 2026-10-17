@@ -51,14 +51,14 @@ Invariants to preserve in every design:
 
 | Package | Responsibility | Status | May depend on |
 | --- | --- | --- | --- |
-| `@holqa/core` | Neutral contracts: `Result`, `Diagnostic`, `diagnosticCodes`, `ResourceId` | **Implemented** (foundations) | none |
+| `@holqa/core` | Neutral contracts: `Result`, `Diagnostic`, `diagnosticCodes`, `ResourceId`, `HolqaError`, descriptor protocol with resource/trigger kind registries, `RuntimeBinding` | **Implemented** (contracts) | none |
 | `@holqa/compiler` | Canonical JSON today; analysis, manifest IR, diagnostics later | **Implemented** (`canonicalJsonStringify` only) | core |
 | `@holqa/cli` | `holqa` bin: `--help`, `--version`, `--json`; proposed commands report `HOLQA_CLI_NOT_IMPLEMENTED` | **Implemented** (help/version only) | core, compiler, local, runtime-bun |
-| `@holqa/sdk` | Public developer SDK (`defineApp`, resource helpers) | Planned | core |
+| `@holqa/sdk` | Public developer SDK (`defineApp`, `queue`/`bucket`/`schedule`/`http.api`, typed handles, handler registration) | **Implemented** (no HTTP routes yet) | core |
 | `@holqa/client` | Browser-safe generated-client runtime | Planned | core |
 | `@holqa/runtime-bun` | Bun execution and invocation adapters | Planned | core |
 | `@holqa/local` | Local execution and resource emulation | Planned | core, runtime-bun |
-| `@holqa/testing` | Deterministic test utilities | Planned | core, sdk, local, runtime-bun |
+| `@holqa/testing` | Test utilities: type assertions today, deterministic execution later | **Implemented** (type assertions only) | core, sdk, local, runtime-bun |
 | `packages/integrations/*` | Zod, Valibot, Effect, oRPC, TanStack Query adapters | Planned (names undecided) | core, sdk, client |
 
 Planned packages are directories with a README only. Enforcement: `scripts/check-boundaries.ts` (`pnpm boundaries:check`) and `no-restricted-imports` in `eslint.config.mjs`. `core`, `compiler`, `sdk`, `client` never import `bun`, `bun:*`, `node:*`; `sdk`/`client` never import compiler, runtime, local, cli, or testing.
@@ -69,7 +69,7 @@ Planned packages are directories with a README only. Enforcement: `scripts/check
 - Analysis, normalization, manifest construction, deterministic serialization → `compiler`.
 - Anything that executes handlers or uses Bun APIs → `runtime-bun` (planned) or `cli`.
 - Emulation of queues/storage/schedules → `local` (planned).
-- Developer-facing builders and typed handles → `sdk` (planned).
+- Developer-facing builders and typed handles → `sdk`. A new resource or trigger kind starts in `core`'s `ResourceKindMap`/`TriggerKindMap` (see `docs/architecture/resource-model.md`).
 - Framework-specific glue → `packages/integrations/<name>` (planned).
 
 Creating a planned package is an architectural change: it needs a `package.json`, real tests, an `allowedDependencies` entry, docs updates, and usually an ADR.

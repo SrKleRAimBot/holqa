@@ -1,8 +1,20 @@
 # Requirements backlog after M0
 
-> **Status:** Planned. Every item below is unimplemented work. Items are written so that each can be filed as one GitHub issue; none have been filed yet.
+> **Status:** Planned, with the items listed under [progress](#progress) done. Items are written so that each can be filed as one GitHub issue; none have been filed yet.
 
 Identifiers are stable for cross-referencing (`HB-NN`). "Depends on" lists items that must be done first. Every item's definition of done also includes the repository's standing rules: tests under `tests/`, documentation and status labels updated, `pnpm check` passing, and a changeset for user-visible package changes.
+
+## Progress
+
+| ID | State | Notes |
+| --- | --- | --- |
+| HB-05 | Done | Descriptor protocol in `@holqa/core`, with typed kind registries ([ADR 0018](../../architecture/decisions/0018-typed-kind-registries-in-the-descriptor-protocol.md)). A test loads a second copy of the module. |
+| HB-06 | Done | Standard Schema types, `isStandardSchema`, `validateInput`. |
+| HB-07 | Done | Binding slot on the application descriptor; `bindApp` also checks capabilities ([ADR 0020](../../architecture/decisions/0020-runtime-binding-resolution.md)). |
+| HB-09 | Partly done | `HOLQA_RESOURCE_ID_DUPLICATE`, `HOLQA_DECLARATION_INVALID`, `HOLQA_INPUT_INVALID`, `HOLQA_RUNTIME_NOT_BOUND` are registered, plus the new `HOLQA_RUNTIME_ALREADY_BOUND` and `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`. Compiler and runtime codes are registered with their emitters. |
+| HB-10 | Done | `defineApp`, `defineResources`, `composeResources`, `queue`, `secret`, `variable`, with a type-level corpus and `package-smoke` coverage. |
+| HB-12 | Done | `bucket` with a portable object event schema, `schedule` with `scheduledTime` metadata. |
+| HB-33 | Started | `checkIdentities` in `@holqa/core` is shared by `defineApp` and, later, the compiler. |
 
 ## Dependency overview
 

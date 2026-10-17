@@ -10,7 +10,7 @@ This roadmap distinguishes the current bootstrap state from future implementatio
 | --- | --- | --- |
 | 0 | Bootstrap | In progress |
 | M0 | Foundation and architecture validation | Complete (see [M0](milestones/m0/index.md)) |
-| 1 | Core resource model and SDK | Planned |
+| 1 | Core resource model and SDK | In progress |
 | 2 | Compiler | Planned |
 | 3 | Bun runtime and local development | Planned |
 | 4 | Clients and integrations | Planned |
@@ -68,14 +68,22 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 
 **Goal:** Developers can declare an application's resources in `infra.ts` with full type inference, even though nothing executes yet.
 
-### Goals
+### Done
 
-- Define the logical resource model in `@holqa/core`: resource kinds, contracts, required capabilities, and references between resources ([ADR 0003](architecture/decisions/0003-explicit-resource-declarations.md), [ADR 0005](architecture/decisions/0005-infrastructure-independent-resource-contracts.md)).
-- Implement `defineApp` and initial resource factories in `@holqa/sdk` (`http.api`, `queue`, `bucket`, `schedule`, `staticSite`, `secret`, `variable`) as pure, deterministic declarations.
-- Implement typed resource handles whose types are inferred from declarations (for example a queue's message type).
+| Item | Status |
+| --- | --- |
+| Logical resource model in `@holqa/core`: descriptor protocol, typed resource and trigger kind registries, capability requirements, handler metadata separated from `invoke`, runtime binding contract ([resource model](architecture/resource-model.md), ADRs 0018 to 0020) | **Implemented** |
+| `defineApp`, `defineResources`, `composeResources`, `queue`, `bucket`, `schedule`, `http.api` (declaration only), `secret`, `variable` as pure declarations with declaration-time validation | **Implemented** |
+| Typed handles inferred from declarations, across modules, with no generated code | **Implemented** |
+| Handler registration for queues, buckets and schedules | **Implemented** |
+| Composition of resource registries from multiple files ([composing applications](concepts/composing-applications.md)) | **Implemented** |
+| Type-level tests, including negative tests, for every implemented resource kind; `@holqa/testing` type assertions | **Implemented** |
+
+### Remaining goals
+
+- Implement the remaining factories and registrations: HTTP routes with `reply` and `staticSite`.
 - Normalize schemas through the Standard Schema interface and define the internal normalized schema representation ([ADR 0016](architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md)).
 - Ship the first schema adapter for Zod.
-- Support composing resource registries from multiple files.
 - Extend the `ResourceId` grammar decision ([ADR 0004](architecture/decisions/0004-stable-logical-resource-identities.md)) and finalize it before 1.0.
 
 ### Exit criteria

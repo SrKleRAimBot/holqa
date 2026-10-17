@@ -8,7 +8,7 @@ metadata:
 
 # Testing event-driven applications
 
-> **Preview — not yet available.** `@holqa/testing` and its test harness are **planned** and not implemented. Code below is illustrative. Today you can only unit-test plain functions that your handlers call.
+> **Preview — not yet available.** `@holqa/testing` exists in the Holqa repository (unpublished) but contains only compile-time type assertions (`Equal`, `Expect`, `Accepts`, `assertType`). The test harness below is **planned** and not implemented; code using it is illustrative. Today you can unit-test plain functions that your handlers call and assert on the types of resource handles.
 
 ## When to use
 

@@ -14,7 +14,9 @@
   "dependencies": {
     "@holqa/cli": "workspace:*",
     "@holqa/compiler": "workspace:*",
-    "@holqa/core": "workspace:*"
+    "@holqa/core": "workspace:*",
+    "@holqa/sdk": "workspace:*",
+    "@holqa/testing": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

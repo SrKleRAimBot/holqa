@@ -4,7 +4,7 @@
 - **Date:** 2026-10-17
 - **Deciders:** Holqa maintainers
 
-> **Implementation status:** The principle is an accepted design. The only implemented part is identifier validation in `@holqa/core` (`ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`). The identifier grammar is an **initial proposal** and may be revised before 1.0. Nothing yet assigns identities to resources, tracks them across deployments, or uses them to bind infrastructure.
+> **Implementation status:** Identifier validation is implemented in `@holqa/core` (`ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`, `checkIdentities`). `@holqa/sdk` requires an explicit `id` on every resource and handler, validates it when declared and rejects duplicate resource identifiers in `defineApp`, at run time and, for literal identifiers, at compile time ([ADR 0019](0019-declaration-time-validation.md)). The identifier grammar is an **initial proposal** and may be revised before 1.0. Nothing yet tracks identities across deployments or uses them to bind infrastructure.
 
 ## Context
 

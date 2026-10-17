@@ -8,7 +8,7 @@ metadata:
 
 # Getting started with a Holqa project
 
-> **Preview — not yet available.** The SDK (`@holqa/sdk`) and the CLI commands in this skill are **proposed** and not implemented. Holqa packages are not published to npm. Treat every code sample as illustrative; names may change.
+> **Preview — not yet available.** Holqa packages are not published to npm. The SDK (`@holqa/sdk`) exists in the Holqa repository and can declare applications, resources and handlers, but nothing executes them yet; the CLI commands in this skill are **proposed** and not implemented. Treat every code sample as illustrative; names may change.
 
 ## When to use
 
@@ -26,7 +26,7 @@ bun packages/cli/dist/bin.js --version --json
 bun packages/cli/dist/bin.js dev --json    # exits 1, HOLQA_CLI_NOT_IMPLEMENTED on stderr
 ```
 
-Nothing else in this skill runs yet. Do not install `@holqa/sdk`; it does not exist.
+Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations such as the `infra.ts` below (without `staticSite`, HTTP routes or RPC, which are proposed). Nothing else in this skill runs yet. Do not try to install `@holqa/sdk` from npm; it is not published.
 
 ## Planned workflow
 

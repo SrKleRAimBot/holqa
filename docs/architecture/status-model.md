@@ -21,7 +21,9 @@ Only the following items carry the **Implemented** label. Everything else in the
 
 | Package | Implemented items |
 | --- | --- |
-| `@holqa/core` | `Result`, `ok`, `err`; `Diagnostic`, `createDiagnostic`, `formatDiagnostic`; the `diagnosticCodes` registry; `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength` |
+| `@holqa/core` | `Result`, `ok`, `err`; `Diagnostic`, `createDiagnostic`, `formatDiagnostic`; the `diagnosticCodes` registry; `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`, `checkIdentities`; `HolqaError`; JSON and Standard Schema types, `validateInput`; the descriptor protocol with resource and trigger kind registries and readers; `RuntimeBinding`, `bindApp`, `resolveDriver`, `checkCapabilities` |
+| `@holqa/sdk` | `defineApp`, `defineResources`, `composeResources`; `queue`, `bucket`, `schedule`, `http.api` (declaration only); `secret`, `variable`; typed handles and handler registration for queues, buckets and schedules; compile-time identifier and duplicate checks |
+| `@holqa/testing` | Compile-time type assertions (`Equal`, `Expect`, `Accepts`, `HasTypeError`, `assertType`, ...) |
 | `@holqa/compiler` | `canonicalJsonStringify`, `CanonicalJsonError`, `CanonicalJsonValue` |
 | `@holqa/cli` | `holqa --help`, `--version`, `--json`; structured errors for proposed and unknown commands |
 | `examples/package-smoke` | Verification that built packages are consumable through their public exports |
@@ -56,7 +58,7 @@ Use the exact bold terms in tables and prose when the status of a specific item 
 
 ### Illustrative code
 
-Code that uses APIs which do not exist (for example `defineApp`, `queue(...)`, or `resources.orders.send(...)`) must be introduced as illustrative. Place a sentence such as the following immediately before the code block:
+Code that uses APIs which do not exist (for example `http.api(...).route(...)`, `staticSite(...)`, or `holqa dev`) must be introduced as illustrative. Place a sentence such as the following immediately before the code block:
 
 > The following code is illustrative. The API is proposed, not implemented, and may change.
 
