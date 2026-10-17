@@ -1,0 +1,41 @@
+{
+  "name": "holqa-monorepo",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.14.0",
+  "description": "Monorepo for Holqa, a TypeScript-native, infrastructure-agnostic application infrastructure framework.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=22.13.0",
+    "bun": ">=1.3.13"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "typecheck": "turbo run typecheck typecheck:repo",
+    "typecheck:repo": "tsc -p tsconfig.json --noEmit",
+    "lint": "turbo run lint lint:repo",
+    "lint:repo": "eslint . --ignore-pattern \"packages/**\" --ignore-pattern \"examples/package-smoke/**\" --cache --cache-location node_modules/.cache/eslint-repo",
+    "lint:fix": "eslint . --fix",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "clean": "turbo run clean && rm -rf node_modules/.cache .turbo",
+    "agents:sync": "bun scripts/agents-sync.ts --write",
+    "agents:check": "bun scripts/agents-sync.ts --check",
+    "boundaries:check": "bun scripts/check-boundaries.ts",
+    "check": "turbo run build typecheck typecheck:repo lint lint:repo test agents:check boundaries:check",
+    "changeset": "changeset"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "catalog:",
+    "@changesets/cli": "catalog:",
+    "@types/bun": "catalog:",
+    "eslint": "catalog:",
+    "eslint-plugin-format": "catalog:",
+    "eslint-plugin-n": "catalog:",
+    "eslint-plugin-path-alias": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  }
+}

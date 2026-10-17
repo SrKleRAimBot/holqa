@@ -1,0 +1,17 @@
+{
+  // ESLint is the formatter for this repository (see eslint.config.mjs).
+  "prettier.enable": false,
+  "editor.formatOnSave": false,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "never"
+  },
+  "eslint.validate": [
+    "javascript",
+    "typescript",
+    "json",
+    "jsonc",
+    "yaml"
+  ],
+  "typescript.tsdk": "node_modules/typescript/lib"
+}

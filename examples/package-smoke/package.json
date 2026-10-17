@@ -1,0 +1,23 @@
+{
+  "name": "@holqa/example-package-smoke",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Consumes the built Holqa packages through their public exports to prove the build, declaration and bin outputs are valid.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@holqa/cli": "workspace:*",
+    "@holqa/compiler": "workspace:*",
+    "@holqa/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}
