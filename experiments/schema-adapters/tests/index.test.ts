@@ -109,7 +109,7 @@ describe("schema interoperability", () => {
     for (const schema of [zodAsync, valibotAsync]) {
       expect(schema["~standard"].validate("ok")).toBeInstanceOf(Promise);
       expect(await validateInput(schema, "ok", "value")).toBe("ok");
-      expect(validateInput(schema, "no", "value")).rejects.toBeInstanceOf(InputValidationError);
+      await expect(validateInput(schema, "no", "value")).rejects.toBeInstanceOf(InputValidationError);
     }
   });
 
