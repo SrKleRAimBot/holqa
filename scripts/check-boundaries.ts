@@ -9,6 +9,8 @@
  * 4. Every `@holqa/*` import in `src/` is declared in `package.json`.
  * 5. Modules inside each package's `src/` have no circular imports.
  * 6. No test files live inside a shipped `src/` directory.
+ * 7. Disposable M0 experiments (`experiments/*`) follow the layering in
+ *    `experimentDependencies`; their development dependencies are exempt.
  *
  * Usage: bun scripts/check-boundaries.ts
  */
@@ -29,7 +31,7 @@ import {
 const root = join(import.meta.dir, "..");
 
 /** Directories whose children may be workspace packages. */
-const workspaceParents = ["packages", "packages/integrations", "examples"];
+const workspaceParents = ["packages", "packages/integrations", "examples", "experiments"];
 
 /**
  * Allowed internal dependencies for each framework package. Dependencies point
@@ -47,6 +49,21 @@ const allowedDependencies: Readonly<Record<string, readonly string[]>> = {
   "@holqa/cli": ["@holqa/core", "@holqa/compiler", "@holqa/local", "@holqa/runtime-bun"]
 };
 
+/**
+ * Allowed internal dependencies for the disposable M0 experiments under
+ * `experiments/`. They mirror the target layering so the experiments test it:
+ * `experiment-model` stands in for future `@holqa/core` contracts, and the
+ * compiler and runtime prototypes must not depend on the SDK prototype.
+ * Development dependencies are exempt so tests can use the SDK as a fixture.
+ */
+const experimentDependencies: Readonly<Record<string, readonly string[]>> = {
+  "@holqa/experiment-model": ["@holqa/core"],
+  "@holqa/experiment-sdk": ["@holqa/core", "@holqa/experiment-model"],
+  "@holqa/experiment-schema-adapters": ["@holqa/core", "@holqa/experiment-model"],
+  "@holqa/experiment-compiler": ["@holqa/core", "@holqa/compiler", "@holqa/experiment-model"],
+  "@holqa/experiment-runtime-bun": ["@holqa/core", "@holqa/experiment-model"]
+};
+
 /** Allowed internal dependencies for any package under `packages/integrations/`. */
 const integrationDependencies = ["@holqa/core", "@holqa/sdk", "@holqa/client"];
 
@@ -57,8 +74,10 @@ const sourceExtensions = [".ts", ".tsx", ".mts", ".cts"];
 interface WorkspacePackage {
   readonly name: string;
   readonly directory: string;
-  readonly kind: "framework" | "integration" | "example";
+  readonly kind: "framework" | "integration" | "example" | "experiment";
   readonly internalDependencies: ReadonlyMap<string, string>;
+  /** Internal runtime and peer dependencies, excluding development dependencies. */
+  readonly productionDependencies: ReadonlySet<string>;
 }
 
 /**
@@ -86,14 +105,18 @@ function discoverPackages(): WorkspacePackage[] {
         optionalDependencies?: Record<string, string>;
       };
       const internalDependencies = new Map<string, string>();
+      const productionDependencies = new Set<string>();
       for (const field of [manifest.dependencies, manifest.devDependencies, manifest.peerDependencies, manifest.optionalDependencies]) {
         for (const [name, specifier] of Object.entries(field ?? {})) {
-          if (name.startsWith("@holqa/"))
-            internalDependencies.set(name, specifier);
+          if (!name.startsWith("@holqa/"))
+            continue;
+          internalDependencies.set(name, specifier);
+          if (field !== manifest.devDependencies)
+            productionDependencies.add(name);
         }
       }
-      const kind = parent === "examples" ? "example" : parent === "packages/integrations" ? "integration" : "framework";
-      packages.push({ name: manifest.name, directory, kind, internalDependencies });
+      const kind = parent === "examples" ? "example" : parent === "experiments" ? "experiment" : parent === "packages/integrations" ? "integration" : "framework";
+      packages.push({ name: manifest.name, directory, kind, internalDependencies, productionDependencies });
     }
   }
   return packages.sort((left, right) => left.name.localeCompare(right.name));
@@ -109,15 +132,20 @@ function checkDependencyDirections(pkg: WorkspacePackage): string[] {
   const problems: string[] = [];
   const allowed = pkg.kind === "example"
     ? undefined
-    : pkg.kind === "integration" ? integrationDependencies : allowedDependencies[pkg.name];
+    : pkg.kind === "integration"
+      ? integrationDependencies
+      : pkg.kind === "experiment" ? experimentDependencies[pkg.name] : allowedDependencies[pkg.name];
 
   if (pkg.kind === "framework" && allowed === undefined)
     problems.push(`${pkg.name}: not listed in allowedDependencies (scripts/check-boundaries.ts). Decide and document its dependency direction.`);
+  if (pkg.kind === "experiment" && allowed === undefined)
+    problems.push(`${pkg.name}: not listed in experimentDependencies (scripts/check-boundaries.ts).`);
 
   for (const [dependency, specifier] of pkg.internalDependencies) {
     if (!specifier.startsWith("workspace:"))
       problems.push(`${pkg.name}: internal dependency ${dependency} must use the workspace: protocol (found "${specifier}").`);
-    if (allowed !== undefined && !allowed.includes(dependency))
+    const checked = pkg.kind !== "experiment" || pkg.productionDependencies.has(dependency);
+    if (checked && allowed !== undefined && !allowed.includes(dependency))
       problems.push(`${pkg.name}: must not depend on ${dependency}. Allowed: ${allowed.length === 0 ? "none" : allowed.join(", ")}.`);
   }
   return problems;
@@ -230,6 +258,9 @@ function checkModules(pkg: WorkspacePackage): string[] {
       const packageName = specifier.match(/^@holqa\/[^/]+/)?.[0];
       if (packageName !== undefined && packageName !== pkg.name && !pkg.internalDependencies.has(packageName))
         problems.push(`${display}: imports ${packageName}, which is not declared in ${pkg.name}'s package.json.`);
+      // Experiments may use other experiments as test fixtures, but shipped src/ code may only import production dependencies.
+      else if (packageName !== undefined && packageName !== pkg.name && pkg.kind === "experiment" && !pkg.productionDependencies.has(packageName))
+        problems.push(`${display}: imports ${packageName}, which ${pkg.name} declares only as a development dependency.`);
 
       const target = resolveLocalImport(specifier, file, sourceRoot);
       if (target !== undefined)

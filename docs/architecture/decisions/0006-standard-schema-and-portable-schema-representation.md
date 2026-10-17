@@ -1,6 +1,6 @@
 # 0006. Standard Schema and a portable schema representation
 
-- **Status:** Proposed
+- **Status:** Superseded by [0016](0016-schema-adapters-and-conversion-fidelity.md)
 - **Date:** 2026-10-17
 - **Deciders:** Holqa maintainers
 

@@ -109,12 +109,18 @@ See [compiler](compiler.md) for the pipeline in detail.
 | Explicit, declarative resource declarations | [0003](decisions/0003-explicit-resource-declarations.md) |
 | Stable logical resource identities | [0004](decisions/0004-stable-logical-resource-identities.md) |
 | Infrastructure-independent resource contracts | [0005](decisions/0005-infrastructure-independent-resource-contracts.md) |
-| Standard Schema and a portable schema representation | [0006](decisions/0006-standard-schema-and-portable-schema-representation.md) |
+| Standard Schema and a portable schema representation (superseded) | [0006](decisions/0006-standard-schema-and-portable-schema-representation.md) |
 | Compiler and runtime are separate | [0007](decisions/0007-separate-compiler-and-runtime.md) |
 | Agent instructions and skills organization | [0008](decisions/0008-agent-instructions-and-skills.md) |
 | Test placement and TypeScript standards | [0009](decisions/0009-test-placement-and-typescript-standards.md) |
 | TypeScript 6 until tooling supports 7 | [0010](decisions/0010-typescript-6-until-tooling-supports-7.md) |
 | `@/` path aliases in library packages | [0011](decisions/0011-path-aliases-in-library-packages.md) |
+| Source-inferred types and reply helpers | [0012](decisions/0012-source-inferred-types-and-reply-helpers.md) |
+| A descriptor protocol in `@holqa/core` | [0013](decisions/0013-descriptor-protocol-in-core.md) |
+| Evaluation-based manifest extraction | [0014](decisions/0014-evaluation-based-manifest-extraction.md) |
+| Runtime generations and reload | [0015](decisions/0015-runtime-generations-and-reload.md) |
+| Schema adapters and conversion fidelity | [0016](decisions/0016-schema-adapters-and-conversion-fidelity.md) |
+| Package layers after M0 | [0017](decisions/0017-package-layers-after-m0.md) |
 
 ## Build and packaging
 

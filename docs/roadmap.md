@@ -9,6 +9,7 @@ This roadmap distinguishes the current bootstrap state from future implementatio
 | Phase | Name | Status |
 | --- | --- | --- |
 | 0 | Bootstrap | In progress |
+| M0 | Foundation and architecture validation | Complete (see [M0](milestones/m0/index.md)) |
 | 1 | Core resource model and SDK | Planned |
 | 2 | Compiler | Planned |
 | 3 | Bun runtime and local development | Planned |
@@ -57,6 +58,12 @@ flowchart LR
 - Repository owner confirms the license (Apache-2.0) before any public release.
 - Documentation has no broken relative links.
 
+## M0: Foundation and architecture validation
+
+**Goal:** Confirm that the scaffold's checks, package boundaries, toolchain and proposed APIs work together, and find fundamental limitations of the programming model before the SDK accumulates code.
+
+Outcome: the baseline passes, the package layers are confirmed and extended ([ADR 0017](architecture/decisions/0017-package-layers-after-m0.md)), and four disposable experiments under [`experiments/`](../experiments/README.md) recorded their results. ADRs 0012–0017 record the decisions, and the [backlog](milestones/m0/backlog.md) lists the follow-up work with dependencies and acceptance criteria. Nothing from M0 is a framework capability: the experiments are **not** Implemented framework features.
+
 ## Phase 1: Core resource model and SDK
 
 **Goal:** Developers can declare an application's resources in `infra.ts` with full type inference, even though nothing executes yet.
@@ -66,7 +73,7 @@ flowchart LR
 - Define the logical resource model in `@holqa/core`: resource kinds, contracts, required capabilities, and references between resources ([ADR 0003](architecture/decisions/0003-explicit-resource-declarations.md), [ADR 0005](architecture/decisions/0005-infrastructure-independent-resource-contracts.md)).
 - Implement `defineApp` and initial resource factories in `@holqa/sdk` (`http.api`, `queue`, `bucket`, `schedule`, `staticSite`, `secret`, `variable`) as pure, deterministic declarations.
 - Implement typed resource handles whose types are inferred from declarations (for example a queue's message type).
-- Normalize schemas through the Standard Schema interface and define the internal normalized schema representation ([ADR 0006](architecture/decisions/0006-standard-schema-and-portable-schema-representation.md)).
+- Normalize schemas through the Standard Schema interface and define the internal normalized schema representation ([ADR 0016](architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md)).
 - Ship the first schema adapter for Zod.
 - Support composing resource registries from multiple files.
 - Extend the `ResourceId` grammar decision ([ADR 0004](architecture/decisions/0004-stable-logical-resource-identities.md)) and finalize it before 1.0.

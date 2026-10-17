@@ -1,6 +1,6 @@
 // Illustrative example: uses the proposed Holqa API, which is not implemented yet. This file is not type-checked or executed.
 import { resources } from "../../infra";
-import { sql } from "../db";
+import { getSql } from "../db";
 
 /** Largest upload, in bytes, that the application accepts for processing. */
 const maxUploadBytes = 25 * 1024 * 1024;
@@ -18,6 +18,7 @@ export default resources.uploads.onObjectCreated({
   id: "uploads.register",
   prefix: "incoming/",
   handler: async ({ object, log }) => {
+    const sql = getSql();
     const accepted = object.size <= maxUploadBytes && allowedContentTypes.has(object.contentType ?? "");
     const status = accepted ? "accepted" : "rejected";
 

@@ -46,7 +46,8 @@ export default resources.api.route({
     200: z.object({ orderId: z.string(), status: z.string() }),
     404: z.object({ message: z.string() })
   },
-  handler: async ({ params }) => ({ status: 200, body: { orderId: params.orderId, status: "pending" } })
+  // `reply` keeps status and body literals precise (see ADR 0012).
+  handler: async ({ params, reply }) => reply(200, { orderId: params.orderId, status: "pending" })
 });
 ```
 

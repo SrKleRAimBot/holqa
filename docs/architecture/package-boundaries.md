@@ -16,10 +16,13 @@ Holqa's packages are layered so that framework-neutral contracts never depend on
 | `@holqa/local` | `packages/local` | Local execution and resource emulation. | Planned | `core`, `runtime-bun` |
 | `@holqa/testing` | `packages/testing` | Testing utilities, fixtures, deterministic execution. | Planned | `core`, `sdk`, `local`, `runtime-bun` |
 | `@holqa/cli` | `packages/cli` | Developer CLI. | **Implemented** (help, version, `--json`) | `core`, `compiler`, `local`, `runtime-bun` |
-| Integrations | `packages/integrations/*` | Schema, handler, transport, and client adapters (Zod, Valibot, Effect, oRPC, TanStack Query). | Planned | `core`, `sdk`, `client` |
-| Examples | `examples/*` | Example applications and smoke tests. | `package-smoke` **Implemented** | anything |
+| Schema adapters | `packages/integrations/{zod,valibot,...}` | Convert one schema library's schemas for the compiler ([ADR 0016](decisions/0016-schema-adapters-and-conversion-fidelity.md)). | Planned | `core` only (Accepted design; enforced today only as an integration) |
+| Framework adapters | `packages/integrations/{orpc,tanstack-query,effect,...}` | Handler, transport, and client adapters. | Planned | `core`, `sdk`, `client` |
+| Drivers and providers | future `packages/providers/*` | Runtime drivers and provisioning providers. | Planned | `core` only (Accepted design; no packages yet) |
+| Experiments | `experiments/*` | Disposable M0 prototypes ([experiments](../../experiments/README.md)). | Not framework code | Mirror of this table (`experimentDependencies`); never a dependency of `packages/*` |
+| Examples | `examples/*` | Example applications and smoke tests. | `package-smoke` **Implemented**; `commerce` type-checked against the experiments | anything |
 
-Final npm names for integration packages are not decided.
+Final npm names for integration packages are not decided. The layer decisions for schema adapters, framework adapters, drivers, providers and experiments are recorded in [ADR 0017](decisions/0017-package-layers-after-m0.md), which also confirms the existing directions with the M0 prototypes.
 
 ```mermaid
 flowchart BT
@@ -66,7 +69,7 @@ Two independent mechanisms enforce the rules. Both run as part of `pnpm check`.
 
 ### `scripts/check-boundaries.ts`
 
-Run with `pnpm boundaries:check` (executed by Bun). It discovers every package under `packages/`, `packages/integrations/`, and `examples/`, then checks:
+Run with `pnpm boundaries:check` (executed by Bun). It discovers every package under `packages/`, `packages/integrations/`, `examples/`, and `experiments/`, then checks:
 
 | Check | Failure example |
 | --- | --- |
@@ -77,6 +80,7 @@ Run with `pnpm boundaries:check` (executed by Bun). It discovers every package u
 | Every `@holqa/*` import in `src/` is declared in `package.json`. | Importing `@holqa/core` without declaring it. |
 | Modules within a package's `src/` have no circular imports. | `src/a.ts ↔ src/b.ts`. |
 | No test files inside `src/`. | `src/foo.test.ts`. |
+| Experiments follow `experimentDependencies`; their `src/` imports only production dependencies. | `experiments/compiler/src` importing `@holqa/experiment-sdk`. |
 
 The allowed-directions table in the script is the source of truth; this document must match it. Adding a new framework package requires adding it to the script, which forces a deliberate decision about its dependencies.
 
@@ -87,9 +91,10 @@ The root `eslint.config.mjs` applies import restrictions by file path:
 | Files | Restriction |
 | --- | --- |
 | All files | No deep imports into another package's `src/` or `dist/` (for example `@holqa/core/src/result`). Use the package's public entry point. |
-| `packages/{core,compiler,sdk,client}/src/**` | No `bun`, `bun:*`, or `node:*`; no `@holqa/runtime-*`, `@holqa/local`, `@holqa/cli`, `@holqa/testing`. |
+| `packages/{core,compiler,sdk,client}/src/**` and `experiments/{model,sdk,schema-adapters,compiler}/src/**` | No `bun`, `bun:*`, or `node:*`; no `@holqa/runtime-*`, `@holqa/local`, `@holqa/cli`, `@holqa/testing`. |
 | `packages/core/src/**` | No `@holqa/*` imports at all. |
-| `packages/{sdk,client}/src/**` | Additionally, no `@holqa/compiler`. |
+| `packages/{sdk,client}/src/**` and `experiments/sdk/src/**` | Additionally, no `@holqa/compiler`. |
+| `experiments/{model,schema-adapters,compiler,runtime-bun}/src/**` | No imports of the SDK prototype (and, outside the runtime, the runtime prototype), including type-only imports, which the boundary script cannot see. |
 | `**/src/**/*.{test,spec}.{ts,tsx}` | Rejected: tests belong under `tests/`, mirroring `src/`. |
 
 ESLint gives fast editor feedback; the boundary script catches what ESLint cannot see (`package.json` declarations, package-level cycles).

@@ -1,6 +1,6 @@
 // Illustrative example: uses the proposed Holqa API, which is not implemented yet. This file is not type-checked or executed.
 import { resources } from "../../infra";
-import { sql } from "../db";
+import { getSql } from "../db";
 
 /**
  * The single competing consumer for the `order-processing` queue.
@@ -14,6 +14,7 @@ export default resources.orders.consume({
   id: "orders.process",
   concurrency: 4,
   handler: async ({ message, delivery, log }) => {
+    const sql = getSql();
     await sql.begin(async (tx) => {
       const claimed = await tx`
         INSERT INTO processed_orders (order_id) VALUES (${message.orderId})

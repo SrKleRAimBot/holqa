@@ -11,11 +11,21 @@ import pathAlias from "eslint-plugin-path-alias";
 const codeFiles = ["**/*.{ts,tsx,mts,cts,js,jsx,mjs,cjs}"];
 
 /** Workspace packages that hold Holqa's framework-neutral contracts. */
-const neutralPackageSources = ["packages/core/src/**", "packages/compiler/src/**", "packages/sdk/src/**", "packages/client/src/**"];
+const neutralPackageSources = [
+  "packages/core/src/**",
+  "packages/compiler/src/**",
+  "packages/sdk/src/**",
+  "packages/client/src/**",
+  // Disposable M0 experiments that prototype neutral packages obey the same rules.
+  "experiments/model/src/**",
+  "experiments/sdk/src/**",
+  "experiments/schema-adapters/src/**",
+  "experiments/compiler/src/**"
+];
 
 /** Restricts imports that would reach into another package's private files. */
 const noDeepPackageImports = {
-  group: ["@holqa/*/src", "@holqa/*/src/**", "@holqa/*/dist", "@holqa/*/dist/**", "**/packages/*/src/**"],
+  group: ["@holqa/*/src", "@holqa/*/src/**", "@holqa/*/dist", "@holqa/*/dist/**", "**/packages/*/src/**", "**/experiments/*/src/**"],
   message: "Import other Holqa packages through their public entry points (package.json \"exports\"), never their src/ or dist/ files."
 };
 
@@ -206,7 +216,7 @@ export default antfu({
     }]
   }
 }, {
-  files: ["packages/sdk/src/**", "packages/client/src/**"],
+  files: ["packages/sdk/src/**", "packages/client/src/**", "experiments/sdk/src/**"],
   rules: {
     "no-restricted-imports": ["error", {
       paths: [
@@ -217,6 +227,34 @@ export default antfu({
         { group: ["bun:*", "node:*"], message: "Public SDK/client code must stay runtime-neutral." },
         { group: ["@holqa/compiler", "@holqa/compiler/*"], message: "The public SDK and client must not import compiler internals." },
         { group: ["@holqa/runtime-*", "@holqa/local", "@holqa/cli", "@holqa/testing"], message: "The public SDK and client must not depend on runtime, tooling or testing packages." }
+      ]
+    }]
+  }
+}, {
+  // M0 experiments mirror the target layering: the compiler, runtime, model and
+  // schema-adapter prototypes must not see the SDK prototype, not even through
+  // type-only imports (which scripts/check-boundaries.ts cannot detect).
+  files: ["experiments/model/src/**", "experiments/schema-adapters/src/**", "experiments/compiler/src/**"],
+  rules: {
+    "no-restricted-imports": ["error", {
+      paths: [
+        { name: "bun", message: "Framework-neutral packages must not depend on Bun APIs. Use @holqa/runtime-bun." }
+      ],
+      patterns: [
+        noDeepPackageImports,
+        { group: ["bun:*", "node:*"], message: "Framework-neutral packages must not import runtime-specific modules." },
+        { group: ["@holqa/runtime-*", "@holqa/local", "@holqa/cli", "@holqa/testing"], message: "Framework-neutral packages must not depend on runtime, tooling or testing packages." },
+        { group: ["@holqa/experiment-sdk", "@holqa/experiment-runtime-bun"], message: "Only the descriptor contracts are shared; the SDK and runtime prototypes are out of bounds here." }
+      ]
+    }]
+  }
+}, {
+  files: ["experiments/runtime-bun/src/**"],
+  rules: {
+    "no-restricted-imports": ["error", {
+      patterns: [
+        noDeepPackageImports,
+        { group: ["@holqa/experiment-sdk", "@holqa/experiment-compiler"], message: "The runtime prototype works from model descriptors only." }
       ]
     }]
   }

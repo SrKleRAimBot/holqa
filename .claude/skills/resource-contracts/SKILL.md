@@ -23,7 +23,7 @@ Contracts are the part of Holqa that outlives a single deployment: resource IDs 
 | `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength` | **Implemented** (`@holqa/core`) |
 | `Diagnostic`, `createDiagnostic`, `formatDiagnostic`, `diagnosticCodes` | **Implemented** (`@holqa/core`) |
 | `canonicalJsonStringify`, `CanonicalJsonError`, `CanonicalJsonValue` | **Implemented** (`@holqa/compiler`) |
-| Standard Schema-based contracts, Zod integration | Design (see ADR 0006); not implemented |
+| Standard Schema-based contracts, Zod integration | Accepted design (see ADR 0016, superseding ADR 0006); not implemented |
 | Normalized schema representation, fingerprints, evolution checks | Design; not implemented |
 | Manifest schema | Planned |
 
@@ -125,5 +125,5 @@ canonicalJsonStringify({ kind: "queue", id: id.ok ? id.value : null });
 - Zod: https://zod.dev, JSON Schema conversion: https://zod.dev/json-schema
 - Valibot: https://valibot.dev; Effect Schema: https://effect.website/docs/schema/introduction/
 - JSON Schema: https://json-schema.org; RFC 8785 (for contrast): https://www.rfc-editor.org/rfc/rfc8785
-- Local: [docs/concepts/type-safety-and-schemas.md](../../../docs/concepts/type-safety-and-schemas.md), [docs/reference/diagnostic-codes.md](../../../docs/reference/diagnostic-codes.md), [ADR 0004](../../../docs/architecture/decisions/0004-stable-logical-resource-identities.md), [ADR 0006](../../../docs/architecture/decisions/0006-standard-schema-and-portable-schema-representation.md), [docs/architecture/compiler.md](../../../docs/architecture/compiler.md)
+- Local: [docs/concepts/type-safety-and-schemas.md](../../../docs/concepts/type-safety-and-schemas.md), [docs/reference/diagnostic-codes.md](../../../docs/reference/diagnostic-codes.md), [ADR 0004](../../../docs/architecture/decisions/0004-stable-logical-resource-identities.md), [ADR 0016](../../../docs/architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md), [docs/architecture/compiler.md](../../../docs/architecture/compiler.md)
 - Related skills: `holqa-architecture`, `typescript-library`, `safe-refactoring`

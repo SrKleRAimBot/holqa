@@ -1,0 +1,26 @@
+{
+  "name": "@holqa/example-commerce",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Holqa's recurring reference application: a small commerce backend, type-checked and exercised against the disposable M0 experiment packages.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@holqa/experiment-sdk": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@holqa/experiment-compiler": "workspace:*",
+    "@holqa/experiment-model": "workspace:*",
+    "@holqa/experiment-runtime-bun": "workspace:*",
+    "@holqa/experiment-schema-adapters": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

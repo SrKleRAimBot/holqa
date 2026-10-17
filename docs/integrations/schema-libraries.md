@@ -1,6 +1,6 @@
 # Schema libraries: Zod, Valibot, and Effect Schema
 
-> **Status:** Planned. No schema adapters exist. Zod is the planned first-class integration; Valibot and Effect Schema are planned through adapters. The underlying design is **Proposed** in [ADR 0006](../architecture/decisions/0006-standard-schema-and-portable-schema-representation.md).
+> **Status:** Planned. No schema adapters exist. Zod is the planned first-class integration; Valibot and Effect Schema are planned through adapters. The underlying design is **Accepted design** in [ADR 0016](../architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md), which supersedes ADR 0006.
 
 Holqa uses schemas for two purposes: TypeScript type inference and runtime validation at trust boundaries. Its public generics are designed around the Standard Schema interface so that developers can choose their schema library. See [type safety and schemas](../concepts/type-safety-and-schemas.md) for the full model.
 

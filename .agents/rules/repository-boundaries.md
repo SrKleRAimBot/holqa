@@ -19,7 +19,7 @@
 - Declare every `@holqa/*` import in the importing package's `package.json` with `workspace:*`.
 - Keep `src/` free of circular module imports and test files.
 - A new framework package must be added to `allowedDependencies` in [`scripts/check-boundaries.ts`](../../scripts/check-boundaries.ts) and documented in `docs/architecture/package-boundaries.md`; the check fails otherwise.
-- Keep separate: `packages/` (Holqa libraries), `skills/` (public skills for Holqa users), `.agents/` (contributor instructions), `docs/` (authoritative docs), `examples/`, `scripts/` (maintainer automation).
+- Keep separate: `packages/` (Holqa libraries), `skills/` (public skills for Holqa users), `.agents/` (contributor instructions), `docs/` (authoritative docs), `examples/`, `experiments/` (disposable M0 prototypes; never a dependency of `packages/`), `scripts/` (maintainer automation).
 - Stay within the task. Do not make speculative edits, refactors, or "while I'm here" changes outside the requested scope; propose them separately.
 - Prefer small, verifiable changes over large rewrites.
 - Run `pnpm boundaries:check` after changing imports, dependencies, or package layout.

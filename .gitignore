@@ -20,6 +20,9 @@ coverage/
 # Holqa local state (future CLI/emulator output)
 .holqa/
 
+# Scratch copies created by the M0 experiment tests
+experiments/*/.tmp/
+
 # Competing lockfiles: pnpm is the only package manager for this repository
 package-lock.json
 yarn.lock

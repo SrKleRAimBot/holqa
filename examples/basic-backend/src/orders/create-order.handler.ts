@@ -2,7 +2,7 @@
 import { z } from "zod";
 
 import { resources } from "../../infra";
-import { sql } from "../db";
+import { getSql } from "../db";
 
 /** Request body accepted by `POST /api/orders`; validated before the handler runs. */
 const createOrderBody = z.object({
@@ -19,7 +19,8 @@ export default resources.api.route({
   responses: {
     202: z.object({ orderId: z.string().uuid() })
   },
-  handler: async ({ body }) => {
+  handler: async ({ body, reply }) => {
+    const sql = getSql();
     const orderId = crypto.randomUUID();
 
     await sql`INSERT INTO orders (id, sku, quantity, status) VALUES (${orderId}, ${body.sku}, ${body.quantity}, 'pending')`;
@@ -31,9 +32,7 @@ export default resources.api.route({
       priority: body.priority
     });
 
-    return {
-      status: 202,
-      body: { orderId }
-    };
+    // `reply` keeps the status and body types precise; see ADR 0012.
+    return reply(202, { orderId });
   }
 });
