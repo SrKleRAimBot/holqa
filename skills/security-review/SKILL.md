@@ -8,7 +8,7 @@ metadata:
 
 # Security review
 
-> **Preview — the APIs referenced are not yet available.** The SDK, generated clients and bindings named here are **proposed**. The review checklist applies to any code written against the proposed API, and most items apply to event-driven backends in general.
+> **Preview.** The SDK and the Bun runtime for HTTP routes and RPC procedures are implemented in private, unpublished packages; generated clients and infrastructure bindings named here are **proposed**. The review checklist applies to any code written against the proposed API, and most items apply to event-driven backends in general.
 
 ## When to use
 

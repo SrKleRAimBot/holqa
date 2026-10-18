@@ -1,6 +1,6 @@
 # API design specification
 
-> **Status:** Partly implemented. The application definition, the `queue`, `bucket`, `schedule` and `http.api` declarations, configuration entries, typed handles, queue, bucket and schedule handler registration, the descriptor protocol and the runtime binding contract are **Implemented** in `@holqa/core` and `@holqa/sdk`, with the differences listed under [implementation status](#implementation-status). Schema adapters are **Implemented** as described in [schema contracts](schema-contracts.md). HTTP routes, `reply`, RPC procedures, `staticSite` and infrastructure bindings remain **Proposed**. Parts marked **Validated in M0** were prototyped in the disposable [`experiments/`](../../experiments/README.md) packages, which are not part of the framework.
+> **Status:** Partly implemented. The application definition, the `queue`, `bucket`, `schedule` and `http.api` declarations, configuration entries, typed handles, queue, bucket and schedule handler registration, HTTP routes with `reply`, RPC procedures, middleware, the descriptor protocol and the runtime binding contract are **Implemented** in `@holqa/core` and `@holqa/sdk`, with the differences listed under [implementation status](#implementation-status). Schema adapters are **Implemented** as described in [schema contracts](schema-contracts.md). `staticSite` and infrastructure bindings remain **Proposed**. The implemented HTTP, RPC and middleware APIs are specified in the [runtime reference](runtime.md). Parts marked **Validated in M0** were prototyped in the disposable [`experiments/`](../../experiments/README.md) packages, which are not part of the framework.
 
 This page specifies the public APIs for application definitions, typed resources, handlers, schema adapters and bindings. It is the target for the first real implementation of `@holqa/sdk` and the descriptor contracts in `@holqa/core`. Decisions behind it are recorded in ADRs [0012](../architecture/decisions/0012-source-inferred-types-and-reply-helpers.md) to [0017](../architecture/decisions/0017-package-layers-after-m0.md). The [commerce example](../../examples/commerce/README.md) is the reference application written against it.
 
@@ -10,12 +10,15 @@ This page specifies the public APIs for application definitions, typed resources
 | --- | --- | --- |
 | `defineApp`, `defineResources`, `App.env` | **Implemented** | `handlers` is optional and also accepts `{ include, exclude }`; `description` was added; `composeResources` was added. `defineApp` validates the whole definition and throws a `HolqaError` listing every problem, including duplicate identifiers ([ADR 0019](../architecture/decisions/0019-declaration-time-validation.md)). |
 | `queue`, `bucket`, `schedule`, `secret`, `variable` | **Implemented** | Identifiers and options are validated when the factory is called, and literal identifiers at compile time. |
-| `http.api` | **Implemented** (declaration only) | `route(...)` and `reply` are not implemented. |
+| `http.api` | **Implemented** | Accepts `middleware`. |
+| `route(...)`, `reply` | **Implemented** | Adds a `headers` schema and route `middleware`; `reply(status, body, headers?)` as in ADR 0012; bodies are validated and sent in the schema's output form; a returned `Response` passes through for streaming; an undeclared status fails with `HOLQA_RESPONSE_INVALID` (not `HOLQA_DECLARATION_INVALID`). See the [runtime reference](runtime.md#http-routes). |
+| `procedure(...)` | **Implemented** | `{ id, operation: "query" \| "mutation", input?, output, middleware?, handler }`, served with the `holqa.rpc/1` protocol ([ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md)). |
+| Middleware | **Implemented** | `middleware(...)`, `middleware.requires<Context>()`, application, API and route scopes. See [middleware](runtime.md#middleware). |
 | Handler registrations `consume`, `onObjectCreated`, `handle` | **Implemented** | Registrations expose `trigger` (the trigger kind), `id` and `resourceId`. |
 | Descriptor protocol | **Implemented** | Typed kind registries instead of open `config` objects; handler descriptors hold `definition` (JSON metadata) separately from `invoke`; resource descriptors add `requirements` ([ADR 0018](../architecture/decisions/0018-typed-kind-registries-in-the-descriptor-protocol.md)). |
-| Runtime bindings | **Implemented** (contract only) | `RuntimeBinding` is `{ name, capabilities, drivers, config }`; `bindApp` checks capabilities and drivers before installing; rebinding fails with `HOLQA_RUNTIME_ALREADY_BOUND` ([ADR 0020](../architecture/decisions/0020-runtime-binding-resolution.md)). No runtime installs bindings yet. |
+| Runtime bindings | **Implemented** (contract only) | `RuntimeBinding` is `{ name, capabilities, drivers, config }`; `bindApp` checks capabilities and drivers before installing; rebinding fails with `HOLQA_RUNTIME_ALREADY_BOUND` ([ADR 0020](../architecture/decisions/0020-runtime-binding-resolution.md)). `@holqa/runtime-bun` installs a binding when it starts. |
 | Schema adapters | **Implemented** | The method is `describe(schema, side)` and returns a description with structured `runtimeOnly` entries, or a problem with a `path` and `hint`. Fidelity is recorded on the normalized contract's `source`, not per conversion ([ADR 0021](../architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md)). |
-| Infrastructure bindings, routes, procedures, `staticSite` | Proposed | — |
+| Infrastructure bindings, `staticSite` | Proposed | — |
 
 The [resource model](../architecture/resource-model.md) and the [packages reference](packages.md) describe the implemented API; this page keeps the original proposal for the parts that are not built.
 
@@ -222,8 +225,8 @@ These codes are used by the experiments. The SDK and compiler codes in this tabl
 | Question | Where it is tracked |
 | --- | --- |
 | How the CLI obtains schema adapters (declared in `defineApp`, a tool configuration file, or resolved by vendor name). | [Backlog](../milestones/m0/backlog.md) |
-| RPC `procedure` shape and query/mutation classification. | Backlog |
-| Middleware typing (context extension at application, API and route level). | Backlog |
+| RPC `procedure` shape and query/mutation classification. | Resolved by [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) |
+| Middleware typing (context extension at application, API and route level). | Resolved by [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) |
 | Whether `send` validates by default (it does in M0). | Backlog |
 | Infrastructure binding file format and capability vocabulary. | [ADR 0005](../architecture/decisions/0005-infrastructure-independent-resource-contracts.md), backlog |
 

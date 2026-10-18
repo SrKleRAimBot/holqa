@@ -1,6 +1,6 @@
 # Resource model
 
-> **Status:** Implemented — the descriptor protocol, kind registries, handler model and runtime binding contract in `@holqa/core`, and the declaration API in `@holqa/sdk`. The compiler pipeline that reads descriptors into a manifest is **Implemented** ([compiler specification](../reference/compiler-specification.md)). Execution (a runtime that invokes handlers) and real drivers are **Planned**.
+> **Status:** Implemented — the descriptor protocol, kind registries, handler model and runtime binding contract in `@holqa/core`, and the declaration API in `@holqa/sdk`. The compiler pipeline that reads descriptors into a manifest is **Implemented** ([compiler specification](../reference/compiler-specification.md)). Execution of HTTP routes and RPC procedures is **Implemented** in `@holqa/runtime-bun` ([runtime reference](../reference/runtime.md)); queue, storage and schedule delivery and real drivers are **Planned**.
 
 This page describes how Holqa represents an application internally: the descriptors every SDK value carries, the typed registries that define resource and trigger kinds, how handlers separate metadata from code, how a logical handle reaches an implementation at run time, and which modules and packages depend on which. For the developer-facing view, see the [application model](../concepts/application-model.md).
 
@@ -50,7 +50,8 @@ There is no open `Record<string, unknown>` anywhere in the model, so provider-sp
 | `queue.message` | `queue` | `concurrency?` | `message` | `attempt`, `messageId` | `resources.x.consume(...)` (**Implemented**) |
 | `bucket.object-created` | `bucket` | `prefix?` | `object` (portable event) | none | `resources.x.onObjectCreated(...)` (**Implemented**) |
 | `schedule.tick` | `schedule` | none | none | `scheduledTime` | `resources.x.handle(...)` (**Implemented**) |
-| `http.route` | `http.api` | `method`, `path` | `params?`, `query?`, `body?`, `responses` | none | `route(...)` (**Planned**) |
+| `http.route` | `http.api` | `method`, `path` | `params?`, `query?`, `headers?`, `body?`, `responses` | none | `resources.x.route(...)` (**Implemented**) |
+| `http.procedure` | `http.api` | `operation` (`query` or `mutation`) | `input?`, `output` | none | `resources.x.procedure(...)` (**Implemented**) |
 
 ### Adding a kind
 
@@ -66,7 +67,7 @@ A handler registration such as `resources.orders.consume({ id, handler })` produ
 - `definition` is plain JSON: the handler's identifier and its trigger, including a reference `{ kind, id }` to the resource it belongs to. The compiler reads it, together with `schemas`, without importing any driver or calling user code.
 - `invoke(input, context)` is the only executable part. A runtime calls it with **untrusted** input; it validates the input against the handler's schemas (`validateInput`, which always awaits) and only then calls the user's function with a typed context.
 
-Registration is declarative: calling `consume` runs nothing. Queue and HTTP execution belong to the planned runtime.
+Registration is declarative: calling `consume` runs nothing. For `http.route` and `http.procedure`, `invoke` receives `{ request, params }` and resolves to a Fetch `Response`; `@holqa/runtime-bun` executes them ([runtime reference](../reference/runtime.md)). Queue delivery is planned.
 
 ## Runtime binding
 

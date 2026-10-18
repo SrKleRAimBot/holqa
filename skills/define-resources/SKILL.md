@@ -8,7 +8,7 @@ metadata:
 
 # Defining infrastructure resources
 
-> **Preview — not yet published.** `defineApp`, `defineResources`, `composeResources`, `queue`, `bucket`, `schedule`, `http.api` (without routes), `secret` and `variable` are implemented in the Holqa repository's `@holqa/sdk`, which is not published to npm yet. `staticSite`, HTTP routes and the RPC mount are **proposed**; code that uses them is illustrative.
+> **Preview — not yet published.** `defineApp`, `defineResources`, `composeResources`, `queue`, `bucket`, `schedule`, `http.api` (with routes and RPC procedures, see `create-http-endpoint` and `create-rpc-procedure`), `secret` and `variable` are implemented in the Holqa repository's `@holqa/sdk`, which is not published to npm yet. `staticSite` is **proposed**; code that uses it is illustrative.
 
 ## When to use
 
@@ -36,7 +36,7 @@ In the repository's `@holqa/sdk`, factories validate their declarations when cal
 6. **Compose if large.** Split resources into modules with `defineResources` and combine them with `composeResources`, which rejects duplicate aliases (plain spread silently keeps the last one).
 
 ```ts
-// infra.ts — illustrative: staticSite and the rpc mount are proposed; the rest is implemented but unpublished
+// infra.ts — illustrative: staticSite is proposed; the rest is implemented but unpublished
 import { bucket, defineApp, http, queue, schedule, secret, staticSite, variable } from "@holqa/sdk";
 import { z } from "zod";
 
@@ -44,7 +44,7 @@ const app = defineApp({
   name: "commerce",
   handlers: ["./src/**/*.handler.ts"],
   resources: {
-    api: http.api({ id: "public-api", basePath: "/api", rpc: { path: "/rpc" } }),
+    api: http.api({ id: "public-api", basePath: "/api" }), // procedures are served at /api/rpc/<id>
     orders: queue({
       id: "order-processing",
       message: z.object({ orderId: z.string(), priority: z.enum(["normal", "urgent"]) }),

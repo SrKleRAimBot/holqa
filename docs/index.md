@@ -12,14 +12,15 @@ What exists today:
 
 - A pnpm + Turborepo monorepo with strict TypeScript, ESLint, Bun tests, and enforced package boundaries.
 - `@holqa/core`: `Result`, structured `Diagnostic` values, a diagnostic code registry, validated `ResourceId`s, and the descriptor protocol and runtime binding contract behind the resource model.
-- `@holqa/sdk`: `defineApp`, resource declarations (`queue`, `bucket`, `schedule`, `http.api`), configuration (`secret`, `variable`), typed resource handles inferred from source, and handler registration for queues, buckets and schedules. Nothing executes handlers yet.
+- `@holqa/sdk`: `defineApp`, resource declarations (`queue`, `bucket`, `schedule`, `http.api`), configuration (`secret`, `variable`), typed resource handles inferred from source, handler registration for queues, buckets and schedules, and HTTP routes, RPC procedures and typed middleware.
 - `@holqa/testing`: compile-time type assertions.
 - `@holqa/compiler`: deterministic canonical JSON, schema contracts, and compilation of an application into a validated resource graph and a deterministic manifest (version 1) with an entry point map. See the [compiler specification](reference/compiler-specification.md).
+- `@holqa/runtime-bun`: an invocation dispatcher with lifecycle, limits, cancellation and structured logs that executes compiled applications' HTTP routes and RPC procedures on Bun. See the [runtime reference](reference/runtime.md).
 - `@holqa/cli`: a `holqa` binary that prints help and version information, inspects an application (`holqa inspect`), writes its manifest (`holqa build --manifest`), and reports structured diagnostics (with `--json`) for commands that are not implemented.
 
 Disposable prototypes from the [M0 milestone](milestones/m0/index.md) live in [`experiments/`](../experiments/README.md); they are not part of the framework.
 
-Everything else (HTTP routes, bundling, client generation, runtime, local development environment, clients, integrations, and providers) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
+Everything else (queue, storage and schedule delivery, bundling, client generation, the local development environment, clients, integrations, and providers) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
 
 ## Where to start
 
@@ -83,6 +84,8 @@ Everything else (HTTP routes, bundling, client generation, runtime, local develo
 | [0019](architecture/decisions/0019-declaration-time-validation.md) | Declaration-time validation in the SDK |
 | [0020](architecture/decisions/0020-runtime-binding-resolution.md) | Runtime binding resolution |
 | [0021](architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md) | Schema contracts, wire payloads and compatibility |
+| [0022](architecture/decisions/0022-manifest-v1-and-entry-point-map.md) | Manifest version 1 and a separate entry point map |
+| [0023](architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) | A common invocation engine, with HTTP and RPC as its first transports |
 
 ## Milestones
 
@@ -110,6 +113,7 @@ Everything else (HTTP routes, bundling, client generation, runtime, local develo
 | [Diagnostic codes](reference/diagnostic-codes.md) | Implemented `HOLQA_*` codes and the stability policy. |
 | [Schema contracts](reference/schema-contracts.md) | Validation errors, wire encoding, canonical contracts, fingerprints, compatibility policy and Zod support. |
 | [CLI](reference/cli.md) | Implemented flags, exit codes, JSON output, and proposed commands. |
+| [Runtime](reference/runtime.md) | Execution lifecycle, invocations, HTTP routes, middleware ordering and the `holqa.rpc/1` protocol. |
 | [API design specification](reference/api-design.md) | Proposed public APIs for applications, resources, handlers, schema adapters and bindings. |
 
 ## Contributing

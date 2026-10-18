@@ -128,7 +128,7 @@ The compiler must account for:
 | Versioned messages | Queue declarations carry an explicit `schemaVersion`; the `holqa.message/1` envelope carries the version a message was produced with. | **Implemented** (drivers do not use the envelope yet) |
 | Contract change detection | Stable fingerprints over canonical contracts. | **Implemented**, including recording them in the manifest |
 | Breaking-change diagnostics | `checkSchemaCompatibility` classifies each change as safe, potentially breaking, unverifiable or breaking. | **Implemented**; comparing against a deployed manifest is **Planned** |
-| Public HTTP/RPC contract changes | The same checker with the `request` and `response` roles. | **Implemented** as a library function; routes are **Proposed** |
+| Public HTTP/RPC contract changes | The same checker with the `request` and `response` roles. | **Implemented** as a library function; routes and procedures are **Implemented**, but running the checker on them against a deployment is **Planned** |
 | Migration guidance | Diagnostics with hints, the [evolution guidance](../reference/schema-contracts.md#evolution-guidance), and a public `schema-evolution` agent skill. | Guidance **Implemented**; the skill is available as a preview; migration engine **Planned** |
 
 ## TypeScript standards in this repository

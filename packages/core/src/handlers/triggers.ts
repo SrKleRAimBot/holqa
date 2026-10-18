@@ -60,7 +60,7 @@ export interface ScheduleTickMetadata {
   readonly scheduledTime: string;
 }
 
-/** Options of an HTTP route. Route execution is planned; the trigger shape is reserved now. */
+/** The method and path template an HTTP route serves. */
 export interface HttpRouteTriggerOptions {
   readonly method: HttpMethod;
   /** Path relative to the API's base path. `:name` segments are parameters. */
@@ -72,8 +72,30 @@ export interface HttpRouteTriggerSchemas {
   readonly params?: StandardSchemaV1;
   readonly query?: StandardSchemaV1;
   readonly body?: StandardSchemaV1;
+  /** Request headers, read as a record of lowercase names to values. */
+  readonly headers?: StandardSchemaV1;
   /** Response schemas keyed by HTTP status code. */
   readonly responses: Readonly<{ [status: number]: StandardSchemaV1 }>;
+}
+
+/**
+ * Whether an RPC procedure only reads (`query`) or changes state
+ * (`mutation`). Queries may also be called with `GET`, so they must be safe
+ * to repeat; clients may cache their results.
+ */
+export type HttpProcedureOperation = "query" | "mutation";
+
+/** Options of an RPC procedure served by an HTTP API. */
+export interface HttpProcedureTriggerOptions {
+  readonly operation: HttpProcedureOperation;
+}
+
+/** Schemas an RPC procedure validates its input and output with. */
+export interface HttpProcedureTriggerSchemas {
+  /** The input contract. Absent means the procedure takes no input. */
+  readonly input?: StandardSchemaV1;
+  /** The output contract. */
+  readonly output: StandardSchemaV1;
 }
 
 /**
@@ -85,6 +107,7 @@ export interface TriggerKindMap {
   readonly "bucket.object-created": TriggerKindSpec<"bucket", ObjectCreatedTriggerOptions, ObjectCreatedTriggerSchemas, EmptyObject>;
   readonly "schedule.tick": TriggerKindSpec<"schedule", EmptyObject, EmptyObject, ScheduleTickMetadata>;
   readonly "http.route": TriggerKindSpec<"http.api", HttpRouteTriggerOptions, HttpRouteTriggerSchemas, EmptyObject>;
+  readonly "http.procedure": TriggerKindSpec<"http.api", HttpProcedureTriggerOptions, HttpProcedureTriggerSchemas, EmptyObject>;
 }
 
 /** The name of a trigger kind, for example `queue.message`. */
@@ -95,7 +118,8 @@ const triggerResourceKinds = {
   "queue.message": "queue",
   "bucket.object-created": "bucket",
   "schedule.tick": "schedule",
-  "http.route": "http.api"
+  "http.route": "http.api",
+  "http.procedure": "http.api"
 } as const satisfies { readonly [Trigger in TriggerKind]: TriggerKindMap[Trigger]["resource"] };
 
 /** Every trigger kind this version of the protocol defines, in a stable order. */

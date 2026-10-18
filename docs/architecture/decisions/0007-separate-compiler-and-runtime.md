@@ -4,7 +4,7 @@
 - **Date:** 2026-10-17
 - **Deciders:** Holqa maintainers
 
-> **Implementation status:** The package boundary exists. The compiler and runtime do not. `@holqa/compiler` currently contains only `canonicalJsonStringify`, the deterministic JSON serializer that will underpin the manifest. There is no manifest schema, resource analysis, handler discovery or client generation. `@holqa/runtime-bun` is planned (a README only).
+> **Implementation status:** The compiler is implemented in `@holqa/compiler` (manifest version 1, entry point map; [ADR 0022](0022-manifest-v1-and-entry-point-map.md)). The runtime is implemented in `@holqa/runtime-bun` for HTTP routes and RPC procedures, loading compiled output with `loadCompiledApplication` ([ADR 0023](0023-common-invocation-engine-and-http-rpc-execution.md)). Client generation is planned. This line was updated to reflect the implementation; the decision is unchanged.
 
 ## Context
 

@@ -1,6 +1,6 @@
 # Package boundaries
 
-> **Status:** Implemented. Dependency directions and import restrictions are enforced by `scripts/check-boundaries.ts` and ESLint. Most packages listed here do not exist yet; their rules are already defined so they apply from the first commit.
+> **Status:** Implemented. Dependency directions and import restrictions are enforced by `scripts/check-boundaries.ts` and ESLint. Several packages listed here do not exist yet; their rules are already defined so they apply from the first commit.
 
 Holqa's packages are layered so that framework-neutral contracts never depend on execution infrastructure, and the public SDK never becomes a circular dependency hub. This page lists every package, what it may depend on, and how those rules are enforced. For the layer model, see the [architecture overview](overview.md).
 
@@ -9,10 +9,10 @@ Holqa's packages are layered so that framework-neutral contracts never depend on
 | Package | Path | Responsibility | Status | May depend on (internal) |
 | --- | --- | --- | --- | --- |
 | `@holqa/core` | `packages/core` | Framework-neutral contracts, resource identity, diagnostics, descriptor protocol, runtime binding contract. | **Implemented** (contracts) | none |
-| `@holqa/sdk` | `packages/sdk` | Primary public developer-facing SDK: `defineApp`, resource factories, typed handles. | **Implemented** (application and resource model) | `core` |
+| `@holqa/sdk` | `packages/sdk` | Primary public developer-facing SDK: `defineApp`, resource factories, typed handles. | **Implemented** (application and resource model, HTTP routes, RPC procedures, middleware) | `core` |
 | `@holqa/client` | `packages/client` | Framework-independent, browser-safe generated-client runtime. | Planned | `core` |
 | `@holqa/compiler` | `packages/compiler` | Resource analysis, manifest IR, diagnostics, compilation. | **Implemented** (canonical JSON, application compilation, graph validation, manifest version 1 and entry point map); client generation and bundling Planned | `core` |
-| `@holqa/runtime-bun` | `packages/runtime-bun` | Bun execution and invocation adapters. | Planned | `core` |
+| `@holqa/runtime-bun` | `packages/runtime-bun` | Bun execution: invocation dispatcher, lifecycle, HTTP and RPC transports. | **Implemented** (dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve`); queue, storage and schedule transports Planned | `core` |
 | `@holqa/local` | `packages/local` | Local execution and resource emulation. | Planned | `core`, `runtime-bun` |
 | `@holqa/testing` | `packages/testing` | Testing utilities, fixtures, deterministic execution. | **Implemented** (type assertions only) | `core`, `sdk`, `local`, `runtime-bun` |
 | `@holqa/cli` | `packages/cli` | Developer CLI. | **Implemented** (help, version, `--json`, `inspect`, `build --manifest`); other workflow commands Proposed | `core`, `compiler`, `local`, `runtime-bun` |

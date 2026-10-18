@@ -47,11 +47,13 @@ describe("normalizeTriggerKind", () => {
   it("keeps defined options only and names the trigger capability", () => {
     expect(normalizeTriggerKind("queue.message", {})).toEqual({ options: {}, capabilities: ["trigger.queue.message"], problems: [] });
     expect(normalizeTriggerKind("http.route", { method: "GET", path: "/orders/:id" }).options).toEqual({ method: "GET", path: "/orders/:id" });
+    expect(normalizeTriggerKind("http.procedure", { operation: "mutation" })).toEqual({ options: { operation: "mutation" }, capabilities: ["trigger.http.procedure"], problems: [] });
   });
 
   it("rejects malformed options", () => {
     expect(normalizeTriggerKind("http.route", { method: "TRACE", path: "/a" }).problems).toHaveLength(1);
     expect(normalizeTriggerKind("bucket.object-created", { prefix: 3 }).problems).toEqual(["\"options.prefix\" must be a string."]);
+    expect(normalizeTriggerKind("http.procedure", { operation: "subscription" }).problems).toEqual(["\"options.operation\" must be one of \"query\", \"mutation\"."]);
   });
 });
 
@@ -59,7 +61,8 @@ describe("schema roles", () => {
   const schema = fixtureSchema({ type: "string" });
 
   it("lists roles sorted and flattens responses", () => {
-    expect(triggerSchemas("http.route", { query: schema, body: schema, responses: { 404: schema, 200: schema } }).roles.map(entry => entry.role)).toEqual(["body", "query", "response.200", "response.404"]);
+    expect(triggerSchemas("http.route", { query: schema, body: schema, headers: schema, responses: { 404: schema, 200: schema } }).roles.map(entry => entry.role)).toEqual(["body", "headers", "query", "response.200", "response.404"]);
+    expect(triggerSchemas("http.procedure", { input: schema, output: schema }).roles.map(entry => entry.role)).toEqual(["input", "output"]);
   });
 
   it("reports missing, unknown and non-schema roles", () => {
@@ -67,5 +70,6 @@ describe("schema roles", () => {
     expect(resourceSchemas("bucket", { message: schema }).problems).toEqual(["\"schemas.message\" is not a recognized setting."]);
     expect(triggerSchemas("queue.message", { message: 1 }).problems).toEqual(["\"schemas.message\" must be a Standard Schema."]);
     expect(triggerSchemas("http.route", { responses: { 999: schema } }).problems).toEqual(["\"schemas.responses.999\" is not a recognized setting."]);
+    expect(triggerSchemas("http.procedure", { input: schema }).problems).toEqual(["\"schemas.output\" is required."]);
   });
 });

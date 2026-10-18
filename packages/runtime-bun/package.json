@@ -1,0 +1,46 @@
+{
+  "name": "@holqa/runtime-bun",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Holqa's Bun runtime: the invocation dispatcher, application lifecycle, HTTP and RPC execution, and a Bun.serve adapter.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SrKleRAimBot/holqa.git",
+    "directory": "packages/runtime-bun"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.3.13"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@holqa/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

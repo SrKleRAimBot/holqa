@@ -21,18 +21,20 @@ Only the following items carry the **Implemented** label. Everything else in the
 
 | Package | Implemented items |
 | --- | --- |
-| `@holqa/core` | `Result`, `ok`, `err`; `Diagnostic`, `createDiagnostic`, `formatDiagnostic`; the `diagnosticCodes` registry; `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`, `checkIdentities`; `HolqaError`; JSON and Standard Schema types, `validateInput` with structured issues; JSON wire payloads (`toWirePayload`, `prepareWirePayload`), message envelopes and codecs, payload codecs; the `SchemaAdapter` contract; the descriptor protocol with resource and trigger kind registries and readers; `RuntimeBinding`, `bindApp`, `resolveDriver`, `checkCapabilities` |
-| `@holqa/sdk` | `defineApp`, `defineResources`, `composeResources`; `queue`, `bucket`, `schedule`, `http.api` (declaration only); `secret`, `variable`; typed handles and handler registration for queues, buckets and schedules; compile-time identifier and duplicate checks |
+| `@holqa/core` | `Result`, `ok`, `err`; `Diagnostic`, `createDiagnostic`, `formatDiagnostic`; the `diagnosticCodes` registry; `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`, `checkIdentities`; `HolqaError`; JSON and Standard Schema types, `validateInput` with structured issues; JSON wire payloads (`toWirePayload`, `prepareWirePayload`), message envelopes and codecs, payload codecs; the `SchemaAdapter` contract; the descriptor protocol with resource and trigger kind registries and readers; `RuntimeBinding`, `bindApp`, `resolveDriver`, `checkCapabilities`; the `http.procedure` trigger, `HttpInvocationInput`, `HttpRejectedError`, the `holqa.rpc/1` envelope types, `ApplicationScope` |
+| `@holqa/sdk` | `defineApp`, `defineResources`, `composeResources`; `queue`, `bucket`, `schedule`, `http.api`; `secret`, `variable`; typed handles and handler registration for queues, buckets and schedules; HTTP routes (`route`, `reply`), RPC procedures (`procedure`), typed `middleware` and `scoped` values; compile-time identifier and duplicate checks |
 | `@holqa/testing` | Compile-time type assertions (`Equal`, `Expect`, `Accepts`, `HasTypeError`, `assertType`, ...) |
 | `@holqa/compiler` | `canonicalJsonStringify`, `CanonicalJsonError`, `CanonicalJsonValue`; schema normalization (`normalizeSchema`, `describeSchemaContract`, `canonicalizeJsonSchema`), `fingerprintSchemaContract`, `checkSchemaCompatibility`; `compileApplication` (handler discovery, graph validation, manifest version 1, entry point map), `selectHandlerModules`, `discoverHandlers`, `validateManifest`, `validateEntrypoints`, `buildResourceGraph`, the manifest and entry point JSON Schemas |
+| `@holqa/runtime-bun` | `createRuntime` (invocation dispatcher, lifecycle, HTTP routing, RPC, CORS, structured logs), `serve` and `stopOnSignals` (`Bun.serve`), `loadCompiledApplication`, `createEnvironmentBinding`. See the [runtime reference](../reference/runtime.md) |
 | `@holqa/zod` | The Zod 4 schema adapter (`zodAdapter`, `createZodAdapter`, `isZodSchema`) |
 | `@holqa/cli` | `holqa --help`, `--version`, `--json`; `holqa inspect`; `holqa build --manifest`; analysis in a separate process (`createProcessHost`); structured errors for proposed and unknown commands |
 | `examples/package-smoke` | Verification that built packages are consumable through their public exports |
 | `examples/schema-evolution` | End-to-end schema contract corpus with Zod |
 | `examples/manifest` | End-to-end compilation of SDK applications through the built CLI |
+| `examples/http-api` | An SDK application compiled by the built CLI and served by `@holqa/runtime-bun` |
 | Repository tooling | pnpm workspace, Turborepo tasks, ESLint configuration, boundary checks, agent instruction sync |
 
-See [packages reference](../reference/packages.md), [CLI reference](../reference/cli.md), and [diagnostic codes](../reference/diagnostic-codes.md) for details.
+See [packages reference](../reference/packages.md), [CLI reference](../reference/cli.md), [runtime reference](../reference/runtime.md), and [diagnostic codes](../reference/diagnostic-codes.md) for details.
 
 The disposable M0 prototypes under [`experiments/`](../../experiments/README.md) and the [`commerce` example](../../examples/commerce/README.md) built on them run and are tested, but they are **not** Implemented framework capabilities. They are evidence for Accepted design decisions (ADRs 0012–0017), and no framework API may be described as existing because an experiment exercises it.
 
@@ -61,7 +63,7 @@ Use the exact bold terms in tables and prose when the status of a specific item 
 
 ### Illustrative code
 
-Code that uses APIs which do not exist (for example `http.api(...).route(...)`, `staticSite(...)`, or `holqa dev`) must be introduced as illustrative. Place a sentence such as the following immediately before the code block:
+Code that uses APIs which do not exist (for example `staticSite(...)`, generated clients, or `holqa dev`) must be introduced as illustrative. Place a sentence such as the following immediately before the code block:
 
 > The following code is illustrative. The API is proposed, not implemented, and may change.
 

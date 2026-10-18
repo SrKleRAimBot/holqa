@@ -43,7 +43,22 @@ describe("diagnosticCodes", () => {
       manifestVersionUnsupported: "HOLQA_MANIFEST_VERSION_UNSUPPORTED",
       analysisFailed: "HOLQA_ANALYSIS_FAILED",
       cliArgumentInvalid: "HOLQA_CLI_ARGUMENT_INVALID",
-      buildOutputFailed: "HOLQA_BUILD_OUTPUT_FAILED"
+      buildOutputFailed: "HOLQA_BUILD_OUTPUT_FAILED",
+      httpRouteNotFound: "HOLQA_HTTP_ROUTE_NOT_FOUND",
+      httpMethodNotAllowed: "HOLQA_HTTP_METHOD_NOT_ALLOWED",
+      httpMediaTypeUnsupported: "HOLQA_HTTP_MEDIA_TYPE_UNSUPPORTED",
+      httpRejected: "HOLQA_HTTP_REJECTED",
+      responseInvalid: "HOLQA_RESPONSE_INVALID",
+      handlerFailed: "HOLQA_HANDLER_FAILED",
+      handlerNotFound: "HOLQA_HANDLER_NOT_FOUND",
+      invocationTimeout: "HOLQA_INVOCATION_TIMEOUT",
+      invocationCancelled: "HOLQA_INVOCATION_CANCELLED",
+      runtimeOverloaded: "HOLQA_RUNTIME_OVERLOADED",
+      runtimeNotRunning: "HOLQA_RUNTIME_NOT_RUNNING",
+      runtimeStartFailed: "HOLQA_RUNTIME_START_FAILED",
+      configInvalid: "HOLQA_CONFIG_INVALID",
+      rpcVersionUnsupported: "HOLQA_RPC_VERSION_UNSUPPORTED",
+      buildStale: "HOLQA_BUILD_STALE"
     });
   });
 });

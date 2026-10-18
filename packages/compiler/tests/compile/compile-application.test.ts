@@ -14,6 +14,7 @@ import {
   id,
   module,
   objectCreatedHandler,
+  procedureHandler,
   queueConsumer,
   queueResource,
   routeHandler,
@@ -261,6 +262,68 @@ describe("compileApplication", () => {
     });
     expect(result.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_ROUTE_CONFLICT"]);
     expect(result.diagnostics[0]?.details).toEqual({ route: "GET /api/orders/:", handlers: ["orders.by-key", "orders.get"] });
+  });
+
+  it("rejects routes of different APIs that share a base path and serve the same requests, as the runtime does", async () => {
+    const result = await compile({
+      app: application({ resources: [httpApiResource("public-api"), httpApiResource("admin-api")] }),
+      modules: [module("src/a.handler.ts", { a: routeHandler("public.orders", "public-api", "GET", "/orders"), b: routeHandler("admin.orders", "admin-api", "GET", "/orders") })]
+    });
+    expect(result.diagnostics.map(diagnostic => [diagnostic.code, diagnostic.details])).toEqual([["HOLQA_ROUTE_CONFLICT", { route: "GET /api/orders", handlers: ["admin.orders", "public.orders"] }]]);
+  });
+
+  it("records procedures with their operation and input and output schemas", async () => {
+    const output = fixtureSchema({ type: "object", properties: { total: { type: "integer" } }, required: ["total"] });
+    const input = fixtureSchema({ type: "object", properties: { orderId: { type: "string" } }, required: ["orderId"] });
+    const result = await compile({
+      app: application({ resources: [httpApiResource("shop-api")] }),
+      modules: [module("src/a.handler.ts", { default: procedureHandler("orders.total", "shop-api", "query", output, input) })]
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok)
+      return;
+    expect<unknown>(result.manifest.handlers.map(handler => [handler.trigger, Object.keys(handler.schemas)])).toEqual([
+      [{ kind: "http.procedure", resource: { kind: "http.api", id: "shop-api" }, options: { operation: "query" } }, ["input", "output"]]
+    ]);
+    expect(result.manifest.requiredCapabilities).toContain("trigger.http.procedure");
+    expect(validateManifest(JSON.parse(serializeManifest(result.manifest))).ok).toBe(true);
+  });
+
+  it("records a route's headers schema in a manifest the JSON Schema accepts", async () => {
+    const route = routeHandler("orders.list", "shop-api", "GET", "/orders", { 200: fixtureSchema({ type: "string" }) });
+    const withHeaders = { "~holqa": { ...route["~holqa"], schemas: { ...route["~holqa"].schemas, headers: fixtureSchema({ type: "object" }) } } };
+    const result = await compile({ app: application({ resources: [httpApiResource("shop-api")] }), modules: [module("src/a.handler.ts", { default: withHeaders })] });
+    expect(result.ok).toBe(true);
+    if (!result.ok)
+      return;
+    expect(Object.keys(result.manifest.handlers[0]!.schemas)).toEqual(["headers", "response.200"]);
+    expect(validateManifest(JSON.parse(serializeManifest(result.manifest))).ok).toBe(true);
+  });
+
+  it("rejects routes that collide with a procedure's RPC path", async () => {
+    const output = fixtureSchema({ type: "string" });
+    const result = await compile({
+      app: application({ resources: [httpApiResource("shop-api")] }),
+      modules: [module("src/a.handler.ts", {
+        query: procedureHandler("orders.total", "shop-api", "query", output),
+        mutation: procedureHandler("orders.cancel", "shop-api", "mutation", output),
+        shadowsQuery: routeHandler("rpc.get", "shop-api", "GET", "/rpc/orders.total"),
+        // A parameter segment never conflicts with a static one: routers prefer the static procedure path.
+        parameter: routeHandler("rpc.any", "shop-api", "POST", "/rpc/:name"),
+        unrelated: routeHandler("rpc.put", "shop-api", "PUT", "/rpc/orders.cancel")
+      })]
+    });
+    expect(result.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_ROUTE_CONFLICT"]);
+    expect(result.diagnostics[0]?.details).toEqual({ route: "GET /api/rpc/orders.total", handlers: ["orders.total", "rpc.get"] });
+  });
+
+  it("rejects a procedure without an output schema or with an unknown operation", async () => {
+    const output = fixtureSchema({ type: "string" });
+    const missingOutput = procedureHandler("orders.total", "shop-api", "query", output);
+    const withoutOutput = { "~holqa": { ...missingOutput["~holqa"], schemas: {} } };
+    const badOperation = procedureHandler("orders.cancel", "shop-api", "subscription" as "query", output);
+    const codes = await failureCodes({ app: application({ resources: [httpApiResource("shop-api")] }), modules: [module("src/a.handler.ts", { withoutOutput, badOperation })] });
+    expect(codes).toEqual(["HOLQA_TRIGGER_INVALID", "HOLQA_TRIGGER_INVALID"]);
   });
 
   it("rejects unknown resource settings instead of dropping them", async () => {

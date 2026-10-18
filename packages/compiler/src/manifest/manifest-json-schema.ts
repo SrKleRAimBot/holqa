@@ -96,7 +96,8 @@ const triggerDefinitionsByKind: { readonly [Trigger in TriggerKind]: JsonObject 
   "http.route": triggerDefinition("http.route", closedObject({
     method: { enum: ["GET", "POST", "PUT", "PATCH", "DELETE"] },
     path: { type: "string", pattern: "^/$|^(?:/(?:[\\w.~-]+|:[A-Za-z_]\\w*))+$" }
-  }))
+  })),
+  "http.procedure": triggerDefinition("http.procedure", closedObject({ operation: { enum: ["query", "mutation"] } }))
 };
 
 /** Resource definitions keyed by their `$defs` name. */
@@ -153,7 +154,7 @@ export const manifestJsonSchema: JsonObject = deepFreeze({
     schemaReference: closedObject({ fingerprint: ref("fingerprint"), source: ref("schemaSource"), schemaVersion: ref("positiveInteger") }, ["fingerprint", "source"]),
     schemaReferences: {
       type: "object",
-      propertyNames: { type: "string", pattern: "^(?:message|object|params|query|body|value|response\\.[1-5][0-9]{2})$" },
+      propertyNames: { type: "string", pattern: "^(?:message|object|params|query|body|headers|input|output|value|response\\.[1-5][0-9]{2})$" },
       additionalProperties: ref("schemaReference")
     },
     resource: { oneOf: Object.keys(resourceDefinitions).map(name => ref(name)) },

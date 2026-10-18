@@ -1,6 +1,6 @@
 # Application model
 
-> **Status:** Implemented in part. `defineApp`, `defineResources`, `composeResources`, the `queue`, `bucket`, `schedule` and `http.api` factories, `secret` and `variable`, typed handles, and handler registration for queues, buckets and schedules exist in `@holqa/sdk`. Handler discovery and compilation into a manifest are **Implemented** in `@holqa/compiler` and the CLI. HTTP routes and RPC procedures, `staticSite`, and anything that executes handlers are **Proposed** or **Planned**.
+> **Status:** Implemented in part. `defineApp`, `defineResources`, `composeResources`, the `queue`, `bucket`, `schedule` and `http.api` factories, `secret` and `variable`, typed handles, handler registration for queues, buckets and schedules, and HTTP routes, RPC procedures and typed middleware exist in `@holqa/sdk`. Handler discovery and compilation into a manifest are **Implemented** in `@holqa/compiler` and the CLI. `@holqa/runtime-bun` executes HTTP routes and RPC procedures ([runtime reference](../reference/runtime.md)). `staticSite` and the delivery of queue, storage and schedule events are **Proposed** or **Planned**.
 
 A Holqa application is a set of **logical resources** declared in a registry module, plus **handler modules** that contain business logic. This document describes the registry (`infra.ts` and `defineApp`), how resources are identified, how typed handles work, and how resource lifecycles relate to code. The internal representation is described in [resource model](../architecture/resource-model.md).
 
@@ -83,7 +83,7 @@ A logical resource describes **what** the application needs and **which guarante
 | `queue({ id, message, schemaVersion, delivery? })` | Message schema, schema version, `maxAttempts`, `deadLetter`; requires at-least-once delivery. | **Implemented** |
 | `bucket({ id, access })` | Access policy (`private`, `public-read`). | **Implemented** |
 | `schedule({ id, cron, timezone, overlap })` | Five-field cron expression, IANA time zone, overlap policy (`skip`, `allow`). | **Implemented** |
-| `http.api({ id, basePath, docs? })` | Base path and documentation metadata. Routes and an RPC mount are proposed. | **Implemented** (declaration only) |
+| `http.api({ id, basePath, docs? })` | Base path, documentation metadata and API middleware; routes and RPC procedures are registered on its handle. | **Implemented** |
 | `staticSite(...)` | Source root, build command and output, SPA fallback. | Proposed |
 | `secret(schema)` / `variable(schema, { default? })` | Configuration value schema; default for variables only. | **Implemented** |
 
@@ -126,9 +126,9 @@ export default resources.orders.consume({
 | `QueueHandle<Id, Schema>` | `send(message: InferInput<Schema>)` validates the message, then hands its input form to the bound driver. | `consume({ id, concurrency?, handler })` |
 | `BucketHandle<Id>` | `put(key, body, { contentType? })`, `get(key)` | `onObjectCreated({ id, prefix?, handler })` |
 | `ScheduleHandle<Id>` | none | `handle({ id, handler })` |
-| `HttpApiHandle<Id>` | none | `route(...)` is proposed |
+| `HttpApiHandle<Id, Context>` | none | `route({ id, method, path, ..., handler })`, `procedure({ id, operation, input?, output, handler })` |
 
-Handles are **operations** on a resource, not the resource itself. Declaring a handle opens nothing. When an operation runs, the handle resolves a driver from the runtime binding installed on its application: a local emulator, a test double or a driver for an external service ([ADR 0020](../architecture/decisions/0020-runtime-binding-resolution.md)). Using a handle with no binding fails with `HOLQA_RUNTIME_NOT_BOUND`. Local drivers and a runtime that installs bindings are **Planned**.
+Handles are **operations** on a resource, not the resource itself. Declaring a handle opens nothing. When an operation runs, the handle resolves a driver from the runtime binding installed on its application: a local emulator, a test double or a driver for an external service ([ADR 0020](../architecture/decisions/0020-runtime-binding-resolution.md)). Using a handle with no binding fails with `HOLQA_RUNTIME_NOT_BOUND`. `@holqa/runtime-bun` installs a binding when it starts; its default binding serves HTTP APIs and configuration only. Local drivers for queues and buckets are **Planned**.
 
 Type helpers for code that works with handles: `QueueMessageInput<H>`, `QueueMessageOutput<H>`, `QueueConsumerFor<H>`, `ResourceIdOf<H>`, `ResourceIds<R>`, `ResourceById<R, Id>` and `ResourceAliasesOfKind<R, Kind>`. See the [packages reference](../reference/packages.md#holqasdk).
 

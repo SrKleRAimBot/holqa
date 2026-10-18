@@ -82,7 +82,7 @@ The compiler (see [compiler](../architecture/compiler.md)) constructs the graph 
 | References resolve. | A handler for a resource that was removed. | `HOLQA_RESOURCE_NOT_FOUND` | **Implemented** |
 | Triggers match their resource. | A queue consumer registered on a bucket, or a consumer whose message contract differs from its queue's. | `HOLQA_TRIGGER_INVALID` | **Implemented** |
 | A queue has at most one consumer. | Two `consume` calls on `order-processing`. | `HOLQA_QUEUE_CONSUMER_DUPLICATE` | **Implemented** |
-| Routes are unambiguous. | Two handlers for `GET /api/orders/:id`. | `HOLQA_ROUTE_CONFLICT` | **Implemented** in the compiler; route registration in the SDK is **Proposed** |
+| Routes are unambiguous. | Two handlers for `GET /api/orders/:id`. | `HOLQA_ROUTE_CONFLICT` | **Implemented** in the compiler and in `@holqa/runtime-bun` with one shared rule (`httpRouteKeys`): across every API of the application, including RPC procedure paths |
 | Schemas can be normalized. | A schema transformation with no portable form. | `HOLQA_SCHEMA_UNSUPPORTED` | **Implemented** |
 | Requirements are satisfiable by the selected binding. | `deadLetter: true` on a driver without dead-letter support. | Not assigned | **Planned** at build time |
 

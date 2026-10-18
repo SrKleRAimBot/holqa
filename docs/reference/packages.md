@@ -1,6 +1,6 @@
 # Packages
 
-> **Status:** Reference for the current repository state. Five framework packages, one integration package and four example packages (`package-smoke`, `schema-evolution` and `manifest` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
+> **Status:** Reference for the current repository state. Six framework packages, one integration package and five example packages (`package-smoke`, `schema-evolution`, `manifest` and `http-api` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
 
 All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single code entry point (`.`) through their `exports` map. `@holqa/compiler` additionally exports its JSON Schema files. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
 
@@ -14,8 +14,9 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | `@holqa/example-package-smoke` | `examples/package-smoke` | **Implemented** | Verifies built package outputs. |
 | `@holqa/example-schema-evolution` | `examples/schema-evolution` | **Implemented** | End-to-end schema contract corpus with Zod. |
 | `@holqa/example-manifest` | `examples/manifest` | **Implemented** | End-to-end compilation of SDK applications through the built CLI. |
-| `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model) | Public developer-facing SDK. |
-| `@holqa/runtime-bun` | `packages/runtime-bun` | Planned | Bun execution and invocation adapters. |
+| `@holqa/example-http-api` | `examples/http-api` | **Implemented** | An SDK application with routes, procedures and middleware, compiled by the built CLI and served by `@holqa/runtime-bun`. |
+| `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model, HTTP routes, RPC procedures, middleware) | Public developer-facing SDK. |
+| `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP and RPC transports. |
 | `@holqa/local` | `packages/local` | Planned | Local execution and resource emulation. |
 | `@holqa/testing` | `packages/testing` | **Implemented** (type assertions only) | Testing utilities; deterministic execution is planned. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
@@ -76,13 +77,21 @@ Planned packages are directories containing only a README. They have no `package
 | `bindApp(app, binding)` | Function | Installs a binding after checking capabilities and drivers; returns an unbind function. Throws `HOLQA_RUNTIME_ALREADY_BOUND` or `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`. |
 | `requireBinding`, `resolveDriver`, `readConfig` | Functions | Resolve the current binding, a resource's driver or a configuration value; throw `HOLQA_RUNTIME_NOT_BOUND` without a binding. |
 | `checkCapabilities(resource, advertised, bindingName)` | Function | Compares a resource's requirements with the capabilities a binding advertises for its kind; one `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` diagnostic per shortfall. |
+| `HttpMethod`, `HttpRouteTriggerOptions`, `HttpRouteTriggerSchemas`, `HttpProcedureOperation`, `HttpProcedureTriggerOptions`, `HttpProcedureTriggerSchemas` | Types | The `http.route` trigger (with an optional `headers` schema) and the `http.procedure` trigger (`{ operation: "query" \| "mutation" }`, schemas `input?`, `output`). |
+| `HttpInvocationInput`, `isHttpInvocationInput(value)`, `isResponseLike(value)` | Type, functions | What runtimes pass to HTTP handlers' `invoke` (`{ request, params }`), and structural guards for requests and responses. |
+| `httpEndpoint(basePath, definition)`, `httpRouteKeys(basePath, definition)`, `joinRoutePath`, `routeShape`, `HttpEndpoint` | Functions, type | Where an HTTP handler is served and the `<METHOD> <shape>` keys the compiler and runtime use for `HOLQA_ROUTE_CONFLICT`. |
+| `HttpRejectedError`, `HttpRejectedErrorInit`, `isHttpRejectedError(value)` | Class, type, function | Rejects a request with an explicit status, safe message and headers (`HOLQA_HTTP_REJECTED`, or the code of a Holqa error `cause`). |
+| `HttpErrorBody`, `HttpErrorDetail` | Types | The error body sent to HTTP and RPC callers: `{ error: { code, message, invocationId?, issues? } }`. |
+| `rpcProtocolFormat`, `rpcProtocolVersion`, `rpcVersionHeader`, `rpcMountSegment`, `rpcInputQueryParameter`, `rpcProcedurePath(basePath, id)` | Constants, function | The `holqa.rpc/1` protocol: `"holqa.rpc/1"`, `"1"`, `"holqa-rpc-version"`, `"rpc"`, `"input"`, and `<basePath>/rpc/<id>`. |
+| `RpcRequestEnvelope`, `RpcSuccessEnvelope`, `RpcFailureEnvelope`, `RpcResponseEnvelope` | Types | The RPC request and response envelopes. |
+| `ApplicationScope`, `ScopedDefinition` | Types | The application execution context: values created once per runtime and disposed of when it stops. `InvocationContext` gains optional `correlationId` and `scope`. |
 
 Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 characters (for example `order-processing`, `orders.process`). The grammar is an initial proposal and may be revised before 1.0 ([ADR 0004](../architecture/decisions/0004-stable-logical-resource-identities.md)).
 
 ## `@holqa/sdk`
 
 - **Path:** `packages/sdk`
-- **Status:** Implemented (application and resource model). Private. HTTP routes, RPC procedures and `staticSite` are proposed.
+- **Status:** Implemented (application and resource model, HTTP routes, RPC procedures, middleware, scoped values). Private. `staticSite` is proposed.
 - **Purpose:** Declare applications, resources, configuration and handlers with types inferred from source. Runtime-neutral.
 - **Entry point:** `@holqa/sdk` → `dist/index.js`, `dist/index.d.ts`.
 - **Internal dependencies:** `@holqa/core`.
@@ -98,6 +107,32 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `QueueConsumer`, `ObjectCreatedHandler`, `ScheduleHandler`, `HandlerRegistration` | Types | Handler registrations. |
 | `QueueMessageInput`, `QueueMessageOutput`, `QueueConsumerFor`, `ResourceIdOf`, `ResourceIds`, `ResourceById`, `ResourceAliasesOfKind` | Types | Type helpers derived from handles. |
 | `HolqaTypeError`, `CheckResourceId`, `CheckUniqueResourceIds`, `DuplicateResourceIds`, `ResourceIdProblem`, `CheckDistinctAliases` | Types | Compile-time declaration checks. |
+| `HttpApiHandle.route(options)` | Method | Registers an HTTP route: `{ id, method, path, params?, query?, headers?, body?, responses, middleware?, handler }`. See the [runtime reference](runtime.md#http-routes). |
+| `HttpApiHandle.procedure(options)` | Method | Registers an RPC procedure: `{ id, operation, input?, output, middleware?, handler }`, served at `<basePath>/rpc/<id>`. See [RPC procedures](runtime.md#rpc-procedures). |
+| `middleware(options)`, `middleware.requires<Context>()` | Functions | Typed HTTP middleware for `defineApp`, `http.api`, routes and procedures. See [middleware](runtime.md#middleware). |
+| `scoped({ name, create, dispose? })` | Function | Declares an application-scoped value used with `scope.use(definition)`. |
+| `HttpRoute`, `RouteOptions`, `RouteContext`, `RouteContract`, `InferRouteContract`, `RouteReply`, `RouteReplyValue`, `RouteResult`, `ResponseSchemas`, `PathParams`, `PathParamNames`, `CheckParams`, `BodylessMethod`, `QueryRecord`, `HeaderRecord` | Types | Route registrations, handler contexts and client contracts. |
+| `HttpProcedure`, `ProcedureOptions`, `ProcedureContext`, `ProcedureContract`, `InferProcedureContract` | Types | Procedure registrations and client contracts. |
+| `HttpMiddleware`, `AnyHttpMiddleware`, `MiddlewareOptions`, `MiddlewareArgs`, `MiddlewareNext`, `MiddlewareResult`, `MiddlewareReturn`, `MiddlewareFactory`, `DefineMiddleware`, `MiddlewareChainContext`, `CheckMiddlewareChain`, `MiddlewareExtension`, `MiddlewareRequirement`, `ExtendContext`, `AppResources`, `ScopedOptions` | Types | Middleware typing and the application's resource types with middleware context. `HttpApiOptions` gains `middleware`; `App` gains a third type parameter (the application middleware's context, default `{}`). |
+
+## `@holqa/runtime-bun`
+
+- **Path:** `packages/runtime-bun`
+- **Status:** Implemented (dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve` adapter). Private. Queue, storage and schedule delivery and worker isolation are planned. See the [runtime reference](runtime.md) and [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md).
+- **Entry point:** `@holqa/runtime-bun` → `dist/index.js`, `dist/index.d.ts`. Requires Bun (`engines.bun >= 1.3.13`) for `serve` and `loadCompiledApplication`.
+- **Internal dependencies:** `@holqa/core`.
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `createRuntime(options)` | Function | Validates an application and its handlers and returns a `Runtime`: `start`, `stop`, `invoke`, `fetch`, `stats`, `state`, `name`, `handlers`. Handlers of other trigger kinds need `manualTriggers: true` and run only through `invoke`. |
+| `Runtime`, `RuntimeOptions`, `RuntimeLimits`, `RuntimeHttpOptions`, `RuntimeState`, `RuntimeStats`, `StopOptions` | Types | The runtime and its settings. |
+| `InvocationRequest`, `InvocationOutcome`, `InvocationSuccess`, `InvocationFailed`, `InvocationFailure`, `DispatchStats` | Types | Normalized invocations and their structured outcomes. |
+| `serve(runtime, options)`, `ServeOptions`, `RunningServer`, `stopOnSignals(server, options?, signals?)` | Functions, types | Serves a runtime with `Bun.serve` (default `127.0.0.1:3000`, 1 MiB bodies) and stops gracefully on signals. |
+| `loadCompiledApplication({ root, buildDir? })`, `LoadCompiledApplicationOptions`, `CompiledApplication` | Function, types | Loads `holqa build --manifest` output and checks it against the code (`HOLQA_BUILD_STALE`). |
+| `createEnvironmentBinding(app, env)`, `EnvironmentVariables` | Function, type | The default binding: `http.api` capability and validated configuration from environment variables. |
+| `CorsOptions` | Type | The CORS policy. |
+| `correlationHeader` | Constant | `"x-correlation-id"`. |
+| `jsonLineSink(write?)`, `silentSink`, `LogSink`, `LogEntry`, `LogLevel` | Functions, types | Structured log sinks. |
 
 ## `@holqa/testing`
 
@@ -198,18 +233,24 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 - **Status:** Implemented. Private; not published.
 - **Purpose:** Applications written with `@holqa/sdk` and Zod, compiled by the built `holqa` binary: a golden manifest, identical bytes across processes, directories and a relocated copy, an unchanged manifest after renaming every local name, and diagnostics for an invalid application. See its [README](../../examples/manifest/README.md).
 
+## `@holqa/example-http-api`
+
+- **Path:** `examples/http-api`
+- **Status:** Implemented. Private; not published.
+- **Purpose:** The runtime acceptance test: an SDK application with routes, RPC procedures, application and route middleware and a scoped store, compiled by the built `holqa` binary, loaded with `loadCompiledApplication` and served with `serve` on a loopback port. See its [README](../../examples/http-api/README.md).
+
 ## `@holqa/example-package-smoke`
 
 - **Path:** `examples/package-smoke`
 - **Status:** Implemented. Private; not published.
-- **Purpose:** Consumes `@holqa/core`, `@holqa/compiler`, `@holqa/cli`, `@holqa/sdk`, `@holqa/testing`, and `@holqa/zod` through their public exports after they are built. It verifies that `dist/` contains JavaScript and declarations, that no unresolved `@/` aliases remain in emitted `.js` or `.d.ts` files, that the built `holqa` binary runs, that the built compiler compiles an SDK application, and that the manifest JSON Schemas and the CLI's analysis entry point are shipped.
+- **Purpose:** Consumes `@holqa/core`, `@holqa/compiler`, `@holqa/cli`, `@holqa/runtime-bun`, `@holqa/sdk`, `@holqa/testing`, and `@holqa/zod` through their public exports after they are built. It verifies that `dist/` contains JavaScript and declarations, that no unresolved `@/` aliases remain in emitted `.js` or `.d.ts` files, that the built `holqa` binary runs, that the built compiler compiles an SDK application, and that the manifest JSON Schemas and the CLI's analysis entry point are shipped.
 - **Run:** `pnpm --filter @holqa/example-package-smoke test` (after `pnpm build`), or as part of `pnpm test` / `pnpm check`.
 
 ## Planned packages
 
 | Package | Intended responsibility | Allowed internal dependencies |
 | --- | --- | --- |
-| `@holqa/runtime-bun` | Execute handlers on Bun; HTTP via the Fetch API; invocation adapters; concurrency limits. | `core` |
+| `@holqa/runtime-bun` (extensions) | Queue, storage and schedule transports on the dispatcher; worker or process isolation. | `core` |
 | `@holqa/local` | Local runtime drivers: queue, storage, and scheduler emulation; event inspection. | `core`, `runtime-bun` |
 | `@holqa/testing` (extensions) | Deterministic test harness; simulated deliveries, retries, failures; fixtures. | `core`, `sdk`, `local`, `runtime-bun` |
 | `@holqa/client` | Fetch-based runtime for generated, browser-safe clients. Runtime-neutral. | `core` |

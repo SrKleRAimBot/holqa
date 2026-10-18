@@ -89,20 +89,21 @@ runtime. These integrations are planned; see [integrations](docs/integrations/in
 | Package | Path | Status |
 | --- | --- | --- |
 | `@holqa/core` | [packages/core](packages/core) | Implemented contracts: `Result`, structured diagnostics with stable `HOLQA_*` codes, resource identity, schema validation, the descriptor protocol and the runtime binding contract |
-| `@holqa/sdk` | [packages/sdk](packages/sdk) | Implemented application and resource model: `defineApp`, queues, buckets, schedules, HTTP API declarations, configuration, typed handles |
+| `@holqa/sdk` | [packages/sdk](packages/sdk) | Implemented application and resource model: `defineApp`, queues, buckets, schedules, HTTP APIs with routes, RPC procedures and typed middleware, configuration, typed handles |
 | `@holqa/compiler` | [packages/compiler](packages/compiler) | Implemented: handler discovery, graph validation, deterministic manifest version 1, schema contracts and compatibility checks |
 | `@holqa/cli` | [packages/cli](packages/cli) | Implemented: `holqa --help`, `--version`, `--json`, `holqa inspect` and `holqa build --manifest`; other workflow commands are proposed |
 | `@holqa/testing` | [packages/testing](packages/testing) | Implemented: compile-time type assertions only |
 | `@holqa/zod` | [packages/integrations/zod](packages/integrations/zod) | Implemented: Zod 4 schema adapter |
-| `@holqa/runtime-bun`, `@holqa/local`, `@holqa/client`, other integrations | [packages](packages) | Planned (design documents only) |
+| `@holqa/runtime-bun` | [packages/runtime-bun](packages/runtime-bun) | Implemented: invocation dispatcher, lifecycle, HTTP routes and RPC procedures served with `Bun.serve`; queue, storage and schedule delivery planned |
+| `@holqa/local`, `@holqa/client`, other integrations | [packages](packages) | Planned (design documents only) |
 
 All packages are private and unpublished. The full list is in [docs/reference/packages.md](docs/reference/packages.md).
 
 ## Repository structure
 
 ```text
-packages/          Holqa libraries (core, compiler, cli, and planned packages)
-examples/          package-smoke, schema-evolution and manifest (run in CI) and illustrative application examples
+packages/          Holqa libraries (core, sdk, compiler, cli, runtime-bun, and planned packages)
+examples/          package-smoke, schema-evolution, manifest and http-api (run in CI) and illustrative application examples
 docs/              Concepts, architecture, ADRs, integrations, reference, contributing guides
 skills/            Agent Skills for developers building with Holqa (preview)
 .agents/           Canonical rules and skills for agents working on this repository

@@ -31,7 +31,7 @@ interface DescribedSchema {
 export interface SchemaUse {
   /** What the schema describes, for example `message of queue "orders"`. */
   readonly subject: string;
-  /** The role, for example `message` or `response.200`. Response roles travel on the wire in their output form. */
+  /** The role, for example `message` or `response.200`. Response roles and a procedure's `output` travel on the wire in their output form. */
   readonly role: string;
   readonly location: DiagnosticLocation;
   /** The declared contract version, when the declaration has one. */
@@ -76,13 +76,13 @@ export class SchemaTable {
     if (described === undefined)
       return undefined;
     const { contract, fingerprint } = described;
-    if (use.role.startsWith("response.") && !contract.output.representable) {
+    if ((use.role.startsWith("response.") || use.role === "output") && !contract.output.representable) {
       this.report(createDiagnostic({
         code: diagnosticCodes.schemaUnsupported,
         severity: "error",
         message: `The ${use.subject} is sent in its output form, which has no portable description at ${contract.output.problem.path}: ${contract.output.problem.reason}`,
         location: use.location,
-        hint: "Response bodies are serialized after validation. Make the schema's output JSON-compatible.",
+        hint: "Response bodies and procedure outputs are serialized after validation. Make the schema's output JSON-compatible.",
         details: { subject: use.subject, path: contract.output.problem.path }
       }));
       return undefined;
