@@ -1,6 +1,6 @@
 # Commerce (reference application)
 
-> **Status:** Reference example, type-checked and tested against the disposable M0 experiment packages. `@holqa/sdk` does not exist yet; this example imports the prototype `@holqa/experiment-sdk` instead, and will be migrated when the real SDK is implemented.
+> **Status:** Reference example, type-checked and tested against the disposable M0 experiment packages. This example imports the prototype `@holqa/experiment-sdk`, not `@holqa/sdk`: it uses HTTP routes and the M0 runtime, which the real packages do not implement yet. It will be migrated when they do ([backlog](../../docs/milestones/m0/backlog.md) HB-26).
 
 A small storefront backend used as Holqa's recurring development reference. Each milestone should be able to run, compile and test this application. It exercises every initial trigger type: HTTP routes, two queues with dead-lettering, an object storage event, and a cron schedule, plus secrets and variables.
 

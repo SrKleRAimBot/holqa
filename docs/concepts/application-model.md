@@ -1,34 +1,30 @@
 # Application model
 
-> **Status:** Accepted design — not implemented. Only resource identifier validation (`parseResourceId` in `@holqa/core`) is **Implemented**. All code below that uses `@holqa/sdk` is illustrative; the API is proposed and may change.
+> **Status:** Implemented in part. `defineApp`, `defineResources`, `composeResources`, the `queue`, `bucket`, `schedule` and `http.api` factories, `secret` and `variable`, typed handles, and handler registration for queues, buckets and schedules exist in `@holqa/sdk`. HTTP routes and RPC procedures, `staticSite`, handler discovery, and anything that executes handlers are **Proposed** or **Planned**.
 
-A Holqa application is a set of **logical resources** declared in a registry file, plus **handler modules** that contain business logic. This document describes the registry (`infra.ts` and `defineApp`), how resources are identified, how typed handles work, and how resource lifecycles relate to code.
+A Holqa application is a set of **logical resources** declared in a registry module, plus **handler modules** that contain business logic. This document describes the registry (`infra.ts` and `defineApp`), how resources are identified, how typed handles work, and how resource lifecycles relate to code. The internal representation is described in [resource model](../architecture/resource-model.md).
 
 ## `infra.ts`: the application registry
 
-Every Holqa application has a conventional entry point named `infra.ts`. It is the canonical registry of the application's infrastructure:
+Every Holqa application has a conventional entry point named `infra.ts`. It is an ordinary TypeScript module, not a configuration language, and it is the canonical registry of the application's infrastructure:
 
 - It declares resources and configuration.
 - It declares where handler modules live.
 - It exports typed resource handles for use by handlers.
 - It contains **no business logic** and performs **no provisioning**.
 
-The following code is illustrative. The API is proposed, not implemented, and may change.
+The following code uses the implemented `@holqa/sdk` API.
 
 ```ts
-import { bucket, defineApp, http, queue, schedule, secret, staticSite, variable } from "@holqa/sdk";
+import { bucket, defineApp, http, queue, schedule, secret, variable } from "@holqa/sdk";
 import { z } from "zod";
 
 const app = defineApp({
   name: "commerce",
+  description: "Storefront and order processing.",
   handlers: ["./src/**/*.handler.ts"],
   resources: {
-    api: http.api({
-      id: "public-api",
-      basePath: "/api",
-      rpc: { path: "/rpc" },
-      docs: { title: "Commerce API", version: "1.0.0" }
-    }),
+    api: http.api({ id: "public-api", basePath: "/api", docs: { title: "Commerce API", version: "1.0.0" } }),
     orders: queue({
       id: "order-processing",
       message: z.object({
@@ -39,13 +35,7 @@ const app = defineApp({
       delivery: { maxAttempts: 5, deadLetter: true }
     }),
     uploads: bucket({ id: "customer-uploads", access: "private" }),
-    cleanup: schedule({ id: "daily-cleanup", cron: "0 2 * * *", timezone: "UTC", overlap: "skip" }),
-    web: staticSite({
-      id: "web",
-      root: "./web",
-      build: { command: "bun run build", output: "dist" },
-      spaFallback: true
-    })
+    cleanup: schedule({ id: "daily-cleanup", cron: "0 2 * * *", timezone: "UTC", overlap: "skip" })
   },
   env: {
     DATABASE_URL: secret(z.string().min(1)),
@@ -58,58 +48,61 @@ export const resources = app.resources;
 export const config = app.env;
 ```
 
+Any [Standard Schema](https://standardschema.dev) implementation works; Zod is used in the examples.
+
 ## `defineApp`
 
-`defineApp` (proposed) takes a single declaration object and returns an application definition. Its responsibilities:
+`defineApp` takes a single declaration object and returns an application.
 
-| Field | Purpose |
-| --- | --- |
-| `name` | The application's name. |
-| `handlers` | Glob patterns for handler modules. The compiler discovers handlers from these patterns ([compiler](../architecture/compiler.md)). |
-| `resources` | A record of logical resource declarations. Property names are local aliases; `id` is the identity. |
-| `env` | Typed configuration: `secret(...)` for sensitive values, `variable(...)` for non-sensitive ones, each with a schema. |
+| Field | Required | Purpose |
+| --- | --- | --- |
+| `name` | Yes | The application's name, in [identifier grammar](resource-identity.md). |
+| `description` | No | A short human-readable description. |
+| `handlers` | No | Glob patterns for handler modules, relative to `infra.ts`: a list, or `{ include, exclude }`. Absolute paths and `..` are rejected. Discovery itself is done by the planned compiler, not by `defineApp`. |
+| `resources` | Yes | A record of resource handles. Property names are local aliases; each resource's `id` is its identity. |
+| `env` | No | Typed configuration: `secret(schema)` for sensitive values, `variable(schema, { default })` for non-sensitive ones. Names must be valid environment variable names. |
 
-The returned object exposes `resources` (typed handles) and `env` (typed configuration accessors). `defineApp` must be **pure**: calling it twice with the same input yields equivalent definitions, it performs no I/O, and it does not read the clock, randomness, or environment variables. These constraints make declarations safe for the compiler to analyze and for development tooling to reload ([ADR 0003](../architecture/decisions/0003-explicit-resource-declarations.md)).
+The returned application exposes:
+
+| Property | Type | Behaviour |
+| --- | --- | --- |
+| `resources` | Exactly the record passed in | The same handles, so their types flow to every importing module. |
+| `env` | `{ readonly [Name]: InferOutput<Schema> }` | Getters that read the value from the runtime binding. Reading one with no binding fails with `HOLQA_RUNTIME_NOT_BOUND`. |
+| `name` | `string` | The application's name. |
+
+`defineApp` is **pure**: it performs no I/O, reads no clock, randomness or environment variable, opens no connection and creates no infrastructure. Calling it twice with equal input yields equivalent descriptors ([ADR 0003](../architecture/decisions/0003-explicit-resource-declarations.md)).
+
+It validates the whole definition and throws one `HolqaError` that lists every problem: an invalid name, malformed handler patterns, values that are not resources, resources that already belong to another application, malformed configuration entries, and duplicate resource identifiers. Duplicate literal identifiers are also a compile-time error ([ADR 0019](../architecture/decisions/0019-declaration-time-validation.md)).
 
 ## Logical resources
 
-A logical resource describes **what** the application needs and **which guarantees** it requires, not how a provider implements it. A queue declaration states its message schema, schema version, retry limit, and dead-letter requirement. It does not name a cloud queue service or carry provider configuration.
+A logical resource describes **what** the application needs and **which guarantees** it requires, not how a provider implements it. A queue declaration states its message schema, schema version, attempt limit and dead-letter requirement. It does not name a cloud queue service or carry provider configuration; the core model has no open configuration dictionaries in which such settings could hide.
 
-Initial resource kinds (all proposed):
+| Factory | Declares | Status |
+| --- | --- | --- |
+| `queue({ id, message, schemaVersion, delivery? })` | Message schema, schema version, `maxAttempts`, `deadLetter`; requires at-least-once delivery. | **Implemented** |
+| `bucket({ id, access })` | Access policy (`private`, `public-read`). | **Implemented** |
+| `schedule({ id, cron, timezone, overlap })` | Five-field cron expression, IANA time zone, overlap policy (`skip`, `allow`). | **Implemented** |
+| `http.api({ id, basePath, docs? })` | Base path and documentation metadata. Routes and an RPC mount are proposed. | **Implemented** (declaration only) |
+| `staticSite(...)` | Source root, build command and output, SPA fallback. | Proposed |
+| `secret(schema)` / `variable(schema, { default? })` | Configuration value schema; default for variables only. | **Implemented** |
 
-| Kind | Declares |
-| --- | --- |
-| `http.api` | Base path, optional RPC mount, documentation metadata. |
-| `queue` | Message schema, schema version, delivery policy (attempts, backoff, dead-letter). |
-| `bucket` | Access policy. |
-| `schedule` | Cron expression, timezone, overlap policy. |
-| `staticSite` | Source root, build command and output, SPA fallback. |
-| `secret` / `variable` | Configuration value schema, default (variables only). |
-
-Future kinds (topics, WebSocket endpoints, workflows) are listed in [triggers and execution](triggers-and-execution.md).
+Future kinds (topics, WebSocket endpoints, workflows) are listed in [triggers and execution](triggers-and-execution.md). Adding one means adding an entry to the typed kind registry in `@holqa/core` ([resource model](../architecture/resource-model.md#adding-a-kind)).
 
 How a logical resource becomes real infrastructure is the job of a binding; see [infrastructure providers](infrastructure-providers.md) and [ADR 0005](../architecture/decisions/0005-infrastructure-independent-resource-contracts.md).
 
 ## Stable identifiers
 
-Every resource and every handler has an explicit, stable identifier. The TypeScript property name (`orders`) is a local alias for convenience; the identifier (`order-processing`) is the persistent identity used in manifests, bindings, and deployed infrastructure ([ADR 0004](../architecture/decisions/0004-stable-logical-resource-identities.md)).
-
-Consequences:
-
-- Renaming `orders` to `orderQueue` in TypeScript changes nothing about infrastructure.
-- Changing `id: "order-processing"` is a deliberate identity change and must be treated as such by tooling.
-- Identifiers must be unique within an application. Duplicates are a compiler error (planned).
-
-**Implemented:** `@holqa/core` validates identifiers with `parseResourceId`. The current grammar is lowercase alphanumeric segments separated by single `-` or `.`, starting with a letter, at most 63 characters (`^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`). Examples: `order-processing`, `orders.process`. Invalid input yields a `HOLQA_RESOURCE_ID_INVALID` diagnostic. The grammar is an initial proposal and may be revised before 1.0.
+Every resource and every handler has an explicit, stable identifier. The TypeScript property name (`orders`) is a local alias for convenience; the identifier (`order-processing`) is the persistent identity ([ADR 0004](../architecture/decisions/0004-stable-logical-resource-identities.md)). The full rules, and how they are checked at compile time and run time, are in [resource identity](resource-identity.md).
 
 ## Typed handles
 
-Each declared resource exposes a typed handle through `app.resources`. Handle types are inferred from the declaration, so producers and consumers share one schema without a hand-written interface.
+Each declared resource is a typed handle, exposed again through `app.resources`. Handle types are inferred from the declaration, so producers and consumers share one schema without a hand-written interface or generated code. Producers use the schema's **input** type; consumers receive its **output** type.
 
-The following code is illustrative. The API is proposed, not implemented, and may change.
+The following code uses the implemented `@holqa/sdk` API.
 
 ```ts
-// Producer
+// Producer: any module
 import { resources } from "../../infra";
 
 await resources.orders.send({ orderId: "order_123", priority: "urgent" });
@@ -128,19 +121,29 @@ export default resources.orders.consume({
 });
 ```
 
-Handles are **operations** on a resource, not the resource itself. At runtime a handle delegates to whichever runtime driver is bound in the current environment (local emulator, test harness, or production driver). Handler code never imports a provider SDK to talk to a Holqa resource. See [type safety and schemas](type-safety-and-schemas.md) for how inference and validation interact.
+| Handle | Operations | Handler registration |
+| --- | --- | --- |
+| `QueueHandle<Id, Schema>` | `send(message: InferInput<Schema>)` validates the message, then hands its input form to the bound driver. | `consume({ id, concurrency?, handler })` |
+| `BucketHandle<Id>` | `put(key, body, { contentType? })`, `get(key)` | `onObjectCreated({ id, prefix?, handler })` |
+| `ScheduleHandle<Id>` | none | `handle({ id, handler })` |
+| `HttpApiHandle<Id>` | none | `route(...)` is proposed |
+
+Handles are **operations** on a resource, not the resource itself. Declaring a handle opens nothing. When an operation runs, the handle resolves a driver from the runtime binding installed on its application: a local emulator, a test double or a driver for an external service ([ADR 0020](../architecture/decisions/0020-runtime-binding-resolution.md)). Using a handle with no binding fails with `HOLQA_RUNTIME_NOT_BOUND`. Local drivers and a runtime that installs bindings are **Planned**.
+
+Type helpers for code that works with handles: `QueueMessageInput<H>`, `QueueMessageOutput<H>`, `QueueConsumerFor<H>`, `ResourceIdOf<H>`, `ResourceIds<R>`, `ResourceById<R, Id>` and `ResourceAliasesOfKind<R, Kind>`. See the [packages reference](../reference/packages.md#holqasdk).
 
 ## Handler modules
 
 Business logic lives in handler modules, separate from `infra.ts`:
 
 - A handler module registers a handler against a resource (for example `resources.orders.consume(...)`) and gives it its own stable `id`.
-- The compiler discovers handler modules via the `handlers` globs.
+- Registration is declarative. It produces a descriptor whose JSON metadata (identifier, trigger, resource reference) is separate from the executable function, so tools can inspect it without running user code.
 - Handlers import `infra.ts` for typed handles; `infra.ts` never imports handlers. This keeps declarations free of business logic and avoids cycles.
+- Discovering handler modules through the `handlers` globs, checking handler identifiers for duplicates and executing handlers are **Planned**.
 
 ## Composable registries
 
-Large applications should not need one enormous `infra.ts`. Resource registries are designed to be composable from multiple files, for example a module per bounded context that exports a group of resource declarations, combined in `infra.ts`. The exact composition API is **Proposed**. Whatever form it takes, identifiers remain globally unique within the application and composition must remain deterministic.
+Large applications do not need one enormous `infra.ts`. Resource groups declared with `defineResources` in separate modules are combined with `composeResources`, which rejects duplicate aliases, or with object spread. Identifiers remain unique across the whole application, and composition is deterministic. See [composing applications](composing-applications.md).
 
 ## Resource lifecycles
 
@@ -160,6 +163,9 @@ Rules that follow from this:
 
 ## Related
 
+- [Resource identity](resource-identity.md)
+- [Composing applications](composing-applications.md)
+- [Resource model architecture](../architecture/resource-model.md)
 - [Resource graph](resource-graph.md)
 - [Triggers and execution](triggers-and-execution.md)
 - [Infrastructure providers](infrastructure-providers.md)

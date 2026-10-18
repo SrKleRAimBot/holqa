@@ -8,7 +8,7 @@ metadata:
 
 # Defining infrastructure resources
 
-> **Preview — not yet available.** `defineApp` and the resource constructors are a **proposed** API in the unimplemented `@holqa/sdk`. Code below is illustrative. Only resource ID validation exists today.
+> **Preview — not yet published.** `defineApp`, `defineResources`, `composeResources`, `queue`, `bucket`, `schedule`, `http.api` (without routes), `secret` and `variable` are implemented in the Holqa repository's `@holqa/sdk`, which is not published to npm yet. `staticSite`, HTTP routes and the RPC mount are **proposed**; code that uses them is illustrative.
 
 ## When to use
 
@@ -24,6 +24,8 @@ Resource IDs are validated by `parseResourceId` in `@holqa/core` (repository-int
 - Valid: `order-processing`, `orders.process`, `daily-cleanup`. Invalid: `Orders`, `order_processing`, `-orders`, `orders.`.
 - Failures report `HOLQA_RESOURCE_ID_INVALID`.
 
+In the repository's `@holqa/sdk`, factories validate their declarations when called, literal IDs are checked at compile time, and `defineApp` rejects duplicate IDs (`HOLQA_RESOURCE_ID_DUPLICATE`) at compile time and run time, reporting every problem at once.
+
 ## Planned workflow
 
 1. **Pick the resource kind** that matches the required behavior, not a vendor product.
@@ -31,10 +33,10 @@ Resource IDs are validated by `parseResourceId` in `@holqa/core` (repository-int
 3. **Declare requirements, not provider settings.** State schema, retries, dead-lettering, access or overlap. Do not add provider-specific option bags; bindings are validated separately.
 4. **Attach schemas** for any data that crosses a trust boundary (queue messages, env values).
 5. **Keep it pure.** No I/O, clocks, randomness or environment reads during declaration.
-6. **Compose if large.** Split resources into modules and spread them into `defineApp`.
+6. **Compose if large.** Split resources into modules with `defineResources` and combine them with `composeResources`, which rejects duplicate aliases (plain spread silently keeps the last one).
 
 ```ts
-// infra.ts — illustrative, proposed API
+// infra.ts — illustrative: staticSite and the rpc mount are proposed; the rest is implemented but unpublished
 import { bucket, defineApp, http, queue, schedule, secret, staticSite, variable } from "@holqa/sdk";
 import { z } from "zod";
 

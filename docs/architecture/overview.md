@@ -1,6 +1,6 @@
 # Architecture overview
 
-> **Status:** Accepted design. The package boundaries and their enforcement are **Implemented**; `@holqa/core`, `@holqa/compiler`, and `@holqa/cli` contain small implemented foundations. All other layers are planned.
+> **Status:** Accepted design. The package boundaries and their enforcement are **Implemented**; `@holqa/core` (contracts and the descriptor protocol), `@holqa/sdk` (the application and resource model), `@holqa/testing` (type assertions), `@holqa/compiler` (canonical JSON) and `@holqa/cli` (help and version) contain implemented parts. All other layers are planned.
 
 This document describes Holqa's layers, how packages map to them, and how data flows from source code to a running application. For the reasoning behind individual decisions, see the [ADRs](decisions/README.md).
 
@@ -11,12 +11,12 @@ Holqa is organized into layers whose dependencies point **inward**, toward frame
 | Layer | Concern | Packages | Runtime-neutral? |
 | --- | --- | --- | --- |
 | **Contracts** | Resource model, diagnostics, identity, schema representation, shared types. | `@holqa/core` | Yes. No Bun, Node, or other Holqa imports. |
-| **Authoring** | Public API for declaring resources and handlers; typed handles. | `@holqa/sdk` (planned) | Yes |
+| **Authoring** | Public API for declaring resources and handlers; typed handles. | `@holqa/sdk` (implemented: application and resource model) | Yes |
 | **Client** | Browser-safe runtime for generated clients. | `@holqa/client` (planned) | Yes |
 | **Compilation** | Analysis, resource graph, manifest IR, diagnostics, client generation. | `@holqa/compiler` | Yes, in its own source (no Bun or Node imports). |
 | **Execution** | Running handlers on Bun; invocation adapters. | `@holqa/runtime-bun` (planned) | No (Bun) |
 | **Local environment** | Local runtime drivers and emulators. | `@holqa/local` (planned) | No |
-| **Testing** | Deterministic test utilities and fixtures. | `@holqa/testing` (planned) | No |
+| **Testing** | Deterministic test utilities and fixtures. | `@holqa/testing` (type assertions implemented) | No |
 | **Tooling** | Developer CLI composing compiler, runtime, and local environment. | `@holqa/cli` | No (Bun) |
 | **Integrations** | Adapters for schema libraries, Effect, oRPC, TanStack Query, and others. | `packages/integrations/*` (planned) | Depends on integration |
 | **Bindings** | Production runtime drivers and provisioning providers. | Not yet scoped | No |
@@ -25,14 +25,14 @@ Holqa is organized into layers whose dependencies point **inward**, toward frame
 flowchart TB
   subgraph Neutral["Runtime-neutral"]
     core["@holqa/core<br/>contracts"]
-    sdk["@holqa/sdk<br/>authoring (planned)"]
+    sdk["@holqa/sdk<br/>authoring"]
     client["@holqa/client<br/>client runtime (planned)"]
     compiler["@holqa/compiler<br/>compilation"]
   end
   subgraph Execution["Execution and tooling"]
     runtime["@holqa/runtime-bun<br/>(planned)"]
     local["@holqa/local<br/>(planned)"]
-    testing["@holqa/testing<br/>(planned)"]
+    testing["@holqa/testing<br/>(partial)"]
     cli["@holqa/cli"]
   end
   integrations["packages/integrations/*<br/>(planned)"]

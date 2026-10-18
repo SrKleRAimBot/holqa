@@ -16,5 +16,8 @@ The project follows [Semantic Versioning](https://semver.org/) and [Conventional
 - `@holqa/core` foundations: `Result`, structured diagnostics with stable `HOLQA_*` codes, and resource identifier validation.
 - `@holqa/compiler` foundation: deterministic canonical JSON serialization.
 - `@holqa/cli`: help, version, and machine-readable (`--json`) diagnostics for proposed commands.
+- Core application and resource model: the descriptor protocol, typed resource and trigger kind registries and the
+  runtime binding contract in `@holqa/core`; `defineApp`, resource declarations, typed handles and handler registration
+  in the new `@holqa/sdk`; compile-time type assertions in the new `@holqa/testing`. ADRs 0018 to 0020.
 - Architecture documentation, ADRs, roadmap, contributor guides, agent instructions (`AGENTS.md`, `CLAUDE.md`,
   `.agents/`, `.claude/`), contributor skills, preview public skills, and examples.

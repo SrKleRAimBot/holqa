@@ -1,15 +1,29 @@
 # API design specification
 
-> **Status:** Proposed — not implemented. Parts marked **Validated in M0** were prototyped in the disposable [`experiments/`](../../experiments/README.md) packages, which are not part of the framework. Nothing on this page exists in `@holqa/sdk` or `@holqa/core` yet, and every API may change.
+> **Status:** Partly implemented. The application definition, the `queue`, `bucket`, `schedule` and `http.api` declarations, configuration entries, typed handles, queue, bucket and schedule handler registration, the descriptor protocol and the runtime binding contract are **Implemented** in `@holqa/core` and `@holqa/sdk`, with the differences listed under [implementation status](#implementation-status). HTTP routes, `reply`, RPC procedures, `staticSite`, schema adapters and infrastructure bindings remain **Proposed**. Parts marked **Validated in M0** were prototyped in the disposable [`experiments/`](../../experiments/README.md) packages, which are not part of the framework.
 
 This page specifies the public APIs for application definitions, typed resources, handlers, schema adapters and bindings. It is the target for the first real implementation of `@holqa/sdk` and the descriptor contracts in `@holqa/core`. Decisions behind it are recorded in ADRs [0012](../architecture/decisions/0012-source-inferred-types-and-reply-helpers.md) to [0017](../architecture/decisions/0017-package-layers-after-m0.md). The [commerce example](../../examples/commerce/README.md) is the reference application written against it.
+
+## Implementation status
+
+| Area | Status | Differences from the M0 proposal on this page |
+| --- | --- | --- |
+| `defineApp`, `defineResources`, `App.env` | **Implemented** | `handlers` is optional and also accepts `{ include, exclude }`; `description` was added; `composeResources` was added. `defineApp` validates the whole definition and throws a `HolqaError` listing every problem, including duplicate identifiers ([ADR 0019](../architecture/decisions/0019-declaration-time-validation.md)). |
+| `queue`, `bucket`, `schedule`, `secret`, `variable` | **Implemented** | Identifiers and options are validated when the factory is called, and literal identifiers at compile time. |
+| `http.api` | **Implemented** (declaration only) | `route(...)` and `reply` are not implemented. |
+| Handler registrations `consume`, `onObjectCreated`, `handle` | **Implemented** | Registrations expose `trigger` (the trigger kind), `id` and `resourceId`. |
+| Descriptor protocol | **Implemented** | Typed kind registries instead of open `config` objects; handler descriptors hold `definition` (JSON metadata) separately from `invoke`; resource descriptors add `requirements` ([ADR 0018](../architecture/decisions/0018-typed-kind-registries-in-the-descriptor-protocol.md)). |
+| Runtime bindings | **Implemented** (contract only) | `RuntimeBinding` is `{ name, capabilities, drivers, config }`; `bindApp` checks capabilities and drivers before installing; rebinding fails with `HOLQA_RUNTIME_ALREADY_BOUND` ([ADR 0020](../architecture/decisions/0020-runtime-binding-resolution.md)). No runtime installs bindings yet. |
+| Schema adapters, infrastructure bindings, routes, procedures, `staticSite` | Proposed | — |
+
+The [resource model](../architecture/resource-model.md) and the [packages reference](packages.md) describe the implemented API; this page keeps the original proposal for the parts that are not built.
 
 ## Design rules
 
 | Rule | Consequence |
 | --- | --- |
 | Types are inferred from source, never generated, for code that can import `infra.ts`. | Factories use `const` type parameters and structural Standard Schema generics. **Validated in M0.** |
-| Declarations are pure. | `defineApp` and every factory perform no I/O and read no clock, randomness or environment. Graph-level problems are compiler diagnostics, not exceptions. **Validated in M0.** |
+| Declarations are pure. | `defineApp` and every factory perform no I/O and read no clock, randomness or environment. Malformed declarations and duplicate resource identifiers throw when declared (**Implemented**); graph problems that involve handlers are compiler diagnostics (planned). |
 | Every Holqa value carries a plain descriptor. | The compiler and runtime read descriptors and never import the SDK. **Validated in M0.** |
 | Handles are operations, not infrastructure. | A handle delegates to a runtime binding. Using it with no binding fails with `HOLQA_RUNTIME_NOT_BOUND`. **Validated in M0.** |
 | Producers send the schema's **input** type; consumers receive its **output** type. | The wire format is the input (encoded) representation. **Validated in M0.** |
@@ -67,7 +81,7 @@ Resource handles constrain only `{ kind, id, "~holqa" }`. A stricter constraint 
 | `staticSite({ id, root, build, spaFallback })` | Static assets | none | none | Proposed (not prototyped) |
 | `secret(schema)`, `variable(schema, { default? })` | Configuration entries | read through `app.env` | none | Proposed (prototyped in M0) |
 
-Identifiers follow the implemented `ResourceId` grammar. They are validated by the compiler and runtime, not by `defineApp`, so that every invalid identifier can be reported at once.
+Identifiers follow the implemented `ResourceId` grammar. They are validated when declared, and `defineApp` reports every problem in a definition at once ([ADR 0019](../architecture/decisions/0019-declaration-time-validation.md)).
 
 ## Handlers
 
@@ -186,7 +200,7 @@ Infrastructure bindings (which driver backs which logical resource in an environ
 
 ## Diagnostic codes proposed by M0
 
-These codes are used by the experiments and are **not registered** in `@holqa/core`. Registering them is part of implementing the compiler and runtime.
+These codes are used by the experiments. `HOLQA_RESOURCE_ID_DUPLICATE`, `HOLQA_INPUT_INVALID`, `HOLQA_RUNTIME_NOT_BOUND` and `HOLQA_DECLARATION_INVALID` are now registered in `@holqa/core` (see [diagnostic codes](diagnostic-codes.md)); the others are registered when the compiler and runtime that emit them are implemented.
 
 | Code | Meaning |
 | --- | --- |

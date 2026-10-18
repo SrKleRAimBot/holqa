@@ -1,6 +1,6 @@
 # Diagnostic codes
 
-> **Status:** Four codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). Other codes on this page are planned examples and are not emitted by any code.
+> **Status:** Ten codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). Other codes on this page are planned examples and are not emitted by any code.
 
 Every problem Holqa reports is a structured `Diagnostic` with a stable code. Tools, CI scripts, and agents should match on the code, never on the message text, which may be reworded.
 
@@ -45,8 +45,14 @@ JSON form (as emitted by `holqa --json`):
 | `HOLQA_CLI_UNKNOWN_COMMAND` | `cliUnknownCommand` | `runCli` (`@holqa/cli`) | The CLI received a command it does not recognize. Exit code `2`. |
 | `HOLQA_CLI_NOT_IMPLEMENTED` | `cliNotImplemented` | `runCli` (`@holqa/cli`) | The command is a proposed command that has not been implemented yet. Exit code `1`. |
 | `HOLQA_MANIFEST_NOT_SERIALIZABLE` | `manifestNotSerializable` | `canonicalJsonStringify` via `CanonicalJsonError` (`@holqa/compiler`) | A value cannot be represented in canonical JSON (for example `undefined`, a function, a `Date`, `NaN`, or a cycle). The message includes the JSON path. |
+| `HOLQA_RESOURCE_ID_DUPLICATE` | `resourceIdDuplicate` | `checkIdentities` (`@holqa/core`), `defineApp` (`@holqa/sdk`) | Two resources in one application share an identifier. The message names every alias involved. |
+| `HOLQA_DECLARATION_INVALID` | `declarationInvalid` | `@holqa/sdk` factories, registrations, `defineApp`, `composeResources` | A declaration is malformed: a missing or invalid option, a value that is not a Standard Schema, a non-resource in `resources`, a resource that already belongs to another application, an alias declared by two groups, or an operation on a handle never passed to `defineApp`. |
+| `HOLQA_INPUT_INVALID` | `inputInvalid` | `validateInput` via `InputValidationError` (`@holqa/core`); queue `send` and handler `invoke` (`@holqa/sdk`) | Untrusted input failed schema validation at a trust boundary. The message lists issue paths and messages but never the rejected value. |
+| `HOLQA_RUNTIME_NOT_BOUND` | `runtimeNotBound` | `requireBinding`, `resolveDriver`, `readConfig` (`@holqa/core`); handles and `app.env` (`@holqa/sdk`) | A resource handle or configuration value was used while no runtime binding is installed, for example at module top level. |
+| `HOLQA_RUNTIME_ALREADY_BOUND` | `runtimeAlreadyBound` | `bindApp` (`@holqa/core`) | A binding was installed on an application instance that already has one. |
+| `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` | `bindingCapabilityUnsupported` | `bindApp`, `checkCapabilities`, `resolveDriver` (`@holqa/core`) | A binding does not support a declared resource kind, cannot satisfy a declared requirement, or has no driver for a kind with operations. One diagnostic per shortfall. |
 
-All four currently use severity `error`.
+All ten currently use severity `error`. Errors thrown by `@holqa/core` and `@holqa/sdk` are `HolqaError` instances whose `diagnostics` list every problem found.
 
 ## Stability policy
 
@@ -73,11 +79,10 @@ The following are **examples of planned codes**. They are not in the registry an
 | Planned code | Intended meaning | Expected emitter |
 | --- | --- | --- |
 | `HOLQA_RESOURCE_NOT_FOUND` | A handler or reference names a resource that is not declared. | Compiler (static validation) |
-| `HOLQA_RESOURCE_ID_DUPLICATE` | Two resources or handlers share an identifier. | Compiler (graph construction) |
+| `HOLQA_HANDLER_ID_DUPLICATE` | Two handlers share an identifier. | Compiler (handler discovery) |
 | `HOLQA_SCHEMA_UNSUPPORTED` | A schema cannot be safely normalized into the portable representation. | Compiler (schema normalization), schema adapters |
 | `HOLQA_ROUTE_AMBIGUOUS` | Two HTTP routes or procedures match the same request. | Compiler (static validation) |
 | `HOLQA_QUEUE_CONSUMER_DUPLICATE` | More than one consumer is registered for a queue. | Compiler (static validation) |
-| `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` | A binding cannot satisfy a declared requirement. | Capability negotiation |
 | `HOLQA_CONFIG_INVALID` | A secret or variable fails validation at startup. | Runtime |
 
 ## Related
