@@ -3,8 +3,9 @@
 Transforms a Holqa application's declarations and handlers into a deterministic, infrastructure-neutral manifest,
 executable artifacts, generated clients, and structured diagnostics.
 
-> **Status:** Only the serialization foundation is implemented. Resource analysis, handler discovery, manifest
-> generation, and client generation are planned. Private and unpublished.
+> **Status:** The serialization foundation and schema contracts (normalization, fingerprints, compatibility checks) are
+> implemented. Resource analysis, handler discovery, manifest generation, and client generation are planned. Private
+> and unpublished.
 
 The compiler is deliberately separate from the runtime ([ADR 0007](../../docs/architecture/decisions/0007-separate-compiler-and-runtime.md)).
 The intended pipeline is described in [docs/architecture/compiler.md](../../docs/architecture/compiler.md).
@@ -25,3 +26,15 @@ canonicalJsonStringify({ kind: "queue", id: "order-processing" });
 //   "kind": "queue"
 // }
 ```
+
+### Schema contracts
+
+| Export | Description |
+| --- | --- |
+| `normalizeSchema(schema, { subject, adapters })` | Converts a Standard Schema into a canonical `SchemaContract` through a library adapter, or reports `HOLQA_SCHEMA_UNSUPPORTED`. |
+| `describeSchemaContract(schema, { subject, schemaVersion, adapters })` | Normalizes and fingerprints a schema into a versioned `SchemaContractRecord`. |
+| `canonicalizeJsonSchema(schema)` | Sorts set-like JSON Schema keywords so that equivalent schemas become identical. |
+| `fingerprintSchemaContract(contract)` | `sha256:` fingerprint of a contract's wire-relevant parts. |
+| `checkSchemaCompatibility(previous, next, { role, subject })` | Classifies every change for a `message`, `request` or `response` contract and reports breaking changes. |
+
+See [schema contracts](../../docs/reference/schema-contracts.md).

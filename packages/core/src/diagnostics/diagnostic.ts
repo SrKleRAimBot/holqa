@@ -1,4 +1,8 @@
 import type { DiagnosticCode } from "@/diagnostics/codes";
+import type {
+  JsonObject,
+  JsonValue
+} from "@/json";
 
 /**
  * How serious a diagnostic is. `error` diagnostics must fail the operation
@@ -28,6 +32,11 @@ export interface Diagnostic {
   readonly location?: DiagnosticLocation;
   /** Optional, actionable guidance for resolving the problem. */
   readonly hint?: string;
+  /**
+   * Optional structured data about the problem, such as the failing field
+   * paths of a validation error. Never contains rejected values or secrets.
+   */
+  readonly details?: JsonObject;
 }
 
 /**
@@ -54,7 +63,8 @@ export function createDiagnostic(input: Diagnostic): Diagnostic {
     severity: input.severity,
     message: input.message,
     ...(input.location === undefined ? {} : { location: Object.freeze({ ...input.location }) }),
-    ...(input.hint === undefined ? {} : { hint: input.hint })
+    ...(input.hint === undefined ? {} : { hint: input.hint }),
+    ...(input.details === undefined ? {} : { details: frozenCopy(input.details) })
   };
   return Object.freeze(diagnostic);
 }
@@ -88,4 +98,20 @@ function formatLocation(location: DiagnosticLocation): string {
   return location.column === undefined
     ? `${location.file}:${location.line}`
     : `${location.file}:${location.line}:${location.column}`;
+}
+
+/**
+ * Copies JSON data and freezes every level of the copy, so a diagnostic's
+ * details cannot change after it is created.
+ *
+ * @param value - The JSON data to copy.
+ * @returns A deeply frozen copy.
+ */
+function frozenCopy<Value extends JsonValue>(value: Value): Value {
+  if (typeof value !== "object" || value === null)
+    return value;
+  const copy = Array.isArray(value)
+    ? value.map(entry => frozenCopy(entry))
+    : Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, frozenCopy(entry)]));
+  return Object.freeze(copy) as Value;
 }

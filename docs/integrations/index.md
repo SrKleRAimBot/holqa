@@ -1,6 +1,6 @@
 # Integrations
 
-> **Status:** Planned. No integration packages exist yet. This section records the intended integration patterns so that core packages are designed to support them.
+> **Status:** Mostly planned. The Zod schema adapter (`@holqa/zod`) is **Implemented**; no other integration package exists yet. This section records the intended integration patterns so that core packages are designed to support them.
 
 Holqa must be composable. It should not require developers to abandon the frameworks and libraries they already use. Integrations are adapters that connect those libraries to Holqa's resource graph, schemas, handlers, and generated clients.
 
@@ -8,7 +8,7 @@ Holqa must be composable. It should not require developers to abandon the framew
 
 | Category | Examples | Purpose | Status | Page |
 | --- | --- | --- | --- | --- |
-| Schema adapters | Zod, Valibot, Effect Schema | Turn library schemas into Standard Schema plus Holqa's normalized representation. | Planned (Zod first) | [Schema libraries](schema-libraries.md) |
+| Schema adapters | Zod, Valibot, Effect Schema | Turn library schemas into Standard Schema plus Holqa's normalized representation. | Zod **Implemented** (`@holqa/zod`); others Planned | [Schema libraries](schema-libraries.md) |
 | Handler adapters | Native async functions, Effect | Let handlers be written as async functions or as Effect programs. | Planned | [Effect](effect.md) |
 | HTTP/transport adapters | Hono, oRPC, Effect HTTP | Mount existing HTTP and RPC frameworks as implementations of Holqa HTTP resources. | Planned | [oRPC and Hono](orpc-and-hono.md), [Effect](effect.md) |
 | Frontend client adapters | Fetch API, TanStack Query | Call public contracts from browsers with full types. | Planned | [TanStack](tanstack.md) |
@@ -42,7 +42,7 @@ Planned integration packages live under `packages/integrations/`:
 | `packages/integrations/orpc` | oRPC interoperability. |
 | `packages/integrations/tanstack-query` | TanStack Query options and keys. |
 
-Final npm names (for example `@holqa/zod` vs. `@holqa/schema-zod`) are not decided. The allowed dependency directions are already enforced by `scripts/check-boundaries.ts`; see [package boundaries](../architecture/package-boundaries.md).
+The Zod adapter is published in the workspace as `@holqa/zod` (private, unpublished); other final npm names are not decided. The allowed dependency directions are already enforced by `scripts/check-boundaries.ts`; see [package boundaries](../architecture/package-boundaries.md).
 
 Each integration should:
 

@@ -14,7 +14,8 @@ paths:
 - Serialize anything that must be reproducible (manifests, fingerprints, golden files) with `canonicalJsonStringify` from `@holqa/compiler`, never `JSON.stringify` directly. It sorts keys, normalizes `-0`, and throws `CanonicalJsonError` instead of dropping data.
 - Never silently drop, coerce, or default data during serialization or normalization. Unsupported values must produce an explicit diagnostic.
 - A schema that cannot be faithfully normalized (for example transforms with no JSON Schema equivalent) must produce a diagnostic, not a lossy approximation.
-- Design schema contracts around the Standard Schema interface. Do not make core generics depend on Zod; Zod support belongs in a dedicated integration (planned).
+- Design schema contracts around the Standard Schema interface. Do not make core generics depend on Zod; Zod support belongs in the dedicated `@holqa/zod` integration.
+- Values crossing an execution boundary are JSON in their schema's input form. Encode with `prepareWirePayload`, which converts to an exact JSON copy and validates that copy; never send a schema's output or the caller's object.
 - Treat diagnostic codes in `packages/core/src/diagnostics/codes.ts` as public contract: add new codes, never rename, remove, or reuse an existing one. Document each new code in `docs/reference/diagnostic-codes.md`.
 - Keep output deterministic: no timestamps, random values, absolute paths, environment data, or `Map`/`Set` iteration order in serialized artifacts.
 - Never place secrets, credentials, or environment values in manifests, diagnostics, or generated clients.

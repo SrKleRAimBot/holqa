@@ -1,6 +1,6 @@
 # Compiler
 
-> **Status:** Planned, with **Implemented** foundations. Canonical JSON serialization (`canonicalJsonStringify`) and the structured diagnostic model are **Implemented**. The compilation pipeline, manifest schema, and client generation are **Planned**. See [ADR 0007](decisions/0007-separate-compiler-and-runtime.md).
+> **Status:** Planned, with **Implemented** foundations. Canonical JSON serialization (`canonicalJsonStringify`), the structured diagnostic model, and stage 4's schema normalization, fingerprints and compatibility checks ([schema contracts](../reference/schema-contracts.md)) are **Implemented** as library functions. The compilation pipeline, manifest schema, and client generation are **Planned**. See [ADR 0007](decisions/0007-separate-compiler-and-runtime.md).
 
 The compiler (`@holqa/compiler`) will be one of Holqa's most important packages. It transforms an application's declarations and handlers into artifacts that the runtime, local environment, providers, and tools consume.
 
@@ -161,6 +161,8 @@ Every compiler failure is a `Diagnostic` from `@holqa/core`:
 Compiler output must be machine-readable, stable, and suitable for agents: the planned `holqa build --json` and `holqa inspect --json` will emit diagnostics in the same `{"diagnostics":[...]}` shape the CLI already uses. See [diagnostic codes](../reference/diagnostic-codes.md).
 
 ## Future: compatibility checking
+
+> **Status:** The checker itself is **Implemented** as `checkSchemaCompatibility` in `@holqa/compiler` ([schema contracts](../reference/schema-contracts.md#compatibility)); running it against a deployed manifest is **Planned**.
 
 Schema fingerprints in the manifest enable comparing a new manifest with a previously deployed one to detect breaking changes in queue messages and public HTTP/RPC contracts. A compatibility engine is not part of the initial compiler; see [type safety and schemas](../concepts/type-safety-and-schemas.md#compatibility-and-evolution).
 

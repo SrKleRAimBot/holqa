@@ -21,12 +21,14 @@ Only the following items carry the **Implemented** label. Everything else in the
 
 | Package | Implemented items |
 | --- | --- |
-| `@holqa/core` | `Result`, `ok`, `err`; `Diagnostic`, `createDiagnostic`, `formatDiagnostic`; the `diagnosticCodes` registry; `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`, `checkIdentities`; `HolqaError`; JSON and Standard Schema types, `validateInput`; the descriptor protocol with resource and trigger kind registries and readers; `RuntimeBinding`, `bindApp`, `resolveDriver`, `checkCapabilities` |
+| `@holqa/core` | `Result`, `ok`, `err`; `Diagnostic`, `createDiagnostic`, `formatDiagnostic`; the `diagnosticCodes` registry; `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`, `checkIdentities`; `HolqaError`; JSON and Standard Schema types, `validateInput` with structured issues; JSON wire payloads (`toWirePayload`, `prepareWirePayload`), message envelopes and codecs, payload codecs; the `SchemaAdapter` contract; the descriptor protocol with resource and trigger kind registries and readers; `RuntimeBinding`, `bindApp`, `resolveDriver`, `checkCapabilities` |
 | `@holqa/sdk` | `defineApp`, `defineResources`, `composeResources`; `queue`, `bucket`, `schedule`, `http.api` (declaration only); `secret`, `variable`; typed handles and handler registration for queues, buckets and schedules; compile-time identifier and duplicate checks |
 | `@holqa/testing` | Compile-time type assertions (`Equal`, `Expect`, `Accepts`, `HasTypeError`, `assertType`, ...) |
-| `@holqa/compiler` | `canonicalJsonStringify`, `CanonicalJsonError`, `CanonicalJsonValue` |
+| `@holqa/compiler` | `canonicalJsonStringify`, `CanonicalJsonError`, `CanonicalJsonValue`; schema normalization (`normalizeSchema`, `describeSchemaContract`, `canonicalizeJsonSchema`), `fingerprintSchemaContract`, `checkSchemaCompatibility` |
+| `@holqa/zod` | The Zod 4 schema adapter (`zodAdapter`, `createZodAdapter`, `isZodSchema`) |
 | `@holqa/cli` | `holqa --help`, `--version`, `--json`; structured errors for proposed and unknown commands |
 | `examples/package-smoke` | Verification that built packages are consumable through their public exports |
+| `examples/schema-evolution` | End-to-end schema contract corpus with Zod |
 | Repository tooling | pnpm workspace, Turborepo tasks, ESLint configuration, boundary checks, agent instruction sync |
 
 See [packages reference](../reference/packages.md), [CLI reference](../reference/cli.md), and [diagnostic codes](../reference/diagnostic-codes.md) for details.

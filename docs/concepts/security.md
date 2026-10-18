@@ -47,8 +47,8 @@ Secrets are declared explicitly (illustrative: `secret(z.string().min(1))`) and 
 
 - Schemas are the single source for both types and runtime checks, so they cannot drift.
 - Validation happens before handler code sees data.
-- Schemas that cannot be normalized produce an explicit diagnostic (`HOLQA_SCHEMA_UNSUPPORTED`, planned) instead of being approximated, because an approximated schema might accept data the developer intended to reject.
-- Messages from older deployments are untrusted with respect to the current schema; versioning and compatibility checks are planned ([compatibility and evolution](type-safety-and-schemas.md#compatibility-and-evolution)).
+- Schemas that cannot be normalized produce an explicit diagnostic (`HOLQA_SCHEMA_UNSUPPORTED`, **Implemented**) instead of being approximated, because an approximated schema might accept data the developer intended to reject.
+- Messages from older deployments are untrusted with respect to the current schema; message codecs reject unaccepted schema versions and the compatibility checker flags breaking changes (**Implemented** as library functions; running them against a deployment is planned) ([compatibility and evolution](type-safety-and-schemas.md#compatibility-and-evolution)).
 
 ## Untrusted build-time execution
 

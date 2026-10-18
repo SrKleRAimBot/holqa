@@ -11,7 +11,10 @@ import {
   it
 } from "bun:test";
 
-import { isStandardSchema } from "@/schema/standard-schema";
+import {
+  hasStandardJsonSchema,
+  isStandardSchema
+} from "@/schema/standard-schema";
 
 /** A schema whose input is a string and whose output is a number. */
 const parsedNumber: StandardSchemaV1<string, number> = {
@@ -51,5 +54,31 @@ describe("isStandardSchema", () => {
     { "~standard": { version: 1, vendor: "x" } }
   ])("rejects %p", (value) => {
     expect(isStandardSchema(value)).toBe(false);
+  });
+});
+
+describe("hasStandardJsonSchema", () => {
+  it("requires input and output converters", () => {
+    const converter = { input: () => ({ type: "string" }), output: () => ({ type: "string" }) };
+    const base = parsedNumber["~standard"];
+    /**
+     * Builds a candidate schema with the given `jsonSchema` property. Only the structure matters to the guard.
+     *
+     * @param jsonSchema - The value placed under `~standard.jsonSchema`.
+     * @returns The candidate, typed as a Standard Schema.
+     */
+    const withConverter = (jsonSchema: unknown) => ({ "~standard": { ...base, jsonSchema } }) as unknown as StandardSchemaV1;
+    expect(hasStandardJsonSchema(withConverter(converter))).toBe(true);
+    expect(hasStandardJsonSchema(parsedNumber)).toBe(false);
+    expect(hasStandardJsonSchema(withConverter({ input: converter.input }))).toBe(false);
+    expect(hasStandardJsonSchema(withConverter(null))).toBe(false);
+  });
+
+  it("keeps the schema's input and output types when it narrows", () => {
+    const candidate: StandardSchemaV1<string, number> = parsedNumber;
+    if (hasStandardJsonSchema(candidate)) {
+      expectTypeOf<InferInput<typeof candidate>>().toEqualTypeOf<string>();
+      expectTypeOf<InferOutput<typeof candidate>>().toEqualTypeOf<number>();
+    }
   });
 });

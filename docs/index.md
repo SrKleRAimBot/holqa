@@ -82,6 +82,7 @@ Everything else (HTTP routes, the compiler pipeline, runtime, local development 
 | [0018](architecture/decisions/0018-typed-kind-registries-in-the-descriptor-protocol.md) | Typed kind registries in the descriptor protocol |
 | [0019](architecture/decisions/0019-declaration-time-validation.md) | Declaration-time validation in the SDK |
 | [0020](architecture/decisions/0020-runtime-binding-resolution.md) | Runtime binding resolution |
+| [0021](architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md) | Schema contracts, wire payloads and compatibility |
 
 ## Milestones
 
@@ -107,6 +108,7 @@ Everything else (HTTP routes, the compiler pipeline, runtime, local development 
 | --- | --- |
 | [Packages](reference/packages.md) | Every package, its status, purpose, and entry points. |
 | [Diagnostic codes](reference/diagnostic-codes.md) | Implemented `HOLQA_*` codes and the stability policy. |
+| [Schema contracts](reference/schema-contracts.md) | Validation errors, wire encoding, canonical contracts, fingerprints, compatibility policy and Zod support. |
 | [CLI](reference/cli.md) | Implemented flags, exit codes, JSON output, and proposed commands. |
 | [API design specification](reference/api-design.md) | Proposed public APIs for applications, resources, handlers, schema adapters and bindings. |
 

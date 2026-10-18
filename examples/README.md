@@ -1,10 +1,11 @@
 # Examples
 
-Holqa is at the bootstrap stage. `package-smoke` runs against the implemented packages, and `commerce` runs against the disposable M0 experiment packages. The others show the intended application structure using the **proposed** SDK API, which is not implemented and may change.
+Holqa is at the bootstrap stage. `package-smoke` and `schema-evolution` run against the implemented packages, and `commerce` runs against the disposable M0 experiment packages. The others show the intended application structure using the **proposed** SDK API, which is not implemented and may change.
 
 | Example | Status | Runs? | Purpose |
 | --- | --- | --- | --- |
 | [`package-smoke`](./package-smoke/) | **Implemented** | Yes, in CI via `pnpm test` | Consumes the built `@holqa/core`, `@holqa/compiler` and `@holqa/cli` packages through their public exports. |
+| [`schema-evolution`](./schema-evolution/) | **Implemented** | Yes, in CI via `pnpm test` | One Zod message schema validated on publish and receipt, normalized, fingerprinted and checked for compatible evolution. |
 | [`commerce`](./commerce/) | Runs against the M0 experiments (not the framework) | Yes, in CI via `pnpm test` | The recurring development reference: HTTP routes, two queues, a storage event and a schedule. Type-checked and tested with the prototype SDK, compiler and runtime. |
 | [`basic-backend`](./basic-backend/) | Illustrative | No | Backend-only application: HTTP route, queue consumer, storage event handler and scheduled task. |
 | [`fullstack-vite`](./fullstack-vite/) | Illustrative | No | Vite frontend calling typed RPC procedures through a generated, browser-safe client with TanStack Query options. |

@@ -78,12 +78,12 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | Handler registration for queues, buckets and schedules | **Implemented** |
 | Composition of resource registries from multiple files ([composing applications](concepts/composing-applications.md)) | **Implemented** |
 | Type-level tests, including negative tests, for every implemented resource kind; `@holqa/testing` type assertions | **Implemented** |
+| Schema system: structured validation errors, JSON wire payloads validated after encoding, versioned message envelopes, the `SchemaAdapter` contract, normalization into canonical contracts, fingerprints and a compatibility checker ([schema contracts](reference/schema-contracts.md), [ADR 0021](architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md)) | **Implemented** |
+| The first schema adapter: `@holqa/zod` for Zod 4 | **Implemented** |
 
 ### Remaining goals
 
 - Implement the remaining factories and registrations: HTTP routes with `reply` and `staticSite`.
-- Normalize schemas through the Standard Schema interface and define the internal normalized schema representation ([ADR 0016](architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md)).
-- Ship the first schema adapter for Zod.
 - Extend the `ResourceId` grammar decision ([ADR 0004](architecture/decisions/0004-stable-logical-resource-identities.md)) and finalize it before 1.0.
 
 ### Exit criteria
@@ -102,7 +102,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 - Define the versioned manifest schema (the IR), serialized with the existing canonical JSON serializer.
 - Configuration discovery (`infra.ts`) and handler discovery (glob patterns declared in `defineApp`).
 - Resource graph construction and static validation: duplicate identifiers, invalid references, ambiguous routes, incompatible requirements, invalid schemas.
-- Schema fingerprints as a basis for future compatibility checks.
+- Record schema contract records (contract, fingerprint, `schemaVersion`) in the manifest, and compare them with a previously deployed manifest using the **Implemented** compatibility checker.
 - A documented, honest analysis strategy for user configuration code that does not claim unsandboxed evaluation is secure.
 - Expose `holqa build` and `holqa inspect` (currently proposed commands).
 
@@ -184,4 +184,4 @@ These capabilities have extension points in the design but no committed phase. A
 | OpenTelemetry integration | Traces and metrics for handlers. |
 | TanStack Start integration | Full-stack hosting integration. |
 | Local MCP server | Exposes the resource graph, diagnostics, and local invocations to agents. See [agent-native development](concepts/agent-native-development.md). |
-| Schema compatibility engine | Detects breaking changes against previous deployments. |
+| Schema migration engine | Upgrades data written under an older `schemaVersion`. The compatibility checker and the version metadata it needs are **Implemented**. |

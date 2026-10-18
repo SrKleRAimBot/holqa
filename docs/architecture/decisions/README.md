@@ -34,11 +34,12 @@ Once an ADR is accepted, it is not rewritten. To change a decision, write a new 
 | [0013](0013-descriptor-protocol-in-core.md) | A descriptor protocol in `@holqa/core` | Accepted (implemented with the proposed layout of 0018) | 2026-10-17 |
 | [0014](0014-evaluation-based-manifest-extraction.md) | Evaluation-based manifest extraction | Accepted (validated in M0, not implemented) | 2026-10-17 |
 | [0015](0015-runtime-generations-and-reload.md) | Runtime generations and reload | Accepted (validated in M0, not implemented) | 2026-10-17 |
-| [0016](0016-schema-adapters-and-conversion-fidelity.md) | Schema adapters and conversion fidelity | Accepted (validated in M0, not implemented) | 2026-10-17 |
+| [0016](0016-schema-adapters-and-conversion-fidelity.md) | Schema adapters and conversion fidelity | Accepted (implemented for Zod; 0021 proposes refining decision 2) | 2026-10-17 |
 | [0017](0017-package-layers-after-m0.md) | Package layers after M0 | Accepted (existing rows enforced) | 2026-10-17 |
 | [0018](0018-typed-kind-registries-in-the-descriptor-protocol.md) | Typed kind registries in the descriptor protocol | Proposed (implemented) | 2026-10-17 |
 | [0019](0019-declaration-time-validation.md) | Declaration-time validation in the SDK | Proposed (implemented) | 2026-10-17 |
 | [0020](0020-runtime-binding-resolution.md) | Runtime binding resolution | Proposed (implemented) | 2026-10-17 |
+| [0021](0021-schema-contracts-wire-payloads-and-compatibility.md) | Schema contracts, wire payloads and compatibility | Proposed (implemented) | 2026-10-18 |
 
 ## Adding an ADR
 

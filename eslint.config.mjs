@@ -16,6 +16,8 @@ const neutralPackageSources = [
   "packages/compiler/src/**",
   "packages/sdk/src/**",
   "packages/client/src/**",
+  // Schema adapters run wherever the schemas run, so they stay runtime-neutral too.
+  "packages/integrations/zod/src/**",
   // Disposable M0 experiments that prototype neutral packages obey the same rules.
   "experiments/model/src/**",
   "experiments/sdk/src/**",

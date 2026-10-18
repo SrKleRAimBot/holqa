@@ -4,7 +4,7 @@
 - **Date:** 2026-10-17
 - **Deciders:** Holqa maintainers
 
-> **Implementation status:** Implemented in `@holqa/core` (descriptors, readers, Standard Schema types, `validateInput`, `RuntimeBinding`, `bindApp`, `requireBinding`). The implementation follows a proposed refinement of the descriptor layout ([ADR 0018](0018-typed-kind-registries-in-the-descriptor-protocol.md)) and a proposed answer to the binding-slot question below ([ADR 0020](0020-runtime-binding-resolution.md)); both are pending acceptance, and once accepted they supersede the corresponding parts of this ADR. The `SchemaAdapter` contract is not implemented yet. Originally validated by the disposable [`@holqa/experiment-model`](../../../experiments/model/) package.
+> **Implementation status:** Implemented in `@holqa/core` (descriptors, readers, Standard Schema types, `validateInput`, `RuntimeBinding`, `bindApp`, `requireBinding`). The implementation follows a proposed refinement of the descriptor layout ([ADR 0018](0018-typed-kind-registries-in-the-descriptor-protocol.md)) and a proposed answer to the binding-slot question below ([ADR 0020](0020-runtime-binding-resolution.md)); both are pending acceptance, and once accepted they supersede the corresponding parts of this ADR. The `SchemaAdapter` contract is implemented as described in [ADR 0021](0021-schema-contracts-wire-payloads-and-compatibility.md). Originally validated by the disposable [`@holqa/experiment-model`](../../../experiments/model/) package.
 
 ## Context
 

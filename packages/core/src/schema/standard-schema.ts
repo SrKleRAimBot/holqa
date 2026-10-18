@@ -77,3 +77,43 @@ export function isStandardSchema(value: unknown): value is StandardSchemaV1 {
     && "vendor" in props && typeof props.vendor === "string"
     && "validate" in props && typeof props.validate === "function";
 }
+
+/** The JSON Schema dialects a Standard JSON Schema converter may be asked to produce. */
+export type StandardJsonSchemaTarget = "draft-2020-12" | "draft-07" | "openapi-3.0" | (string & {});
+
+/** Options passed to a Standard JSON Schema converter. */
+export interface StandardJsonSchemaOptions {
+  readonly target: StandardJsonSchemaTarget;
+  readonly libraryOptions?: Record<string, unknown> | undefined;
+}
+
+/** Converts one side of a schema to JSON Schema. Converters throw when the side cannot be represented. */
+export interface StandardJsonSchemaConverter {
+  readonly input: (options: StandardJsonSchemaOptions) => Record<string, unknown>;
+  readonly output: (options: StandardJsonSchemaOptions) => Record<string, unknown>;
+}
+
+/**
+ * A Standard Schema that also implements the Standard JSON Schema extension
+ * (`~standard.jsonSchema`), as Zod 4.6 does natively. Structural copy of the
+ * interface; Holqa never depends on a schema library package.
+ */
+export interface StandardJsonSchemaV1<Input = unknown, Output = Input> extends StandardSchemaV1<Input, Output> {
+  readonly "~standard": StandardSchemaProps<Input, Output> & { readonly jsonSchema: StandardJsonSchemaConverter };
+}
+
+/**
+ * Reports whether a Standard Schema also exposes a Standard JSON Schema
+ * converter with `input` and `output` functions.
+ *
+ * @param schema - A value already known to implement Standard Schema.
+ * @returns `true` when `schema["~standard"].jsonSchema` has `input` and `output` functions.
+ */
+export function hasStandardJsonSchema<Schema extends StandardSchemaV1>(schema: Schema): schema is Schema & StandardJsonSchemaV1<InferInput<Schema>, InferOutput<Schema>> {
+  const props: object = schema["~standard"];
+  if (!("jsonSchema" in props) || typeof props.jsonSchema !== "object" || props.jsonSchema === null)
+    return false;
+  const converter: object = props.jsonSchema;
+  return "input" in converter && typeof converter.input === "function"
+    && "output" in converter && typeof converter.output === "function";
+}

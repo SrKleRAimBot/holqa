@@ -1,6 +1,6 @@
 # Type safety and schemas
 
-> **Status:** Proposed — not implemented. Source-based inference and mandatory runtime validation at trust boundaries are accepted direction. Building on Standard Schema with library-specific adapters that produce JSON Schema plus fidelity metadata is **Accepted design** in [ADR 0016](../architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md) (superseding ADR 0006), validated with Zod and Valibot in a disposable M0 experiment. No schema handling, normalization, or client generation exists yet.
+> **Status:** Partly implemented. Source-based inference, Standard Schema validation with structured errors, JSON wire payloads, schema normalization through adapters (with `@holqa/zod` as the first), fingerprints and compatibility checks are **Implemented**; see [schema contracts](../reference/schema-contracts.md) and [ADR 0021](../architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md). Recording contracts in a manifest, comparing against a previous deployment, migrations and generated clients are **Planned**.
 
 Type safety is one of Holqa's defining characteristics. Holqa connects resources and operations with strict TypeScript types **and** runtime schemas, because static types alone cannot protect data that crosses a process, network, or time boundary.
 
@@ -57,7 +57,7 @@ Holqa's public type generics are designed around the [Standard Schema](https://s
 
 This lets developers use their preferred schema library and lets Holqa's core remain library-neutral.
 
-**Zod** is the planned first-class integration. **Valibot** and **Effect Schema** are planned through adapters. See [schema libraries](../integrations/schema-libraries.md).
+**Zod** is the first-class integration (`@holqa/zod`, **Implemented**). **Valibot** and **Effect Schema** are planned through adapters. See [schema libraries](../integrations/schema-libraries.md).
 
 ## Why Standard Schema alone is insufficient
 
@@ -74,7 +74,7 @@ Standard Schema covers validation and type inference. The compiler and runtime n
 | Compatibility checking | To compare a new contract against a previously deployed one. |
 | Unsupported-schema reporting | To fail explicitly when a schema cannot be represented. |
 
-So Holqa defines a **normalized internal schema representation**: a portable, JSON-serializable description produced from each schema by a library-specific adapter. The compiler stores it in the manifest (serialized with the implemented canonical JSON serializer) and uses it for fingerprints, documentation, and compatibility checks. The representation is **Accepted design** ([ADR 0016](../architecture/decisions/0016-schema-adapters-and-conversion-fidelity.md)): JSON Schema draft 2020-12 per side (input and output), plus fidelity, runtime-only constraints and the converter's library version.
+So Holqa defines a **normalized internal schema representation**, the schema contract: a portable, JSON-serializable description produced from each schema by a library-specific adapter. It is JSON Schema draft 2020-12 per side (input and output), plus fidelity, runtime-only constraints and the converter's library version. Normalization, canonical form, fingerprints and compatibility checks are **Implemented** in `@holqa/compiler` ([schema contracts](../reference/schema-contracts.md)). Storing contracts in the manifest is **Planned**.
 
 ## Honest limits of normalization
 
@@ -84,7 +84,7 @@ Holqa's rule:
 
 > A schema that cannot be safely normalized produces an explicit diagnostic. It is never silently approximated.
 
-The planned code for this is `HOLQA_SCHEMA_UNSUPPORTED` (see [diagnostic codes](../reference/diagnostic-codes.md)). An adapter may support a documented subset fully, mark specific constructs as "validated at runtime but opaque to documentation", or reject them. Which of these applies must be visible to the developer, not guessed.
+The code for this is `HOLQA_SCHEMA_UNSUPPORTED` (see [diagnostic codes](../reference/diagnostic-codes.md)). An adapter supports a documented subset fully, marks specific constructs as runtime-only (validated at runtime but absent from the description, reported with `HOLQA_SCHEMA_RUNTIME_ONLY`), or rejects them. Which of these applies is visible to the developer, never guessed. The [Zod support table](../reference/schema-contracts.md#zod-support) lists the outcome for each construct.
 
 ## Runtime validation at trust boundaries
 
@@ -98,7 +98,11 @@ TypeScript's static type system cannot validate incoming messages, HTTP requests
 | Configuration load | Secrets and variables, at application start. |
 | Outgoing responses (optional) | Response bodies against declared status-specific schemas. |
 
-Validation failures produce structured diagnostics or well-defined error responses, not thrown strings. Whether producers also validate on `send` (catching bugs earlier at a runtime cost) is a **Proposed** policy decision.
+Validation failures produce structured diagnostics with the failing field's path (**Implemented**: `InputValidationError`, `HOLQA_INPUT_INVALID`), not thrown strings. Queue producers validate on `send` as well, so the same schema checks a message on publish and on receipt (**Implemented**).
+
+## What crosses the wire
+
+Ordinary payloads are JSON (**Implemented**). Producers send the schema's input form, encoded to an exact JSON copy and validated after encoding; consumers decode it with the same schema. A transformation that produces a `Date` therefore never puts a `Date` on the wire, and a value without a JSON form fails with `HOLQA_PAYLOAD_NOT_SERIALIZABLE` instead of being coerced. Binary data uses explicit payload codecs or buckets. See [wire payloads](../reference/schema-contracts.md#wire-payloads).
 
 ## Generated browser-safe clients
 
@@ -121,13 +125,13 @@ The future compiler must account for:
 
 | Concern | Planned mechanism |
 | --- | --- |
-| Versioned messages | Queue declarations carry an explicit `schemaVersion`; messages carry the version they were produced with. |
-| Contract change detection | Stable schema fingerprints recorded in the manifest. |
-| Breaking-change diagnostics | Compare the new manifest against a previous one and flag removed fields, narrowed types, and changed required-ness. |
-| Public HTTP/RPC contract changes | The same comparison for request and response schemas and routes. |
-| Migration guidance | Diagnostics with hints, and a public `schema-evolution` agent skill. |
-
-A sophisticated compatibility engine is out of scope for the bootstrap phase; it is listed under Future on the [roadmap](../roadmap.md). The requirement is recorded here so that the manifest format and schema representation are designed to support it.
+| Concern | Mechanism | Status |
+| --- | --- | --- |
+| Versioned messages | Queue declarations carry an explicit `schemaVersion`; the `holqa.message/1` envelope carries the version a message was produced with. | **Implemented** (drivers do not use the envelope yet) |
+| Contract change detection | Stable fingerprints over canonical contracts. | **Implemented**; recording them in the manifest is **Planned** |
+| Breaking-change diagnostics | `checkSchemaCompatibility` classifies each change as safe, potentially breaking, unverifiable or breaking. | **Implemented**; comparing against a deployed manifest is **Planned** |
+| Public HTTP/RPC contract changes | The same checker with the `request` and `response` roles. | **Implemented** as a library function; routes are **Proposed** |
+| Migration guidance | Diagnostics with hints, the [evolution guidance](../reference/schema-contracts.md#evolution-guidance), and a public `schema-evolution` agent skill. | Guidance **Implemented**; the skill is available as a preview; migration engine **Planned** |
 
 ## TypeScript standards in this repository
 

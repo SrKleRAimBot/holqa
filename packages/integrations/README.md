@@ -1,11 +1,11 @@
-# Integrations (planned)
+# Integrations
 
-> **Status:** Planned. These directories describe intended integration packages; none contain code yet. Final npm
-> package names have not been decided.
+> **Status:** `zod` (`@holqa/zod`) is **Implemented**. The other directories describe planned integration packages and
+> contain only a README. Their final npm package names have not been decided.
 
 | Directory | Purpose |
 | --- | --- |
-| [zod](zod) | First-class Standard Schema adapter and portable schema normalization for Zod. |
+| [zod](zod) | **Implemented.** Zod 4 schema adapter for portable, verified schema contracts. |
 | [valibot](valibot) | Schema adapter for Valibot. |
 | [effect](effect) | Effect Schema adapter and Effect-based handlers. |
 | [orpc](orpc) | Interoperability with existing oRPC routers and contracts. |

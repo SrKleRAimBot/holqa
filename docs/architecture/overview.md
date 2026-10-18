@@ -18,7 +18,7 @@ Holqa is organized into layers whose dependencies point **inward**, toward frame
 | **Local environment** | Local runtime drivers and emulators. | `@holqa/local` (planned) | No |
 | **Testing** | Deterministic test utilities and fixtures. | `@holqa/testing` (type assertions implemented) | No |
 | **Tooling** | Developer CLI composing compiler, runtime, and local environment. | `@holqa/cli` | No (Bun) |
-| **Integrations** | Adapters for schema libraries, Effect, oRPC, TanStack Query, and others. | `packages/integrations/*` (planned) | Depends on integration |
+| **Integrations** | Adapters for schema libraries, Effect, oRPC, TanStack Query, and others. | `packages/integrations/*` (`@holqa/zod` implemented; others planned) | Depends on integration |
 | **Bindings** | Production runtime drivers and provisioning providers. | Not yet scoped | No |
 
 ```mermaid
@@ -74,7 +74,7 @@ Cross-cutting concerns:
 | --- | --- |
 | Diagnostics | `@holqa/core` defines `Diagnostic` and the code registry; every other package emits them. |
 | Serialization | `@holqa/compiler` owns canonical JSON and, later, the manifest schema. |
-| Schemas | `@holqa/core` (normalized representation), `packages/integrations/*` (library adapters). |
+| Schemas | `@holqa/core` (validation, wire payloads, the adapter contract), `@holqa/compiler` (normalized contracts, fingerprints, compatibility), `packages/integrations/*` (library adapters such as `@holqa/zod`). |
 
 ## Data flow
 
