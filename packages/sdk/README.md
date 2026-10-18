@@ -4,7 +4,8 @@ Declare a Holqa application's resources, configuration and handlers in TypeScrip
 
 > **Status:** Implemented (application and resource model, HTTP routes, RPC procedures, middleware), private and
 > unpublished. The API may change before the first release. `staticSite` is proposed. `@holqa/runtime-bun` executes
-> routes and procedures; queue, storage and schedule delivery are planned.
+> routes and procedures and delivers queue messages, object events and scheduled runs from a binding such as
+> `@holqa/local`.
 
 Handler contexts use the standard `AbortSignal` type, so consumers need a `lib` or `types` setting that declares it
 (DOM, `@types/node` or `@types/bun`).
@@ -20,7 +21,8 @@ or provider code. See [package boundaries](../../docs/architecture/package-bound
 | `defineResources()`, `composeResources()` | Resource groups for registries split across modules. |
 | `queue()`, `bucket()`, `schedule()`, `http.api()` | Resource declarations returning typed handles. |
 | `secret()`, `variable()` | Configuration entries. |
-| `consume()`, `onObjectCreated()`, `handle()` (on handles) | Declarative handler registration. |
+| `send(message, { delaySeconds? })` (queues); `put()`, `get()`, `head()`, `delete()`, `list()`, `signedUrl()` (buckets) | Operations through the bound runtime; `send` resolves to `{ messageId }`. |
+| `consume()`, `onObjectCreated()`, `onObjectDeleted()`, `handle()` (on handles) | Declarative handler registration. |
 | `route()`, `procedure()` (on `http.api` handles), `reply` | HTTP routes and RPC procedures; see the [runtime reference](../../docs/reference/runtime.md). |
 | `middleware()`, `middleware.requires()` | Typed middleware for applications, APIs, routes and procedures. |
 | `scoped()` | Application-scoped values (pools, clients) created once per runtime. |

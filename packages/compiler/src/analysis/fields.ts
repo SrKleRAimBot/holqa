@@ -59,6 +59,20 @@ export class FieldReader {
   }
 
   /**
+   * Reads a required finite number that is not negative.
+   *
+   * @param value - The candidate number.
+   * @param path - Its name in messages.
+   * @returns The number, or `0` after recording a problem.
+   */
+  nonNegativeNumber(value: unknown, path: string): number {
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0)
+      return value;
+    this.problems.push(`"${path}" must be a number of at least 0.`);
+    return 0;
+  }
+
+  /**
    * Reads a required boolean.
    *
    * @param value - The candidate boolean.

@@ -1,4 +1,5 @@
 import type {
+  QueueBackoff,
   ResourceKind,
   ResourceKindMap,
   StandardSchemaV1,
@@ -6,7 +7,10 @@ import type {
   TriggerKindMap
 } from "@holqa/core";
 
-import { isStandardSchema } from "@holqa/core";
+import {
+  isStandardSchema,
+  queueBackoffProblem
+} from "@holqa/core";
 
 import {
   definedEntries,
@@ -40,18 +44,20 @@ type ResourceKindRule<Kind extends ResourceKind> = (config: unknown, requirement
 const resourceKindRules: { readonly [Kind in ResourceKind]: ResourceKindRule<Kind> } = {
   "queue": (config, requirements, reader) => {
     const rawConfig = reader.object(config, "config", ["schemaVersion"]);
-    const raw = reader.object(requirements, "requirements", ["delivery", "maxAttempts", "deadLetter"]);
+    const raw = reader.object(requirements, "requirements", ["delivery", "maxAttempts", "deadLetter", "backoff"]);
     const delivery = reader.oneOf(raw.delivery, "requirements.delivery", ["at-least-once"]);
     const deadLetter = reader.boolean(raw.deadLetter, "requirements.deadLetter");
     const maxAttempts = reader.optionalPositiveInteger(raw.maxAttempts, "requirements.maxAttempts");
+    const backoff = raw.backoff === undefined ? undefined : readBackoff(raw.backoff, reader);
     return {
       config: { schemaVersion: reader.positiveInteger(rawConfig.schemaVersion, "config.schemaVersion") },
-      requirements: { delivery, deadLetter, ...definedEntries({ maxAttempts }) },
+      requirements: { delivery, deadLetter, ...definedEntries({ maxAttempts, backoff }) },
       capabilities: [
         "queue",
         `queue.delivery.${delivery}`,
         ...deadLetter ? ["queue.dead-letter"] : [],
-        ...maxAttempts === undefined ? [] : ["queue.max-attempts"]
+        ...maxAttempts === undefined ? [] : ["queue.max-attempts"],
+        ...backoff === undefined ? [] : [`queue.backoff.${backoff.strategy}`]
       ]
     };
   },
@@ -87,6 +93,31 @@ const resourceKindRules: { readonly [Kind in ResourceKind]: ResourceKindRule<Kin
 };
 
 /**
+ * Reads a queue's declared backoff.
+ *
+ * @param value - The untrusted `requirements.backoff` value.
+ * @param reader - Collects problems.
+ * @returns The normalized backoff; problems are recorded in `reader`.
+ */
+function readBackoff(value: unknown, reader: FieldReader): QueueBackoff {
+  const raw = reader.object(value, "requirements.backoff", ["strategy", "delaySeconds", "initialDelaySeconds", "maxDelaySeconds", "multiplier"]);
+  const strategy = reader.oneOf(raw.strategy, "requirements.backoff.strategy", ["fixed", "exponential"]);
+  const backoff: QueueBackoff = strategy === "fixed"
+    ? { strategy, delaySeconds: reader.nonNegativeNumber(raw.delaySeconds, "requirements.backoff.delaySeconds") }
+    : {
+      strategy: "exponential",
+      initialDelaySeconds: reader.nonNegativeNumber(raw.initialDelaySeconds, "requirements.backoff.initialDelaySeconds"),
+      maxDelaySeconds: reader.nonNegativeNumber(raw.maxDelaySeconds, "requirements.backoff.maxDelaySeconds"),
+      ...definedEntries({ multiplier: raw.multiplier === undefined ? undefined : reader.nonNegativeNumber(raw.multiplier, "requirements.backoff.multiplier") })
+    };
+  // The rules the SDK and the manifest JSON Schema apply too (maximum not below the initial delay, multiplier of at least 1).
+  const problem = reader.problems.length === 0 ? queueBackoffProblem(backoff) : undefined;
+  if (problem !== undefined)
+    reader.problems.push(`"requirements.backoff" is invalid: ${problem}.`);
+  return backoff;
+}
+
+/**
  * Normalizes a resource's untrusted `config` and `requirements` for its kind,
  * keeping only known settings and deriving the capabilities they require.
  *
@@ -117,6 +148,10 @@ const triggerKindRules: { readonly [Trigger in TriggerKind]: TriggerKindRule<Tri
     return definedEntries({ concurrency: reader.optionalPositiveInteger(raw.concurrency, "options.concurrency") });
   },
   "bucket.object-created": (options, reader) => {
+    const raw = reader.object(options, "options", ["prefix"]);
+    return definedEntries({ prefix: reader.optionalString(raw.prefix, "options.prefix") });
+  },
+  "bucket.object-deleted": (options, reader) => {
     const raw = reader.object(options, "options", ["prefix"]);
     return definedEntries({ prefix: reader.optionalString(raw.prefix, "options.prefix") });
   },
@@ -173,6 +208,7 @@ const resourceSchemaRoles: { readonly [Kind in ResourceKind]: SchemaRoleSpec } =
 const triggerSchemaRoles: { readonly [Trigger in TriggerKind]: SchemaRoleSpec } = {
   "queue.message": { required: ["message"], optional: [], responses: false },
   "bucket.object-created": { required: ["object"], optional: [], responses: false },
+  "bucket.object-deleted": { required: ["object"], optional: [], responses: false },
   "schedule.tick": noSchemas,
   "http.route": { required: [], optional: ["params", "query", "body", "headers"], responses: true },
   "http.procedure": { required: ["output"], optional: ["input"], responses: false }

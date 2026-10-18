@@ -56,8 +56,8 @@ Invariants to preserve in every design:
 | `@holqa/cli` | `holqa` bin: `--help`, `--version`, `--json`, `inspect`, `build --manifest` (analysis in a separate Bun process); other commands report `HOLQA_CLI_NOT_IMPLEMENTED` | **Implemented** (help, version, `inspect`, `build --manifest`) | core, compiler, local, runtime-bun |
 | `@holqa/sdk` | Public developer SDK (`defineApp`, `queue`/`bucket`/`schedule`/`http.api`, typed handles, handler registration) | **Implemented** (including HTTP routes, RPC procedures, middleware) | core |
 | `@holqa/client` | Browser-safe generated-client runtime | Planned | core |
-| `@holqa/runtime-bun` | Invocation dispatcher, lifecycle, HTTP and RPC transports, `Bun.serve` adapter ([runtime reference](../../../docs/reference/runtime.md)) | **Implemented** (HTTP and RPC; queue, storage and schedule transports planned) | core |
-| `@holqa/local` | Local execution and resource emulation | Planned | core, runtime-bun |
+| `@holqa/runtime-bun` | Invocation dispatcher, lifecycle, HTTP, RPC, queue, object event and schedule transports, `Bun.serve` adapter ([runtime reference](../../../docs/reference/runtime.md)) | **Implemented** (worker isolation planned) | core |
+| `@holqa/local` | Local drivers and sources: SQLite-backed queues, filesystem object storage, clock-driven scheduler, inspection ([local environment](../../../docs/reference/local.md)) | **Implemented** | core, runtime-bun |
 | `@holqa/testing` | Test utilities: type assertions today, deterministic execution later | **Implemented** (type assertions only) | core, sdk, local, runtime-bun |
 | `packages/integrations/*` | Zod, Valibot, Effect, oRPC, TanStack Query adapters | **Implemented** for Zod (`@holqa/zod`); others Planned (names undecided) | core, sdk, client |
 
@@ -68,7 +68,7 @@ Planned packages are directories with a README only. Enforcement: `scripts/check
 - A contract, type, or diagnostic every layer needs → `core` (must stay runtime-neutral and dependency-free).
 - Analysis, normalization, manifest construction, deterministic serialization → `compiler`.
 - Anything that executes handlers or uses Bun APIs → `runtime-bun` or `cli`. Request validation and middleware composition belong in the SDK's registration `invoke`; routing, limits, lifecycle and error responses in `runtime-bun` ([ADR 0023](../../../docs/architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md)).
-- Emulation of queues/storage/schedules → `local` (planned).
+- Emulation of queues/storage/schedules → `local`.
 - Developer-facing builders and typed handles → `sdk`. A new resource or trigger kind starts in `core`'s `ResourceKindMap`/`TriggerKindMap` (see `docs/architecture/resource-model.md`).
 - Framework-specific glue → `packages/integrations/<name>` (planned).
 

@@ -8,7 +8,7 @@ metadata:
 
 # Validating infrastructure bindings
 
-> **Preview — mostly not available.** The application manifest is implemented in the Holqa repository (`holqa build --manifest`), including the capabilities each resource requires. Bindings, capability validation at build time and `holqa doctor` are **accepted design / proposed** and not implemented. No provider exists yet. This skill describes the intended review process.
+> **Preview — mostly not available.** The application manifest is implemented in the Holqa repository (`holqa build --manifest`), including the capabilities each resource requires. Capability validation when a runtime binds an application is implemented: `bindApp` (and therefore `runtime.start()`) fails with `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` for every unmet requirement, and the local binding (`@holqa/local`) advertises its capabilities honestly. Capability validation at build time, `holqa doctor` and bindings for external infrastructure are **accepted design / proposed** and not implemented. No provider exists yet. This skill describes the intended review process.
 
 ## When to use
 
@@ -32,6 +32,7 @@ Providers do not all offer the same guarantees. A binding must **prove** that it
 
 - Resource IDs can be checked against `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$` (at most 63 characters).
 - `holqa build --manifest` writes `manifest.json`, whose `requiredCapabilities` and per-resource `requirements` list what a binding must provide. `holqa inspect` prints the same requirements.
+- Starting a runtime checks the binding against every declared requirement (delivery, `maxAttempts`, dead-lettering, backoff strategy and delays, access policy, overlap policy) and against every handler's trigger (a queue, object event or schedule handler needs a delivery source); each shortfall is a `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` diagnostic. Signed URL expiry and send delays are checked when the operation runs.
 - `holqa doctor --json` and `holqa build --json` without `--manifest` report `HOLQA_CLI_NOT_IMPLEMENTED`.
 
 ## Planned workflow

@@ -1,0 +1,28 @@
+{
+  "name": "@holqa/example-document-processing",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "End-to-end event-driven example: HTTP uploads through signed URLs, object events, a queue consumer with retries and dead-lettering, and a scheduled cleanup, all running on @holqa/local.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test",
+    "start": "holqa build --manifest --app app/infra.ts && bun app/server.ts"
+  },
+  "dependencies": {
+    "@holqa/cli": "workspace:*",
+    "@holqa/core": "workspace:*",
+    "@holqa/local": "workspace:*",
+    "@holqa/runtime-bun": "workspace:*",
+    "@holqa/sdk": "workspace:*",
+    "@holqa/zod": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

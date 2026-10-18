@@ -2,6 +2,7 @@ import type { ResourceDescriptorOf } from "@/index";
 
 import {
   appDescriptor,
+  envelope,
   id,
   queueDescriptor,
   recordingBinding,
@@ -43,7 +44,7 @@ describe("bindApp", () => {
     const binding = recordingBinding();
     const unbind = bindApp(app, binding);
     expect(requireBinding(app, "test")).toBe(binding);
-    await resolveDriver(app, orders, "queue \"orders\" send").send("hello");
+    await resolveDriver(app, orders, "queue \"orders\" send").send(envelope("hello"), {});
     expect(binding.sent).toEqual(["hello"]);
     expect(readConfig(app, app.config[0]!)).toBe("value of TOKEN");
     unbind();
@@ -57,10 +58,10 @@ describe("bindApp", () => {
     const local = recordingBinding();
     const external = recordingBinding();
     const unbindLocal = bindApp(app, local);
-    await resolveDriver(app, orders, "send").send(1);
+    await resolveDriver(app, orders, "send").send(envelope(1), {});
     unbindLocal();
     bindApp(app, external);
-    await resolveDriver(app, orders, "send").send(2);
+    await resolveDriver(app, orders, "send").send(envelope(2), {});
     expect([local.sent, external.sent]).toEqual([[1], [2]]);
   });
 

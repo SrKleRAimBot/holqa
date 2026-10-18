@@ -5,9 +5,10 @@ behavior through one strongly typed programming model, without coupling business
 
 > [!IMPORTANT]
 > **Holqa is in early development.** This repository currently contains the monorepo foundation, architecture
-> documentation, the application and resource model (`@holqa/sdk`), and a compiler that turns an application into a
-> deterministic manifest (`holqa inspect`, `holqa build --manifest`). The runtime, local development environment and
-> providers described below are **design, not shipped software**. Nothing is published. See the
+> documentation, the application and resource model (`@holqa/sdk`), a compiler that turns an application into a
+> deterministic manifest (`holqa inspect`, `holqa build --manifest`), a Bun runtime for HTTP, RPC, queues, storage
+> events and schedules, and local drivers (`@holqa/local`). `holqa dev`, providers for external infrastructure and
+> generated clients are **design, not shipped software**. Nothing is published. See the
 > [roadmap](docs/roadmap.md) for what exists today.
 
 ## The problem
@@ -94,16 +95,17 @@ runtime. These integrations are planned; see [integrations](docs/integrations/in
 | `@holqa/cli` | [packages/cli](packages/cli) | Implemented: `holqa --help`, `--version`, `--json`, `holqa inspect` and `holqa build --manifest`; other workflow commands are proposed |
 | `@holqa/testing` | [packages/testing](packages/testing) | Implemented: compile-time type assertions only |
 | `@holqa/zod` | [packages/integrations/zod](packages/integrations/zod) | Implemented: Zod 4 schema adapter |
-| `@holqa/runtime-bun` | [packages/runtime-bun](packages/runtime-bun) | Implemented: invocation dispatcher, lifecycle, HTTP routes and RPC procedures served with `Bun.serve`; queue, storage and schedule delivery planned |
-| `@holqa/local`, `@holqa/client`, other integrations | [packages](packages) | Planned (design documents only) |
+| `@holqa/runtime-bun` | [packages/runtime-bun](packages/runtime-bun) | Implemented: invocation dispatcher, lifecycle, HTTP routes and RPC procedures served with `Bun.serve`, queue, object event and schedule delivery with retries and dead-lettering |
+| `@holqa/local` | [packages/local](packages/local) | Implemented: local drivers — SQLite-backed queues, filesystem object storage with events and development signed URLs, a clock-driven scheduler, inspection |
+| `@holqa/client`, other integrations | [packages](packages) | Planned (design documents only) |
 
 All packages are private and unpublished. The full list is in [docs/reference/packages.md](docs/reference/packages.md).
 
 ## Repository structure
 
 ```text
-packages/          Holqa libraries (core, sdk, compiler, cli, runtime-bun, and planned packages)
-examples/          package-smoke, schema-evolution, manifest and http-api (run in CI) and illustrative application examples
+packages/          Holqa libraries (core, sdk, compiler, cli, runtime-bun, local, and planned packages)
+examples/          package-smoke, schema-evolution, manifest, http-api and document-processing (run in CI) and illustrative application examples
 docs/              Concepts, architecture, ADRs, integrations, reference, contributing guides
 skills/            Agent Skills for developers building with Holqa (preview)
 .agents/           Canonical rules and skills for agents working on this repository

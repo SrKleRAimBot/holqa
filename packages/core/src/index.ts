@@ -8,6 +8,7 @@ export {
   requireBinding,
   resolveDriver
 } from "@/binding/bind";
+export { checkTriggerDelivery } from "@/binding/delivery-check";
 export { createBindingSlot } from "@/binding/runtime-binding";
 export type {
   BindingCapabilities,
@@ -15,6 +16,25 @@ export type {
   ResourceDrivers,
   RuntimeBinding
 } from "@/binding/runtime-binding";
+export type {
+  DeliveryFailure,
+  DeliverySource,
+  FailedScheduleRun,
+  LeasedDelivery,
+  ObjectEventSource,
+  ObjectEventSubscription,
+  QueueSource,
+  ReceiveRequest,
+  ResourceSources,
+  ScheduleListener,
+  ScheduleRunResult,
+  ScheduleRunStatus,
+  ScheduleSource,
+  ScheduleSubscription,
+  ScheduleTick,
+  SkippedScheduleRun,
+  SucceededScheduleRun
+} from "@/binding/sources";
 export type { ConfigDescriptor } from "@/config/config-descriptor";
 export { diagnosticCodes } from "@/diagnostics/codes";
 export type { DiagnosticCode } from "@/diagnostics/codes";
@@ -56,9 +76,13 @@ export type {
   HttpRouteTriggerSchemas,
   ObjectCreatedTriggerOptions,
   ObjectCreatedTriggerSchemas,
+  ObjectEventMetadata,
+  ObjectEventTriggerOptions,
+  ObjectEventTriggerSchemas,
   QueueMessageMetadata,
   QueueMessageTriggerOptions,
   QueueMessageTriggerSchemas,
+  ScheduleRunTrigger,
   ScheduleTickMetadata,
   TriggerKind,
   TriggerKindMap,
@@ -101,6 +125,12 @@ export {
 export type { Described, Descriptor } from "@/protocol/read";
 export { descriptorKey, descriptorProtocol } from "@/protocol/version";
 export type { DescriptorProtocol } from "@/protocol/version";
+export {
+  backoffDelaySeconds,
+  defaultQueueBackoff,
+  longestBackoffDelaySeconds,
+  queueBackoffProblem
+} from "@/resources/backoff";
 export { checkCapabilities } from "@/resources/capabilities";
 export { checkIdentities } from "@/resources/identity-check";
 export type { DeclaredIdentity } from "@/resources/identity-check";
@@ -113,18 +143,28 @@ export type {
   BucketRequirements,
   BucketSchemas,
   DrivenResourceKind,
+  ExponentialQueueBackoff,
+  FixedQueueBackoff,
   HttpApiCapabilities,
   HttpApiConfig,
   HttpApiDocs,
   HttpApiRequirements,
   HttpApiSchemas,
+  ListObjectsOptions,
+  ObjectEventType,
+  ObjectList,
+  ObjectMetadata,
   PutObjectOptions,
+  QueueBackoff,
+  QueueBackoffStrategy,
   QueueCapabilities,
   QueueConfig,
   QueueDeliveryGuarantee,
   QueueDriver,
   QueueRequirements,
   QueueSchemas,
+  QueueSendOptions,
+  QueueSendReceipt,
   ResourceKind,
   ResourceKindMap,
   ResourceKindSpec,
@@ -132,7 +172,10 @@ export type {
   ScheduleConfig,
   ScheduleOverlap,
   ScheduleRequirements,
-  ScheduleSchemas
+  ScheduleSchemas,
+  SignedUrl,
+  SignedUrlMethod,
+  SignedUrlOptions
 } from "@/resources/kinds";
 export type {
   ResourceDescriptor,
@@ -159,6 +202,12 @@ export type {
   RpcResponseEnvelope,
   RpcSuccessEnvelope
 } from "@/rpc/rpc-protocol";
+export {
+  isTimeZone,
+  nextCronTime,
+  parseCronSchedule
+} from "@/schedule/cron";
+export type { CronSchedule } from "@/schedule/cron";
 export { schemaSides } from "@/schema/schema-adapter";
 export type {
   RuntimeOnlyConstraint,
@@ -197,6 +246,13 @@ export type {
   ValidationIssueInit,
   ValidationPathSegment
 } from "@/schema/validate-input";
+export {
+  objectEventFormat,
+  objectEventTypes,
+  readObjectEvent
+} from "@/storage/object-event";
+export type { ObjectEvent, ObjectEventObject } from "@/storage/object-event";
+export { checkObjectKey, maxObjectKeyBytes } from "@/storage/object-key";
 export {
   decodeJsonPayload,
   encodeJsonPayload,

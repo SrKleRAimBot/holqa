@@ -6,6 +6,10 @@ import type {
 } from "@holqa/core";
 
 import type {
+  RuntimeDeliveryOptions,
+  TransportStats
+} from "@/delivery/transports";
+import type {
   DispatchStats,
   InvocationOutcome,
   InvocationRequest,
@@ -17,14 +21,17 @@ import type { EnvironmentVariables } from "@/runtime/environment-binding";
 
 import {
   bindApp,
+  checkTriggerDelivery,
   createDiagnostic,
   diagnosticCodes,
   diagnosticsOf,
   getAppDescriptor,
   getHandlerDescriptor,
-  HolqaError
+  HolqaError,
+  queueBackoffProblem
 } from "@holqa/core";
 
+import { Transports } from "@/delivery/transports";
 import { Dispatcher } from "@/dispatch/dispatcher";
 import { Semaphore } from "@/dispatch/semaphore";
 import { CorsPolicy } from "@/http/cors";
@@ -76,15 +83,17 @@ export interface RuntimeOptions {
    * need a binding that provides them.
    */
   readonly binding?: RuntimeBinding;
+  /** How queue messages and object events are delivered to handlers. */
+  readonly delivery?: RuntimeDeliveryOptions;
   /** Environment variables for the default binding. Defaults to `process.env`. Ignored when `binding` is given. */
   readonly env?: EnvironmentVariables;
   readonly limits?: RuntimeLimits;
   readonly http?: RuntimeHttpOptions;
   /**
-   * Accept handlers whose trigger has no transport in this runtime yet
-   * (queue consumers, object-created handlers, schedules), so that they can
-   * be run with `runtime.invoke` only. Without it, such handlers fail
-   * `createRuntime`, because nothing would ever deliver their events.
+   * Run queue consumers, object event handlers and schedule handlers only
+   * through `runtime.invoke`: the runtime does not consume the binding's
+   * sources. Without it, `start` fails when the binding cannot deliver a
+   * handler's trigger, because nothing would ever deliver its events.
    * Default `false`.
    */
   readonly manualTriggers?: boolean;
@@ -109,6 +118,8 @@ export interface StopOptions {
 /** A snapshot of a runtime's state and counters. */
 export interface RuntimeStats extends DispatchStats {
   readonly state: RuntimeState;
+  /** Counters of queue, object event and schedule deliveries. */
+  readonly delivery: TransportStats;
 }
 
 /**
@@ -124,16 +135,20 @@ export interface Runtime {
   /** Every registered handler's definition, sorted by identifier. */
   readonly handlers: readonly HandlerDefinition[];
   /**
-   * Validates configuration, installs the binding and starts accepting
-   * invocations. Call it once.
+   * Validates configuration, installs the binding, starts accepting
+   * invocations and, unless `manualTriggers` is set, starts delivering queue
+   * messages, object events and scheduled runs from the binding's sources.
+   * Call it once.
    *
-   * @throws {HolqaError} `HOLQA_RUNTIME_START_FAILED` followed by the causes, for example `HOLQA_CONFIG_INVALID` or `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`. The runtime is then `stopped`.
+   * @throws {HolqaError} `HOLQA_RUNTIME_START_FAILED` followed by the causes, for example `HOLQA_CONFIG_INVALID`, `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` or `HOLQA_SCHEDULE_INVALID`. The runtime is then `stopped`.
    */
   readonly start: () => Promise<void>;
   /**
-   * Stops accepting invocations, lets in-flight ones finish within the grace
-   * period, cancels the rest, disposes of application-scoped values and
-   * removes the binding. Idempotent: concurrent and repeated calls share one stop.
+   * Stops receiving deliveries and scheduled runs, stops accepting
+   * invocations, lets in-flight ones finish within the grace period, cancels
+   * the rest (their deliveries are released for redelivery), disposes of
+   * application-scoped values and removes the binding. Idempotent: concurrent
+   * and repeated calls share one stop.
    */
   readonly stop: (options?: StopOptions) => Promise<void>;
   /** Runs one invocation of any registered handler; never rejects. */
@@ -172,19 +187,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const problems: Diagnostic[] = [];
   const limits = readLimits(options.limits, problems);
   const handlers = registerHandlers(app, options.handlers, problems);
-  if (options.manualTriggers !== true) {
-    for (const { definition } of handlers.values()) {
-      if (definition.trigger.kind !== "http.route" && definition.trigger.kind !== "http.procedure") {
-        problems.push(createDiagnostic({
-          code: diagnosticCodes.runtimeStartFailed,
-          severity: "error",
-          message: `The handler "${definition.id}" is triggered by ${definition.trigger.kind}, which this runtime cannot deliver yet.`,
-          hint: "Queue, storage and schedule delivery is planned. Pass manualTriggers: true to run such handlers through runtime.invoke only.",
-          details: { handler: definition.id, trigger: definition.trigger.kind }
-        }));
-      }
-    }
-  }
+  checkDeliveryOptions(options.delivery, problems);
   const { table, problems: routeProblems } = buildRouteTable(app, [...handlers.values()].map(handler => handler.definition));
   problems.push(...routeProblems);
   let cors: CorsPolicy | undefined;
@@ -212,6 +215,15 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     scope: scope.scope,
     accepting: () => state === "running"
   });
+  const transports = new Transports({
+    app,
+    handlers,
+    delivery: options.delivery ?? {},
+    timeoutMs: limits.timeoutMs,
+    dispatch: request => dispatcher.dispatch(request),
+    stopping: () => state !== "running",
+    logger
+  });
   const fetch = createHttpHandler({ table, dispatcher, logger, ...cors === undefined ? {} : { cors }, trustCorrelationHeader: options.http?.trustCorrelationHeader ?? true });
 
   /**
@@ -227,16 +239,25 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       const binding = options.binding ?? await createEnvironmentBinding(app, options.env ?? process.env);
       if (state !== "starting")
         throw new HolqaError(createDiagnostic({ code: diagnosticCodes.runtimeNotRunning, severity: "error", message: `The runtime for "${app.name}" was stopped while it was starting.` }));
+      if (options.manualTriggers !== true) {
+        const undeliverable = checkTriggerDelivery(app, [...handlers.values()].map(handler => handler.definition), binding);
+        if (undeliverable.length > 0)
+          throw new HolqaError(undeliverable);
+      }
       unbind = bindApp(app, binding);
+      state = "running";
+      if (options.manualTriggers !== true)
+        await transports.start(binding);
     } catch (error) {
       state = "stopped";
+      unbind?.();
+      unbind = undefined;
       const causes = diagnosticsOf(error);
       throw new HolqaError([
         createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: `The application "${app.name}" could not start.` }),
         ...causes
       ], { cause: error });
     }
-    state = "running";
     logger.write("info", "runtime started", { handlers: handlers.size });
   };
 
@@ -251,12 +272,15 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       const wasRunning = state === "running";
       state = "stopping";
       if (wasRunning) {
+        await transports.stopReceiving();
         const drained = await dispatcher.idle(stopOptions.graceMs ?? defaults.graceMs);
         if (!drained) {
           dispatcher.abortAll();
           if (!await dispatcher.idle(stopOptions.forceMs ?? defaults.forceMs))
             logger.write("warn", "handler code was still running when the runtime stopped; it ignored its abort signal", { orphaned: dispatcher.stats().orphaned });
         }
+        // Settle (acknowledge, retry or release) every delivery before the binding goes away.
+        await transports.settled();
       }
       // Scoped values stay usable while in-flight invocations drain.
       await scope.dispose();
@@ -279,7 +303,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     stop,
     invoke: (request: InvocationRequest) => dispatcher.dispatch(request),
     fetch,
-    stats: () => Object.freeze({ state, ...dispatcher.stats() })
+    stats: () => Object.freeze({ state, ...dispatcher.stats(), delivery: transports.stats() })
   });
 }
 
@@ -347,12 +371,52 @@ function registerHandlers(app: AppDescriptor, registrations: readonly unknown[],
       report(diagnosticCodes.triggerInvalid, `The handler "${definition.id}" expects a ${definition.trigger.resource.kind} resource, but "${resource.id}" is a ${resource.kind}.`);
       continue;
     }
+    if (definition.trigger.kind === "queue.message") {
+      const other = [...handlers.values()].find(handler => handler.definition.trigger.kind === "queue.message" && handler.definition.trigger.resource.id === definition.trigger.resource.id);
+      if (other !== undefined) {
+        report(diagnosticCodes.queueConsumerDuplicate, `The queue "${definition.trigger.resource.id}" has two consumers, "${other.definition.id}" and "${definition.id}"; a queue has one competing consumer.`);
+        continue;
+      }
+    }
     const concurrency = definition.trigger.kind === "queue.message" ? definition.trigger.options.concurrency : undefined;
     handlers.set(definition.id, {
       definition,
+      schemas: descriptor.schemas,
       invoke: descriptor.invoke as RegisteredHandler["invoke"],
       ...concurrency === undefined ? {} : { concurrency: new Semaphore(concurrency) }
     });
   }
   return handlers;
+}
+
+/**
+ * Validates delivery settings.
+ *
+ * @param delivery - The configured settings, unvalidated.
+ * @param problems - Where to record problems.
+ */
+function checkDeliveryOptions(delivery: RuntimeDeliveryOptions | undefined, problems: Diagnostic[]): void {
+  if (delivery === undefined)
+    return;
+  /**
+   * Records a problem unless a value is absent or a positive safe integer.
+   *
+   * @param value - The candidate.
+   * @param name - The option's name, for the message.
+   */
+  const positive = (value: unknown, name: string): void => {
+    if (value !== undefined && !(typeof value === "number" && Number.isSafeInteger(value) && value >= 1))
+      problems.push(createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: `"delivery.${name}" must be an integer of at least 1.` }));
+  };
+  positive(delivery.concurrency, "concurrency");
+  positive(delivery.leaseMs, "leaseMs");
+  positive(delivery.objectEvents?.maxAttempts, "objectEvents.maxAttempts");
+  positive(delivery.objectEvents?.concurrency, "objectEvents.concurrency");
+  const backoff = delivery.objectEvents?.backoff;
+  const backoffProblem = backoff === undefined ? undefined : queueBackoffProblem(backoff);
+  if (backoffProblem !== undefined)
+    problems.push(createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: `"delivery.objectEvents.backoff" is invalid: ${backoffProblem}.` }));
+  const deadLetter = delivery.objectEvents?.deadLetter;
+  if (deadLetter !== undefined && typeof deadLetter !== "boolean")
+    problems.push(createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: "\"delivery.objectEvents.deadLetter\" must be a boolean." }));
 }

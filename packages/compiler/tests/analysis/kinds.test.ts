@@ -31,6 +31,29 @@ describe("normalizeResourceKind", () => {
     expect(normalizeResourceKind("http.api", { basePath: "/", docs: { title: "T", version: "1" } }, {}).config).toEqual({ basePath: "/", docs: { title: "T", version: "1" } });
   });
 
+  it("records a queue's backoff and the capability it requires", () => {
+    const exponential = { strategy: "exponential", initialDelaySeconds: 1, maxDelaySeconds: 30, multiplier: 3 } as const;
+    expect(normalizeResourceKind("queue", { schemaVersion: 1 }, { delivery: "at-least-once", deadLetter: true, maxAttempts: 4, backoff: exponential })).toEqual({
+      config: { schemaVersion: 1 },
+      requirements: { delivery: "at-least-once", deadLetter: true, maxAttempts: 4, backoff: exponential },
+      capabilities: ["queue", "queue.delivery.at-least-once", "queue.dead-letter", "queue.max-attempts", "queue.backoff.exponential"],
+      problems: []
+    });
+    expect(normalizeResourceKind("queue", { schemaVersion: 1 }, { delivery: "at-least-once", deadLetter: false, backoff: { strategy: "fixed", delaySeconds: 5 } }).requirements).toEqual({
+      delivery: "at-least-once",
+      deadLetter: false,
+      backoff: { strategy: "fixed", delaySeconds: 5 }
+    });
+    expect(normalizeResourceKind("queue", { schemaVersion: 1 }, { delivery: "at-least-once", deadLetter: false, backoff: { strategy: "fixed", delaySeconds: -1, jitter: true } }).problems).toEqual([
+      "\"requirements.backoff.jitter\" is not a recognized setting.",
+      "\"requirements.backoff.delaySeconds\" must be a number of at least 0."
+    ]);
+    expect(normalizeResourceKind("queue", { schemaVersion: 1 }, { delivery: "at-least-once", deadLetter: false, backoff: { strategy: "exponential", initialDelaySeconds: 1, maxDelaySeconds: 30, multiplier: 0.5 } }).problems).toEqual([
+      "\"requirements.backoff\" is invalid: \"multiplier\" must be a number of at least 1."
+    ]);
+    expect(normalizeResourceKind("queue", { schemaVersion: 1 }, { delivery: "at-least-once", deadLetter: false, backoff: { strategy: "exponential", initialDelaySeconds: 10, maxDelaySeconds: 5 } }).problems).toHaveLength(1);
+  });
+
   it.each([
     ["queue", { schemaVersion: 0 }, { delivery: "at-least-once", deadLetter: false }, "\"config.schemaVersion\" must be a positive integer."],
     ["queue", { schemaVersion: 1 }, { delivery: "exactly-once", deadLetter: false }, "\"requirements.delivery\" must be one of \"at-least-once\"."],
@@ -53,6 +76,8 @@ describe("normalizeTriggerKind", () => {
   it("rejects malformed options", () => {
     expect(normalizeTriggerKind("http.route", { method: "TRACE", path: "/a" }).problems).toHaveLength(1);
     expect(normalizeTriggerKind("bucket.object-created", { prefix: 3 }).problems).toEqual(["\"options.prefix\" must be a string."]);
+    expect(normalizeTriggerKind("bucket.object-deleted", { prefix: 3 }).problems).toEqual(["\"options.prefix\" must be a string."]);
+    expect(normalizeTriggerKind("bucket.object-deleted", { prefix: "raw/" })).toEqual({ options: { prefix: "raw/" }, capabilities: ["trigger.bucket.object-deleted"], problems: [] });
     expect(normalizeTriggerKind("http.procedure", { operation: "subscription" }).problems).toEqual(["\"options.operation\" must be one of \"query\", \"mutation\"."]);
   });
 });

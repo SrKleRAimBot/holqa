@@ -58,7 +58,15 @@ describe("diagnosticCodes", () => {
       runtimeStartFailed: "HOLQA_RUNTIME_START_FAILED",
       configInvalid: "HOLQA_CONFIG_INVALID",
       rpcVersionUnsupported: "HOLQA_RPC_VERSION_UNSUPPORTED",
-      buildStale: "HOLQA_BUILD_STALE"
+      buildStale: "HOLQA_BUILD_STALE",
+      operationInvalid: "HOLQA_OPERATION_INVALID",
+      objectKeyInvalid: "HOLQA_OBJECT_KEY_INVALID",
+      objectNotFound: "HOLQA_OBJECT_NOT_FOUND",
+      signedUrlInvalid: "HOLQA_SIGNED_URL_INVALID",
+      scheduleInvalid: "HOLQA_SCHEDULE_INVALID",
+      localStateUnsupported: "HOLQA_LOCAL_STATE_UNSUPPORTED",
+      deliveryAttemptsExhausted: "HOLQA_DELIVERY_ATTEMPTS_EXHAUSTED",
+      scheduleRunSkipped: "HOLQA_SCHEDULE_RUN_SKIPPED"
     });
   });
 });

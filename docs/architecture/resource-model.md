@@ -1,6 +1,6 @@
 # Resource model
 
-> **Status:** Implemented — the descriptor protocol, kind registries, handler model and runtime binding contract in `@holqa/core`, and the declaration API in `@holqa/sdk`. The compiler pipeline that reads descriptors into a manifest is **Implemented** ([compiler specification](../reference/compiler-specification.md)). Execution of HTTP routes and RPC procedures is **Implemented** in `@holqa/runtime-bun` ([runtime reference](../reference/runtime.md)); queue, storage and schedule delivery and real drivers are **Planned**.
+> **Status:** Implemented — the descriptor protocol, kind registries, handler model and runtime binding contract in `@holqa/core`, and the declaration API in `@holqa/sdk`. The compiler pipeline that reads descriptors into a manifest is **Implemented** ([compiler specification](../reference/compiler-specification.md)). Execution of HTTP routes, RPC procedures, queue messages, object events and scheduled runs is **Implemented** in `@holqa/runtime-bun` ([runtime reference](../reference/runtime.md)), with local drivers and sources in `@holqa/local` ([local environment](../reference/local.md)); drivers for external services are **Planned**.
 
 This page describes how Holqa represents an application internally: the descriptors every SDK value carries, the typed registries that define resource and trigger kinds, how handlers separate metadata from code, how a logical handle reaches an implementation at run time, and which modules and packages depend on which. For the developer-facing view, see the [application model](../concepts/application-model.md).
 
@@ -36,10 +36,10 @@ All descriptors have `protocol: 1` and a `type`. Readers (`getDescriptor`, `getA
 | Facet | Meaning | Queue | Bucket | Schedule | HTTP API |
 | --- | --- | --- | --- | --- | --- |
 | `config` | Normalized, JSON-only settings | `schemaVersion` | none | `cron`, `timezone` | `basePath`, `docs?` |
-| `requirements` | Behaviour a binding must guarantee | `delivery: "at-least-once"`, `maxAttempts?`, `deadLetter` | `access` | `overlap` | none |
+| `requirements` | Behaviour a binding must guarantee | `delivery: "at-least-once"`, `maxAttempts?`, `deadLetter`, `backoff?` | `access` | `overlap` | none |
 | `schemas` | Standard Schemas by role | `message` | none | none | none (routes declare their own) |
-| `capabilities` | What a binding advertises | `delivery[]`, `maxAttempts`, `deadLetter` | `access[]` | `overlap[]` | none |
-| `driver` | Data-plane operations | `send` | `put`, `get` | none | none |
+| `capabilities` | What a binding advertises | `delivery[]`, `maxAttempts`, `deadLetter`, `backoff?[]`, `maxDelaySeconds?` | `access[]`, `events?[]`, `signedUrls?` | `overlap[]` | none |
+| `driver` | Data-plane operations | `send` (a `holqa.message/1` envelope, returns `{ messageId }`) | `put`, `get`, `head`, `delete`, `list`, `signUrl` | none | none |
 
 There is no open `Record<string, unknown>` anywhere in the model, so provider-specific settings cannot enter it without a reviewed change to the registry.
 
@@ -47,9 +47,10 @@ There is no open `Record<string, unknown>` anywhere in the model, so provider-sp
 
 | Trigger kind | Resource kind | `options` | `schemas` | Runtime `metadata` | SDK registration |
 | --- | --- | --- | --- | --- | --- |
-| `queue.message` | `queue` | `concurrency?` | `message` | `attempt`, `messageId` | `resources.x.consume(...)` (**Implemented**) |
-| `bucket.object-created` | `bucket` | `prefix?` | `object` (portable event) | none | `resources.x.onObjectCreated(...)` (**Implemented**) |
-| `schedule.tick` | `schedule` | none | none | `scheduledTime` | `resources.x.handle(...)` (**Implemented**) |
+| `queue.message` | `queue` | `concurrency?` | `message` | `attempt`, `messageId`, `schemaVersion?` | `resources.x.consume(...)` (**Implemented**) |
+| `bucket.object-created` | `bucket` | `prefix?` | `object` (portable event) | `eventId`, `eventTime`, `attempt` | `resources.x.onObjectCreated(...)` (**Implemented**) |
+| `bucket.object-deleted` | `bucket` | `prefix?` | `object` (`{ key }`) | `eventId`, `eventTime`, `attempt` | `resources.x.onObjectDeleted(...)` (**Implemented**) |
+| `schedule.tick` | `schedule` | none | none | `scheduledTime`, `runId?`, `trigger?` | `resources.x.handle(...)` (**Implemented**) |
 | `http.route` | `http.api` | `method`, `path` | `params?`, `query?`, `headers?`, `body?`, `responses` | none | `resources.x.route(...)` (**Implemented**) |
 | `http.procedure` | `http.api` | `operation` (`query` or `mutation`) | `input?`, `output` | none | `resources.x.procedure(...)` (**Implemented**) |
 
@@ -67,7 +68,7 @@ A handler registration such as `resources.orders.consume({ id, handler })` produ
 - `definition` is plain JSON: the handler's identifier and its trigger, including a reference `{ kind, id }` to the resource it belongs to. The compiler reads it, together with `schemas`, without importing any driver or calling user code.
 - `invoke(input, context)` is the only executable part. A runtime calls it with **untrusted** input; it validates the input against the handler's schemas (`validateInput`, which always awaits) and only then calls the user's function with a typed context.
 
-Registration is declarative: calling `consume` runs nothing. For `http.route` and `http.procedure`, `invoke` receives `{ request, params }` and resolves to a Fetch `Response`; `@holqa/runtime-bun` executes them ([runtime reference](../reference/runtime.md)). Queue delivery is planned.
+Registration is declarative: calling `consume` runs nothing. For `http.route` and `http.procedure`, `invoke` receives `{ request, params }` and resolves to a Fetch `Response`; `@holqa/runtime-bun` executes them ([runtime reference](../reference/runtime.md)). Queue consumers, object event handlers and schedule handlers receive their validated input and trusted metadata from the runtime's delivery transports.
 
 ## Runtime binding
 
@@ -89,9 +90,10 @@ sequenceDiagram
 - `defineApp` records which application instance owns each handle. Nothing is resolved at declaration time. Ownership is tracked per copy of `@holqa/sdk`, so an application must load one copy of the SDK (descriptors and bindings themselves work across copies of `@holqa/core`).
 - `bindApp(app, binding)` installs a binding after checking it: every declared resource's kind must have advertised capabilities that satisfy its requirements, and every kind with operations must have a driver. Each shortfall is a `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` diagnostic; rebinding is `HOLQA_RUNTIME_ALREADY_BOUND`.
 - When an operation runs, the handle calls `resolveDriver`. Swapping a local emulator for a driver backed by an external service changes the binding, never the handle or the code that uses it.
+- A binding may also provide `sources` (queue, bucket, schedule): the consuming half that leases deliveries and reports due runs to a runtime. Delivery policy (retries, backoff, dead-lettering, overlap) is applied by the runtime, so every binding applies a declaration the same way. A runtime refuses to start when a handler's trigger has no source.
 - Bindings are data-plane only. Provisioning infrastructure is a separate, planned concern ([infrastructure providers](../concepts/infrastructure-providers.md)).
 
-The capability vocabulary is initial. It will change as the first local and external drivers are built; [ADR 0005](decisions/0005-infrastructure-independent-resource-contracts.md) remains Proposed until then.
+The capability vocabulary is initial. It will change as the first external drivers are built; [ADR 0005](decisions/0005-infrastructure-independent-resource-contracts.md) remains Proposed until then.
 
 ## Dependency architecture
 

@@ -1,5 +1,6 @@
 import type {
   DrivenResourceKind,
+  QueueBackoff,
   ResourceKind,
   ResourceKindMap
 } from "@/resources/kinds";
@@ -36,7 +37,7 @@ describe("resource kind registry", () => {
   });
 
   it("types configuration and requirements per kind instead of as open dictionaries", () => {
-    expectTypeOf<ResourceKindMap["queue"]["requirements"]>().toEqualTypeOf<{ readonly delivery: "at-least-once"; readonly maxAttempts?: number; readonly deadLetter: boolean }>();
+    expectTypeOf<ResourceKindMap["queue"]["requirements"]>().toEqualTypeOf<{ readonly delivery: "at-least-once"; readonly maxAttempts?: number; readonly deadLetter: boolean; readonly backoff?: QueueBackoff }>();
     /** Holds deliberate type errors checked by tsc; never executed. */
     const neverCalled = (): void => {
       // @ts-expect-error -- queue configuration has no provider-specific fields.

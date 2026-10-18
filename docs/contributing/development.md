@@ -81,9 +81,10 @@ holqa/
 │   ├── compiler/        @holqa/compiler: canonical JSON, schema contracts, manifest pipeline (implemented, private)
 │   ├── cli/             @holqa/cli: `holqa` bin: help, version, inspect, build --manifest (implemented, private)
 │   ├── sdk/             @holqa/sdk: application and resource model, routes, procedures, middleware (implemented, private)
-│   ├── runtime-bun/     @holqa/runtime-bun: dispatcher, lifecycle, HTTP and RPC, Bun.serve (implemented, private)
+│   ├── runtime-bun/     @holqa/runtime-bun: dispatcher, lifecycle, HTTP, RPC and background delivery, Bun.serve (implemented, private)
+│   ├── local/           @holqa/local: local queues, object storage and scheduler (implemented, private)
 │   ├── testing/         @holqa/testing: type assertions (implemented, private)
-│   ├── local/ client/   planned: README only
+│   ├── client/          planned: README only
 │   └── integrations/
 │       ├── zod/         @holqa/zod: Zod 4 schema adapter (implemented, private)
 │       └── {valibot,effect,orpc,tanstack-query}/   planned: README only
@@ -92,6 +93,7 @@ holqa/
 │   ├── schema-evolution/  end-to-end schema contract corpus with Zod (runs in pnpm test)
 │   ├── manifest/        compiles SDK applications through the built CLI (runs in pnpm test)
 │   ├── http-api/        compiles an SDK application and serves it with @holqa/runtime-bun (runs in pnpm test)
+│   ├── document-processing/  event-driven SDK application on @holqa/local: uploads, events, queue, schedule (runs in pnpm test)
 │   ├── commerce/        reference application, tested against the M0 experiments
 │   ├── basic-backend/   illustrative application structure (does not run)
 │   └── fullstack-vite/  illustrative application structure (does not run)
@@ -122,7 +124,7 @@ packages/<name>/
 
 ## Adding a new package
 
-The planned packages (`local`, `client`, integrations other than `zod`) already have a directory and a README. Start from that directory. Do not create a package until it has a real API to implement. Every package starts as `"private": true`.
+The planned packages (`client`, integrations other than `zod`) already have a directory and a README. Start from that directory. Do not create a package until it has a real API to implement. Every package starts as `"private": true`.
 
 ### 1. `package.json`
 

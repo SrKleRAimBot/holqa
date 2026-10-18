@@ -1,4 +1,5 @@
 import type { StandardSchemaV1 } from "@/schema/standard-schema";
+import type { MessageEnvelope } from "@/wire/message-envelope";
 
 // Every resource kind is described by one entry in `ResourceKindMap`. Each
 // entry fixes five typed facets, so adding a kind (topics, WebSocket endpoints,
@@ -37,6 +38,34 @@ export interface QueueConfig {
   readonly schemaVersion: number;
 }
 
+/** How the delay before a redelivery grows: constant, or doubling (by `multiplier`) per failed attempt. */
+export type QueueBackoffStrategy = "fixed" | "exponential";
+
+/** A constant delay before every redelivery. */
+export interface FixedQueueBackoff {
+  readonly strategy: "fixed";
+  /** Seconds between a failed attempt and the next delivery. */
+  readonly delaySeconds: number;
+}
+
+/** A delay that grows with every failed attempt, up to a ceiling. */
+export interface ExponentialQueueBackoff {
+  readonly strategy: "exponential";
+  /** Seconds before the second attempt. */
+  readonly initialDelaySeconds: number;
+  /** The longest delay between two attempts, in seconds. */
+  readonly maxDelaySeconds: number;
+  /** The factor applied per further failed attempt. Absent means 2. */
+  readonly multiplier?: number;
+}
+
+/**
+ * The delay between a failed delivery and the next attempt. Delays are
+ * computed without jitter, so they are reproducible in tests; a binding may
+ * deliver later than requested, never earlier.
+ */
+export type QueueBackoff = FixedQueueBackoff | ExponentialQueueBackoff;
+
 /** Behaviour a queue requires from its binding. */
 export interface QueueRequirements {
   readonly delivery: QueueDeliveryGuarantee;
@@ -44,6 +73,8 @@ export interface QueueRequirements {
   readonly maxAttempts?: number;
   /** Whether messages that exhaust their attempts must be kept in a dead-letter destination. */
   readonly deadLetter: boolean;
+  /** The delay before redeliveries. Absent means the runtime's default backoff. */
+  readonly backoff?: QueueBackoff;
 }
 
 /** Schemas a queue declares. */
@@ -58,11 +89,34 @@ export interface QueueCapabilities {
   /** The largest `maxAttempts` the binding can honour. */
   readonly maxAttempts: number;
   readonly deadLetter: boolean;
+  /** Backoff strategies the binding honours. Absent means none: a queue that declares `backoff` cannot be bound. */
+  readonly backoff?: readonly QueueBackoffStrategy[];
+  /**
+   * The longest delay, in seconds, the binding can apply to a sent message or
+   * a redelivery. Absent means no delayed delivery: sends with a delay fail.
+   */
+  readonly maxDelaySeconds?: number;
 }
 
-/** Data-plane queue operations. Messages arrive already validated, in their input (wire) form. */
+/** Settings of one queue send. */
+export interface QueueSendOptions {
+  /** Seconds to wait before the message becomes deliverable. Absent or `0` means at once. */
+  readonly delaySeconds?: number;
+}
+
+/** What a queue returns for an accepted message. */
+export interface QueueSendReceipt {
+  /** The identifier the queue assigned. Every delivery of the message, including duplicates, carries it. */
+  readonly messageId: string;
+}
+
+/**
+ * Data-plane queue operations. The envelope's payload is already validated
+ * and in its input (wire) form; the driver stores the envelope unchanged and
+ * assigns the message identifier.
+ */
 export interface QueueDriver {
-  readonly send: (message: unknown) => Promise<void>;
+  readonly send: (envelope: MessageEnvelope, options: QueueSendOptions) => Promise<QueueSendReceipt>;
 }
 
 /** Who may read objects in a bucket. */
@@ -82,7 +136,14 @@ export interface BucketSchemas {}
 /** What a binding advertises for buckets. */
 export interface BucketCapabilities {
   readonly access: readonly BucketAccess[];
+  /** Object event types the binding delivers to handlers. Absent means none. */
+  readonly events?: readonly ObjectEventType[];
+  /** Signed URL support: the longest expiry the binding can issue. Absent means no signed URLs. */
+  readonly signedUrls?: { readonly maxExpiresInSeconds: number };
 }
+
+/** The kinds of change an object event reports. */
+export type ObjectEventType = "object.created" | "object.deleted";
 
 /** Optional metadata stored with an object. */
 export interface PutObjectOptions {
@@ -90,10 +151,73 @@ export interface PutObjectOptions {
   readonly contentType?: string;
 }
 
-/** Data-plane bucket operations. */
+/** Portable metadata of a stored object. */
+export interface ObjectMetadata {
+  readonly key: string;
+  /** Size in bytes. */
+  readonly size: number;
+  readonly contentType?: string;
+  /**
+   * An opaque version tag that changes whenever the object's content changes.
+   * Its format differs between bindings; compare tags only for equality.
+   */
+  readonly etag: string;
+  /** When the object was last written (ISO 8601, UTC). */
+  readonly lastModified: string;
+}
+
+/** Settings of a bucket listing. */
+export interface ListObjectsOptions {
+  /** Only keys that start with this prefix. */
+  readonly prefix?: string;
+  /** Where to continue: the `cursor` of the previous page. */
+  readonly cursor?: string;
+  /** The largest page, between 1 and 1000. Absent means 100. */
+  readonly limit?: number;
+}
+
+/** One page of a bucket listing, sorted by key in UTF-8 byte order. */
+export interface ObjectList {
+  readonly objects: readonly ObjectMetadata[];
+  /** Present when more keys follow; pass it as `cursor` to read the next page. */
+  readonly cursor?: string;
+}
+
+/** What a signed URL allows: reading an object or writing it. */
+export type SignedUrlMethod = "GET" | "PUT";
+
+/** Settings of a signed URL. */
+export interface SignedUrlOptions {
+  readonly method: SignedUrlMethod;
+  /** How long the URL is valid, in seconds; at least 1. */
+  readonly expiresInSeconds: number;
+  /** For `PUT`: the content type the upload must declare. */
+  readonly contentType?: string;
+}
+
+/**
+ * A time-limited URL that lets a client without credentials read or write
+ * one object. What a signature proves (and whether it can be revoked) is a
+ * property of the binding that issued it; see the binding's documentation.
+ */
+export interface SignedUrl {
+  readonly url: string;
+  readonly method: SignedUrlMethod;
+  /** When the URL stops working (ISO 8601, UTC). */
+  readonly expiresAt: string;
+  /** Headers the client must send with the request, for example `content-type`. */
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+/** Data-plane bucket operations. Keys are validated before a driver sees them (see `checkObjectKey`). */
 export interface BucketDriver {
-  readonly put: (key: string, body: string | Uint8Array, options?: PutObjectOptions) => Promise<void>;
+  readonly put: (key: string, body: Uint8Array, options: PutObjectOptions) => Promise<ObjectMetadata>;
   readonly get: (key: string) => Promise<Uint8Array | undefined>;
+  readonly head: (key: string) => Promise<ObjectMetadata | undefined>;
+  /** Removes an object; resolves to `false` when it did not exist. */
+  readonly delete: (key: string) => Promise<boolean>;
+  readonly list: (options: ListObjectsOptions) => Promise<ObjectList>;
+  readonly signUrl: (key: string, options: SignedUrlOptions) => Promise<SignedUrl>;
 }
 
 /** What happens when a scheduled run is due while the previous run is still in progress. */

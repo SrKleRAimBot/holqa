@@ -1,4 +1,7 @@
-import type { ScheduleHandler } from "@/index";
+import type {
+  ScheduleContext,
+  ScheduleHandler
+} from "@/index";
 
 import {
   getHandlerDescriptor,
@@ -53,5 +56,29 @@ describe("schedule", () => {
     expect<unknown>(getHandlerDescriptor(handler)?.definition.trigger).toEqual({ kind: "schedule.tick", resource: { kind: "schedule", id: "hourly" }, options: {} });
     await handler["~holqa"].invoke(undefined, createContext({ scheduledTime: "2026-10-17T10:00:00.000Z" }));
     expect(runs).toEqual(["2026-10-17T10:00:00.000Z"]);
+  });
+
+  it("rejects cron extensions that no binding evaluates portably", () => {
+    expect(thrownCodes(() => schedule({ id: "last-day", cron: "0 0 L * *", timezone: "UTC", overlap: "skip" }))).toEqual(["HOLQA_DECLARATION_INVALID"]);
+    expect(thrownCodes(() => schedule({ id: "minutes", cron: "61 * * * *", timezone: "UTC", overlap: "skip" }))).toEqual(["HOLQA_DECLARATION_INVALID"]);
+  });
+
+  it("tells handlers how a run was started", async () => {
+    const hourly = schedule({ id: "hourly", cron: "0 * * * *", timezone: "UTC", overlap: "allow" });
+    const runs: unknown[] = [];
+    const handler = hourly.handle({ id: "hourly.report", handler: ({ scheduledTime, trigger, runId }) => {
+      runs.push({ scheduledTime, trigger, runId });
+    } });
+    await handler["~holqa"].invoke(undefined, createContext({ scheduledTime: "2026-10-17T10:00:00.000Z", trigger: "manual", runId: "r-1" }));
+    await handler["~holqa"].invoke(undefined, createContext({ scheduledTime: "2026-10-17T11:00:00.000Z" }));
+    expect(runs).toEqual([
+      { scheduledTime: "2026-10-17T10:00:00.000Z", trigger: "manual", runId: "r-1" },
+      { scheduledTime: "2026-10-17T11:00:00.000Z", trigger: "cron", runId: undefined }
+    ]);
+  });
+
+  it("types how a run was started", () => {
+    expectTypeOf<ScheduleContext["trigger"]>().toEqualTypeOf<"cron" | "manual">();
+    expectTypeOf<ScheduleContext["runId"]>().toEqualTypeOf<string | undefined>();
   });
 });

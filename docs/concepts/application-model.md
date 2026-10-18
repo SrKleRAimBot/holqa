@@ -1,6 +1,6 @@
 # Application model
 
-> **Status:** Implemented in part. `defineApp`, `defineResources`, `composeResources`, the `queue`, `bucket`, `schedule` and `http.api` factories, `secret` and `variable`, typed handles, handler registration for queues, buckets and schedules, and HTTP routes, RPC procedures and typed middleware exist in `@holqa/sdk`. Handler discovery and compilation into a manifest are **Implemented** in `@holqa/compiler` and the CLI. `@holqa/runtime-bun` executes HTTP routes and RPC procedures ([runtime reference](../reference/runtime.md)). `staticSite` and the delivery of queue, storage and schedule events are **Proposed** or **Planned**.
+> **Status:** Implemented in part. `defineApp`, `defineResources`, `composeResources`, the `queue`, `bucket`, `schedule` and `http.api` factories, `secret` and `variable`, typed handles, handler registration for queues, buckets and schedules, and HTTP routes, RPC procedures and typed middleware exist in `@holqa/sdk`. Handler discovery and compilation into a manifest are **Implemented** in `@holqa/compiler` and the CLI. `@holqa/runtime-bun` executes HTTP routes and RPC procedures and delivers queue messages, object events and scheduled runs from a binding such as `@holqa/local` ([runtime reference](../reference/runtime.md)). `staticSite` is **Proposed**.
 
 A Holqa application is a set of **logical resources** declared in a registry module, plus **handler modules** that contain business logic. This document describes the registry (`infra.ts` and `defineApp`), how resources are identified, how typed handles work, and how resource lifecycles relate to code. The internal representation is described in [resource model](../architecture/resource-model.md).
 
@@ -80,7 +80,7 @@ A logical resource describes **what** the application needs and **which guarante
 
 | Factory | Declares | Status |
 | --- | --- | --- |
-| `queue({ id, message, schemaVersion, delivery? })` | Message schema, schema version, `maxAttempts`, `deadLetter`; requires at-least-once delivery. | **Implemented** |
+| `queue({ id, message, schemaVersion, delivery? })` | Message schema, schema version, `maxAttempts`, `deadLetter`, `backoff`; requires at-least-once delivery. | **Implemented** |
 | `bucket({ id, access })` | Access policy (`private`, `public-read`). | **Implemented** |
 | `schedule({ id, cron, timezone, overlap })` | Five-field cron expression, IANA time zone, overlap policy (`skip`, `allow`). | **Implemented** |
 | `http.api({ id, basePath, docs? })` | Base path, documentation metadata and API middleware; routes and RPC procedures are registered on its handle. | **Implemented** |
@@ -139,7 +139,7 @@ Business logic lives in handler modules, separate from `infra.ts`:
 - A handler module registers a handler against a resource (for example `resources.orders.consume(...)`) and gives it its own stable `id`.
 - Registration is declarative. It produces a descriptor whose JSON metadata (identifier, trigger, resource reference) is separate from the executable function, so tools can inspect it without running user code.
 - Handlers import `infra.ts` for typed handles; `infra.ts` never imports handlers. This keeps declarations free of business logic and avoids cycles.
-- Discovering handler modules through the `handlers` globs, checking handler identifiers for duplicates and executing handlers are **Planned**.
+- Discovering handler modules through the `handlers` globs and checking handler identifiers for duplicates are **Implemented** in `@holqa/compiler`; executing handlers is **Implemented** in `@holqa/runtime-bun`.
 
 ## Composable registries
 

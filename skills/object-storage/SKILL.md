@@ -8,7 +8,7 @@ metadata:
 
 # Working with object storage
 
-> **Preview — not yet available.** `bucket(...)`, object operations, signed URLs, storage events and `holqa storage put` are **proposed** and not implemented. Code is illustrative; method names are placeholders.
+> **Preview — not yet published.** `bucket(...)`, object operations (`put`, `get`, `head`, `delete`, `list`), `signedUrl`, and `onObjectCreated` / `onObjectDeleted` are implemented in the Holqa repository (`@holqa/sdk`, unpublished); `@holqa/runtime-bun` delivers storage events from a binding such as `@holqa/local`. `holqa storage put` is a **proposed** command and reports `HOLQA_CLI_NOT_IMPLEMENTED`.
 
 ## When to use
 
@@ -18,19 +18,19 @@ metadata:
 
 ## Works today
 
-Only ID validation for bucket and handler IDs (`customer-uploads`, `uploads.register`). `holqa storage put --json` reports `HOLQA_CLI_NOT_IMPLEMENTED`.
+In the Holqa repository: bucket declarations, the object operations above with portable key rules (`HOLQA_OBJECT_KEY_INVALID`) and bounded listing (`limit` 1 to 1000, `cursor`), signed `GET`/`PUT` URLs, and object-created and object-deleted handlers. Events use the `holqa.object-event/1` envelope; each handler receives `event.id` (stable across redeliveries) and `event.attempt`. Locally, `@holqa/local` stores objects on the filesystem, serves development signed URLs (`storage.fetch`) and lets you inspect and duplicate events (`storage.events`, `storage.duplicateEvent`). `holqa storage put --json` reports `HOLQA_CLI_NOT_IMPLEMENTED`. See the [runtime reference](../../docs/reference/runtime.md#object-events) and the [local environment reference](../../docs/reference/local.md).
 
-## Planned workflow
+## Workflow
 
 1. **Declare the bucket** with an explicit `id` and `access` (`"private"` unless the content is truly public).
 2. **Upload directly from clients with signed URLs** issued by an authenticated server handler, scoped to a key prefix the server chooses.
 3. **Read and write from handlers** using the portable operations on the bucket handle.
 4. **React to events** with an object-created or object-deleted handler, filtered by prefix.
 5. **Validate object metadata** (size, content type, key) in the event handler before processing.
-6. **Exercise it locally** with `holqa storage put` (proposed) against filesystem-backed emulation.
+6. **Exercise it locally** with `@holqa/local` (filesystem-backed); `holqa storage put` is proposed.
 
 ```ts
-// src/uploads/request-upload.handler.ts — illustrative, proposed API
+// src/uploads/request-upload.handler.ts — `requireUser` is illustrative middleware
 import { z } from "zod";
 import { resources } from "../../infra";
 import { requireUser } from "../auth/require-user";
@@ -39,26 +39,24 @@ export default resources.api.route({
   id: "uploads.request",
   method: "POST",
   path: "/uploads",
-  use: [requireUser],
+  middleware: [requireUser],
   body: z.object({ contentType: z.enum(["image/png", "image/jpeg"]) }),
-  responses: { 200: z.object({ url: z.string().url(), key: z.string() }) },
-  handler: async ({ body, user, reply }) => {
-    const key = `incoming/${user.id}/${crypto.randomUUID()}`;  // server-chosen key
-    const url = await resources.uploads.signedUploadUrl(key, {
-      contentType: body.contentType,
-      expiresIn: 300
-    });
-    return reply(200, { url, key });
+  responses: { 200: z.object({ url: z.url(), headers: z.record(z.string(), z.string()), key: z.string() }) },
+  handler: async ({ body, context, reply }) => {
+    const key = `incoming/${context.user.id}/${crypto.randomUUID()}`; // server-chosen key
+    const signed = await resources.uploads.signedUrl(key, { method: "PUT", contentType: body.contentType, expiresInSeconds: 300 });
+    return reply(200, { url: signed.url, headers: { ...signed.headers }, key });
   }
 });
 ```
 
 ```ts
-// src/uploads/on-upload.handler.ts — illustrative, proposed API
+// src/uploads/on-upload.handler.ts — `markRejected` and `registerUpload` are illustrative
 export default resources.uploads.onObjectCreated({
   id: "uploads.register",
   prefix: "incoming/",
-  handler: async ({ object }) => {
+  handler: async ({ object, event }) => {
+    // Events arrive at least once and in no guaranteed order; `event.id` identifies duplicates.
     if (object.size > 25 * 1024 * 1024)
       return markRejected(object.key);            // idempotent upsert
     await registerUpload(object.key, object.size); // idempotent upsert

@@ -112,7 +112,7 @@ describe("the declared application at run time", () => {
     const unbind = bindApp(getAppDescriptor(app)!, binding);
     try {
       await placeOrder({ orderId: "o-1", lines: [{ sku: "A-1", quantity: 1 }], placedAt: "2026-10-17T12:00:00.000Z" });
-      expect(binding.sent).toEqual([{ queue: "order-placed", message: { orderId: "o-1", lines: [{ sku: "A-1", quantity: 1 }], placedAt: "2026-10-17T12:00:00.000Z" } }]);
+      expect(binding.sent.map(({ queue, message }) => ({ queue, message }))).toEqual([{ queue: "order-placed", message: { orderId: "o-1", lines: [{ sku: "A-1", quantity: 1 }], placedAt: "2026-10-17T12:00:00.000Z" } }]);
 
       const descriptor = getHandlerDescriptor(processOrder);
       if (descriptor?.definition.trigger.kind !== "queue.message")

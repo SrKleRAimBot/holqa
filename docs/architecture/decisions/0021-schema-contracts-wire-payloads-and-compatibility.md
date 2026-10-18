@@ -5,6 +5,8 @@
 - **Deciders:** Holqa maintainers
 - **Refines:** [0016](0016-schema-adapters-and-conversion-fidelity.md) decision 2 (where fidelity is recorded). Proposed; once accepted, this supersedes that part of 0016.
 
+> **Implementation note:** Decision 3 said drivers did not use the envelope yet; since [ADR 0024](0024-event-delivery-sources-and-local-drivers.md), queue drivers receive the `holqa.message/1` envelope and consumers accept the queue's own `schemaVersion` (newer versions are retried, older ones dead-lettered).
+
 ## Context
 
 [ADR 0016](0016-schema-adapters-and-conversion-fidelity.md) accepted Standard Schema for validation, per-library adapters for portable JSON Schema, and the rule that nothing is silently approximated. It left open:

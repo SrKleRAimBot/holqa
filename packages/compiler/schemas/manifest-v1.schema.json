@@ -200,6 +200,53 @@
         "requirements": {
           "additionalProperties": false,
           "properties": {
+            "backoff": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "delaySeconds": {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "strategy": {
+                      "const": "fixed"
+                    }
+                  },
+                  "required": [
+                    "strategy",
+                    "delaySeconds"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "initialDelaySeconds": {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "maxDelaySeconds": {
+                      "minimum": 0,
+                      "type": "number"
+                    },
+                    "multiplier": {
+                      "minimum": 1,
+                      "type": "number"
+                    },
+                    "strategy": {
+                      "const": "exponential"
+                    }
+                  },
+                  "required": [
+                    "strategy",
+                    "initialDelaySeconds",
+                    "maxDelaySeconds"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
             "deadLetter": {
               "type": "boolean"
             },
@@ -478,6 +525,9 @@
           "$ref": "#/$defs/trigger-bucket-object-created"
         },
         {
+          "$ref": "#/$defs/trigger-bucket-object-deleted"
+        },
+        {
           "$ref": "#/$defs/trigger-schedule-tick"
         },
         {
@@ -493,6 +543,46 @@
       "properties": {
         "kind": {
           "const": "bucket.object-created"
+        },
+        "options": {
+          "additionalProperties": false,
+          "properties": {
+            "prefix": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "resource": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "kind": {
+              "const": "bucket"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "resource",
+        "options"
+      ],
+      "type": "object"
+    },
+    "trigger-bucket-object-deleted": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "bucket.object-deleted"
         },
         "options": {
           "additionalProperties": false,

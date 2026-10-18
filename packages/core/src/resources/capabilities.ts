@@ -1,6 +1,8 @@
 import type { BindingCapabilities } from "@/binding/runtime-binding";
 import type { Diagnostic } from "@/diagnostics/diagnostic";
 import type {
+  QueueBackoff,
+  QueueCapabilities,
   ResourceKind,
   ResourceKindMap
 } from "@/resources/kinds";
@@ -22,7 +24,8 @@ const requirementChecks: { readonly [Kind in ResourceKind]: RequirementCheck<Kin
     ...requirements.maxAttempts === undefined || requirements.maxAttempts <= capabilities.maxAttempts
       ? []
       : [`${requirements.maxAttempts} delivery attempts are required but at most ${capabilities.maxAttempts} are supported`],
-    ...!requirements.deadLetter || capabilities.deadLetter ? [] : ["a dead-letter destination is required"]
+    ...!requirements.deadLetter || capabilities.deadLetter ? [] : ["a dead-letter destination is required"],
+    ...backoffShortfalls(requirements.backoff, capabilities)
   ],
   "bucket": (requirements, capabilities) => capabilities.access.includes(requirements.access) ? [] : [`${requirements.access} access is required`],
   "schedule": (requirements, capabilities) => capabilities.overlap.includes(requirements.overlap) ? [] : [`the "${requirements.overlap}" overlap policy is required`],
@@ -47,6 +50,24 @@ export function checkCapabilities<Kind extends ResourceKind>(resource: ResourceD
   const check = requirementChecks[resource.kind] as RequirementCheck<Kind>;
   return check(resource.requirements, capabilities)
     .map(shortfall => unsupported(`Binding "${bindingName}" cannot satisfy ${resource.kind} "${resource.id}": ${shortfall}.`));
+}
+
+/**
+ * Describes why a binding cannot apply a queue's declared backoff: an
+ * unsupported strategy, or a delay longer than the binding can schedule.
+ *
+ * @param backoff - The declared backoff, if any.
+ * @param capabilities - The binding's queue capabilities.
+ * @returns One sentence per shortfall; empty when the backoff is absent or supported.
+ */
+function backoffShortfalls(backoff: QueueBackoff | undefined, capabilities: QueueCapabilities): string[] {
+  if (backoff === undefined)
+    return [];
+  if (!(capabilities.backoff ?? []).includes(backoff.strategy))
+    return [`${backoff.strategy} backoff is required`];
+  const longest = backoff.strategy === "fixed" ? backoff.delaySeconds : backoff.maxDelaySeconds;
+  const supported = capabilities.maxDelaySeconds ?? 0;
+  return longest <= supported ? [] : [`redelivery delays of ${longest} seconds are required but at most ${supported} are supported`];
 }
 
 /**

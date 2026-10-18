@@ -4,7 +4,7 @@
 - **Date:** 2026-10-17
 - **Deciders:** Holqa maintainers
 
-> **Implementation status:** Proposed design. Nothing in this ADR is implemented: there are no resource contracts, runtime drivers, provisioning providers or capability checks in the repository. The three-layer split needs validation by implementing at least the local provider and one external provider before the ADR can be accepted.
+> **Implementation status:** Partly implemented. Resource contracts and capability checks exist in `@holqa/core`, and the runtime half of the local provider exists in `@holqa/local` ([ADR 0024](0024-event-delivery-sources-and-local-drivers.md)). Provisioning providers and external providers do not. The three-layer split still needs validation by at least one external provider before the ADR can be accepted.
 
 ## Context
 

@@ -68,6 +68,41 @@ describe("validateManifest", () => {
     expect(await problems(tamper)).toContainEqual(["HOLQA_MANIFEST_INVALID", path]);
   });
 
+  it.each([
+    ["an unknown strategy", { strategy: "linear", delaySeconds: 1 }],
+    ["a negative delay", { strategy: "fixed", delaySeconds: -1 }],
+    ["an extra property", { strategy: "fixed", delaySeconds: 1, jitter: true }],
+    ["a missing maximum", { strategy: "exponential", initialDelaySeconds: 1 }],
+    ["a multiplier below 1", { strategy: "exponential", initialDelaySeconds: 1, maxDelaySeconds: 5, multiplier: 0.5 }]
+  ])("rejects a queue backoff with %s", async (_name, backoff) => {
+    const found = await problems((manifest) => {
+      const queue = manifest.resources.find((resource: { kind: string }) => resource.kind === "queue");
+      queue.requirements.backoff = backoff;
+    });
+    expect(found.map(([code]) => code)).toContain("HOLQA_MANIFEST_INVALID");
+  });
+
+  it("accepts a valid queue backoff and an object-deleted trigger, and rejects a malformed one", async () => {
+    /**
+     * Adds a backoff and turns the object-created trigger into an object-deleted one.
+     *
+     * @param manifest - The manifest copy to change.
+     * @returns The object handler's trigger.
+     */
+    const toDeleted = (manifest: any): { options: { prefix?: unknown } } => {
+      manifest.resources.find((resource: { kind: string }) => resource.kind === "queue").requirements.backoff = { strategy: "fixed", delaySeconds: 5 };
+      const handler = manifest.handlers.find((candidate: { trigger: { kind: string } }) => candidate.trigger.kind === "bucket.object-created");
+      handler.trigger.kind = "bucket.object-deleted";
+      return handler.trigger;
+    };
+    expect(await problems((manifest) => {
+      toDeleted(manifest);
+    })).toEqual([]);
+    expect((await problems((manifest) => {
+      toDeleted(manifest).options.prefix = 3;
+    })).map(([code]) => code)).toContain("HOLQA_MANIFEST_INVALID");
+  });
+
   it("rejects cross-reference problems a JSON Schema cannot express", async () => {
     expect(await problems(manifest => manifest.resources.reverse())).toContainEqual(["HOLQA_MANIFEST_INVALID", "$.resources[1]"]);
     expect(await problems(manifest => manifest.handlers[2].trigger.resource.id = "missing")).toEqual([["HOLQA_MANIFEST_INVALID", "$.handlers[2].trigger.resource"]]);

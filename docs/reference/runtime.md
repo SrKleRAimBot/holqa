@@ -1,8 +1,8 @@
 # Runtime
 
-> **Status:** **Implemented** in `@holqa/runtime-bun` (dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve` adapter), `@holqa/sdk` (`route`, `procedure`, `reply`, `middleware`, `scoped`) and `@holqa/core` (wire contracts). Queue, storage and schedule delivery, worker isolation and reload are **Planned**. All packages are private and unpublished.
+> **Status:** **Implemented** in `@holqa/runtime-bun` (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, `Bun.serve` adapter), `@holqa/sdk` (`route`, `procedure`, `reply`, `middleware`, `scoped`, queue, bucket and schedule operations) and `@holqa/core` (wire contracts, delivery sources, cron evaluation). Worker isolation and reload are **Planned**. All packages are private and unpublished.
 
-This page specifies how a Holqa application executes: the invocation lifecycle shared by every trigger, the HTTP route contract, the `holqa.rpc/1` protocol, and middleware ordering. The design is recorded in [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md).
+This page specifies how a Holqa application executes: the invocation lifecycle shared by every trigger, the HTTP route contract, the `holqa.rpc/1` protocol, middleware ordering, and how queue messages, object events and scheduled runs are delivered. The design is recorded in [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) and [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md). The local binding that delivers them on one machine is described in the [local environment reference](local.md).
 
 ## Layers
 
@@ -10,7 +10,8 @@ This page specifies how a Holqa application executes: the invocation lifecycle s
 | --- | --- |
 | `@holqa/core` | Runtime-neutral contracts: the `http.procedure` trigger kind, `HttpInvocationInput`, `HttpRejectedError`, `HttpErrorBody`, the `holqa.rpc/1` envelope types and constants, `ApplicationScope` and `ScopedDefinition`. |
 | `@holqa/sdk` | Declarations: `api.route`, `api.procedure`, `reply`, `middleware`, `scoped`, application and API middleware. Each registration's `invoke` validates the request, runs the middleware chain and the handler, and checks the response. Runtime-neutral. |
-| `@holqa/runtime-bun` | Execution: `createRuntime` (dispatcher, lifecycle, router, CORS, error responses, logs), `loadCompiledApplication`, and `serve` (`Bun.serve`). Depends on `@holqa/core` only and reads descriptors; it never imports the SDK. |
+| `@holqa/runtime-bun` | Execution: `createRuntime` (dispatcher, lifecycle, router, CORS, error responses, logs, delivery workers for queues and object events, schedule runs), `loadCompiledApplication`, and `serve` (`Bun.serve`). Depends on `@holqa/core` only and reads descriptors; it never imports the SDK. |
+| Bindings | Fulfil resources: drivers for handle operations, and sources the runtime consumes. `@holqa/local` is the first binding with sources ([local environment](local.md)); provider bindings are **Planned**. |
 
 ## Running an application
 
@@ -31,18 +32,21 @@ stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 | --- | --- | --- |
 | `app` | required | The application: the default export of `infra.ts`. |
 | `handlers` | required | Handler registrations. The same registration listed twice counts once. |
-| `binding` | environment binding | The data-plane binding. The default serves `http.api` only and reads configuration from `env`; it advertises no queue, bucket or schedule capability, so such applications fail to start with `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`. |
+| `binding` | environment binding | The binding: drivers, sources and configuration. The default serves `http.api` only and reads configuration from `env`; it advertises no queue, bucket or schedule capability, so such applications fail to start with `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`. Use `createLocalEnvironment(...).binding` from `@holqa/local` to run them locally. |
+| `delivery.concurrency` | `4` | In-flight messages per queue consumer that declares no `concurrency`. |
+| `delivery.leaseMs` | `limits.timeoutMs` + 5 000 (300 000 when `limits.timeoutMs` is `Infinity`) | How long a received message or event stays leased. When the binding's source can extend leases, the runtime renews them every half lease while the handler runs; otherwise the lease must outlast the invocation time limit, or a slow handler's delivery runs again concurrently. |
+| `delivery.objectEvents` | 3 attempts, default backoff, dead-lettered, concurrency 4 | How object event handlers treat failures; buckets declare no retry policy. |
 | `env` | `process.env` | Environment variables for the default binding. |
 | `limits.concurrency` | `256` | Concurrent invocations across all handlers. |
 | `limits.queue` | `1024` | Invocations waiting for a slot; beyond it, `HOLQA_RUNTIME_OVERLOADED`. |
 | `limits.timeoutMs` | `30000` | Time limit per invocation, including waiting for a slot. `Infinity` means none; longer finite values are capped at 2^31 − 1 ms. |
 | `http.cors` | none | [CORS](#cors) policy. |
 | `http.trustCorrelationHeader` | `true` | Adopt a caller's `x-correlation-id` (at most 128 letters, digits, `_`, `.`, `:`, `-`). Set `false` for servers exposed to untrusted callers, so logs never contain caller-chosen identifiers. |
-| `manualTriggers` | `false` | Accept queue, object-created and schedule handlers, which this runtime cannot deliver yet, to run them through `runtime.invoke` only. Without it they fail `createRuntime` with `HOLQA_RUNTIME_START_FAILED`. |
+| `manualTriggers` | `false` | Run queue, object event and schedule handlers only through `runtime.invoke`: the runtime consumes no source. Without it, `start()` fails with `HOLQA_RUNTIME_START_FAILED` and one `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` cause per handler whose trigger the binding cannot deliver. |
 | `log` | JSON lines on standard output | A `LogSink`; `silentSink` discards. |
 | `createId`, `now`, `clock` | `crypto.randomUUID`, `performance.now`, `new Date()` | Injectable for deterministic tests. |
 
-`createRuntime` is synchronous and side-effect free. It reports every problem at once in one `HolqaError`: a value that is not an application (`HOLQA_APP_INVALID`), a non-handler (`HOLQA_DECLARATION_INVALID`), two registrations with one identifier (`HOLQA_HANDLER_ID_DUPLICATE`), a trigger on an undeclared resource (`HOLQA_RESOURCE_NOT_FOUND`) or a resource of another kind (`HOLQA_TRIGGER_INVALID`), two handlers serving the same method and path shape across all APIs (`HOLQA_ROUTE_CONFLICT`, the same rule the compiler applies), handlers whose trigger has no transport (`HOLQA_RUNTIME_START_FAILED`, unless `manualTriggers`), and invalid limits or CORS settings (`HOLQA_RUNTIME_START_FAILED`). These checks repeat the compiler's for registrations that were never compiled; the route rule is the shared `httpRouteKeys` function from `@holqa/core`.
+`createRuntime` is synchronous and side-effect free. It reports every problem at once in one `HolqaError`: a value that is not an application (`HOLQA_APP_INVALID`), a non-handler (`HOLQA_DECLARATION_INVALID`), two registrations with one identifier (`HOLQA_HANDLER_ID_DUPLICATE`), a trigger on an undeclared resource (`HOLQA_RESOURCE_NOT_FOUND`) or a resource of another kind (`HOLQA_TRIGGER_INVALID`), two handlers serving the same method and path shape across all APIs (`HOLQA_ROUTE_CONFLICT`, the same rule the compiler applies), two consumers of one queue (`HOLQA_QUEUE_CONSUMER_DUPLICATE`), and invalid limits, delivery or CORS settings (`HOLQA_RUNTIME_START_FAILED`). These checks repeat the compiler's for registrations that were never compiled; the route rule is the shared `httpRouteKeys` function from `@holqa/core`.
 
 ## Execution lifecycle
 
@@ -54,15 +58,16 @@ stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 | `stopping` | `stop()` | No; in-flight invocations continue |
 | `stopped` | `stop()` finished, or `start()` failed | No |
 
-`start()` runs once. It creates the binding (validating every configuration entry; see [configuration](#configuration)) and installs it with `bindApp`. A failure throws `HOLQA_RUNTIME_START_FAILED` followed by its causes and leaves the runtime `stopped`; create a new runtime to retry. Calling `stop()` while `start()` is still running makes the start fail (`HOLQA_RUNTIME_NOT_RUNNING`) and never installs the binding.
+`start()` runs once. It creates the binding (validating every configuration entry; see [configuration](#configuration)), checks that the binding can deliver every background handler's trigger, installs it with `bindApp`, and then subscribes to the binding's sources (a source can still fail here, for example a schedule with `HOLQA_SCHEDULE_INVALID`). A failure throws `HOLQA_RUNTIME_START_FAILED` followed by its causes and leaves the runtime `stopped`; create a new runtime to retry. Calling `stop()` while `start()` is still running makes the start fail (`HOLQA_RUNTIME_NOT_RUNNING`) and never installs the binding.
 
 `stop({ graceMs = 10000, forceMs = 1000 })` is idempotent; concurrent calls share one stop. It:
 
-1. refuses new invocations;
+1. stops receiving queue messages, object events and scheduled runs, and refuses new invocations;
 2. waits up to `graceMs` for admitted invocations to finish, including those still waiting for a slot; scoped values stay usable meanwhile;
 3. aborts the remaining ones (their callers receive `HOLQA_INVOCATION_CANCELLED`) and waits up to `forceMs` for handler code that ignores its signal, logging a warning if some is still running;
-4. aborts the application scope's `signal` and disposes of scoped values in reverse creation order (a failing `dispose` is logged, and the others still run);
-5. removes the binding.
+4. settles every delivery with its source: finished ones are acknowledged, retried or dead-lettered as usual, and those cancelled by the stop are released for immediate redelivery;
+5. aborts the application scope's `signal` and disposes of scoped values in reverse creation order (a failing `dispose` is logged, and the others still run);
+6. removes the binding.
 
 `serve(...).stop()` stops the runtime first, while the server keeps listening and answers new requests with `503`, then waits up to `forceMs` for responses that are still being written, then closes every connection.
 
@@ -88,7 +93,7 @@ if (!outcome.ok)
 | Identity | Every invocation gets a unique `invocationId`; `correlationId` groups related invocations and defaults to it. Both are in the handler's context, every log entry and the `x-correlation-id` response header. |
 | Outcome | `invoke` never rejects. It resolves to `{ ok: true, value }` or `{ ok: false, failure }`, both with `invocationId`, `correlationId`, `handlerId` and `durationMs`. |
 | Concurrency | A FIFO gate of `limits.concurrency` slots with a wait queue of `limits.queue`. A queue consumer's own `concurrency` is a second gate, acquired first, so invocations waiting for it hold no environment-wide slot. A full queue answers `HOLQA_RUNTIME_OVERLOADED` at once. |
-| Metadata | Trusted, but checked against the trigger kind: a queue consumer needs `{ attempt, messageId }`, a schedule handler `{ scheduledTime }`; otherwise `HOLQA_INPUT_INVALID`. |
+| Metadata | Trusted, but checked against the trigger kind: a queue consumer needs `{ attempt, messageId, schemaVersion? }`, an object event handler `{ eventId, eventTime, attempt }`, a schedule handler `{ scheduledTime, runId?, trigger? }`; otherwise `HOLQA_INPUT_INVALID`. |
 | Time limit | Measured from dispatch, including waiting. When it passes, the invocation's `signal` aborts and the caller receives `HOLQA_INVOCATION_TIMEOUT`. |
 | Cancellation | When the caller's signal aborts (an HTTP client disconnecting aborts `request.signal`), the invocation's signal aborts and the caller receives `HOLQA_INVOCATION_CANCELLED`. An invocation aborted before its handler starts never starts it. |
 | Orphans | JavaScript cannot stop a running function. A handler that ignores its signal keeps running as an orphan and **keeps its concurrency slot** until it finishes, so cancellation never exceeds the limit. `stats().orphaned` counts them. Handlers must honour `signal`. |
@@ -280,6 +285,125 @@ Holqa's own versioned protocol. It is **not** JSON-RPC 2.0 and is not compatible
 
 Middleware that returns its own `Response` bypasses the envelope. Typed clients for procedures are **Planned** (`@holqa/client`); the envelope types (`RpcResponseEnvelope`, `RpcRequestEnvelope`) are exported by `@holqa/core`.
 
+## Queue delivery
+
+```ts
+export const jobs = queue({
+  id: "document-jobs",
+  message: documentJob,
+  schemaVersion: 1,
+  delivery: { maxAttempts: 3, deadLetter: true, backoff: { strategy: "exponential", initialDelaySeconds: 2, maxDelaySeconds: 30 } }
+});
+
+const { messageId } = await resources.jobs.send(job, { delaySeconds: 60 });
+
+export default resources.jobs.consume({
+  id: "documents.process",
+  concurrency: 4,
+  handler: async ({ message, delivery }) => {
+    // delivery.messageId is the same for every delivery of one sent message.
+    if (await alreadyProcessed(delivery.messageId))
+      return;
+    await process(message);
+  }
+});
+```
+
+`send` encodes the message in its schema's input form, validates the encoded copy, wraps it in a `holqa.message/1` envelope with the queue's `schemaVersion`, and resolves with the identifier the queue assigned once it has accepted the message. `delaySeconds` (a whole number, at least 0) delays the first delivery; a delay longer than the binding's `maxDelaySeconds` fails with `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`, and a malformed one with `HOLQA_OPERATION_INVALID`.
+
+A queue has **one competing consumer**. The runtime runs a delivery worker for it that leases messages from the binding's queue source and invokes the consumer through the dispatcher:
+
+| Rule | Behaviour |
+| --- | --- |
+| Delivery | At least once. A message is leased to one receiver for `delivery.leaseMs`, renewed while its handler runs when the source supports it; when the lease expires before it is settled (a crash, a hang), it becomes due again with a higher `attempt`. Duplicates are possible: make consumers idempotent. Order is not guaranteed. |
+| Concurrency | At most the consumer's `concurrency` (default `delivery.concurrency`) messages are leased and running at once. |
+| Success | The message is acknowledged and not delivered again. |
+| Failure | Any error, timeout or cancellation other than shutdown is a failed attempt. Before the last attempt, the message is retried after the backoff delay: `fixed` waits `delaySeconds`; `exponential` waits `initialDelaySeconds × multiplier^(attempt − 1)` (multiplier 2 by default), capped at `maxDelaySeconds`. Without a declared backoff: 1 s, doubling, at most 300 s. No jitter is added. |
+| Last attempt | After `maxAttempts` (the binding's default when not declared) the message is dead-lettered when the queue declares `deadLetter: true`, and discarded otherwise. Dead-lettered messages keep their payload and the last failure (`code`, `message`, `invocationId`). |
+| Not retried | A payload that fails the message schema (`HOLQA_INPUT_INVALID`), an older `schemaVersion` than the consumer's (`HOLQA_PAYLOAD_VERSION_UNSUPPORTED`), a body that is not an envelope (`HOLQA_PAYLOAD_MALFORMED`), and a message received more often than its attempts allow (`HOLQA_DELIVERY_ATTEMPTS_EXHAUSTED`) are dead-lettered (or discarded) at once, without invoking the consumer. |
+| Newer versions | A message with a newer `schemaVersion` than the consumer's, as when producers are deployed first, is a failed attempt (`HOLQA_PAYLOAD_VERSION_UNSUPPORTED`) without invoking the consumer: it is retried with the backoff, so an updated consumer can take it, and dead-lettered (or discarded, when the queue requires no dead-letter destination) after the last attempt. Deploy consumers before producers when a queue requires no dead-letter destination. |
+| Shutdown | Messages whose invocation the stop cancelled are released for immediate redelivery; the attempt still counts. |
+| Context | `message` (validated output), `delivery.attempt`, `delivery.messageId`, `delivery.schemaVersion`, `signal`, `log`. |
+
+Binding requirements are checked when the runtime starts: a queue that requires more attempts, a dead-letter destination, a backoff strategy or longer delays than the binding advertises fails with `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`, and so does a queue without a declared backoff when the binding cannot delay redeliveries by the default's 300 seconds (`checkTriggerDelivery` in `@holqa/core`). Topics, where several subscribers each receive every message, are **Planned**; queues never fan out.
+
+### Publishing and database writes
+
+Sending a message and writing to a database are separate operations. Holqa does not make them atomic: the database write can succeed and the send fail, or the send succeed and the transaction roll back. Applications that need both to happen choose one of these patterns:
+
+| Pattern | How |
+| --- | --- |
+| Transactional outbox | Write the message to an outbox table in the same database transaction as the change. A separate process (a schedule handler works) sends outbox rows and marks them sent. Sending is then at least once, so the consumer must be idempotent. |
+| Idempotent consumers | Key side effects on `delivery.messageId` or on a business key in the message (`orderId`), and record processed keys in the same transaction as the effect. A duplicate then changes nothing. |
+| Send last, tolerate loss | Send after committing and accept that a crash in between loses the message; only for messages that can be recomputed, for example by a schedule. |
+
+Consumers must never assume that a message implies the producer's database change is visible, or that it is delivered only once.
+
+## Object events
+
+```ts
+export const queueUpload = resources.files.onObjectCreated({
+  id: "uploads.queue",
+  prefix: "uploads/",
+  handler: async ({ object, event }) => {
+    // object: { key, size, contentType? }; event: { id, time, attempt }
+    await resources.jobs.send({ key: object.key });
+  }
+});
+
+export const recordRemoval = resources.files.onObjectDeleted({ id: "uploads.removed", handler: async ({ object }) => audit(object.key) });
+```
+
+Buckets support `put` (resolves to metadata with an opaque `etag`), `get`, `head`, `delete` (resolves to `false` when the object did not exist), `list({ prefix?, cursor?, limit? })` (pages of at most 1 000 keys in UTF-8 byte order; pass the returned `cursor` for the next page) and `signedUrl(key, { method: "GET" | "PUT", expiresInSeconds, contentType? })`. Keys must be 1 to 1 024 UTF-8 bytes without control characters, a leading `/`, or `.` and `..` segments (`HOLQA_OBJECT_KEY_INVALID`). Signed URLs require the binding's `signedUrls` capability; what their signature protects is documented by the binding ([local signed URLs](local.md#signed-urls)).
+
+Every change produces one event in the portable `holqa.object-event/1` envelope:
+
+```json
+{
+  "format": "holqa.object-event/1",
+  "id": "8d0f…",
+  "type": "object.created",
+  "bucket": "document-files",
+  "time": "2026-10-18T09:30:00.000Z",
+  "object": { "key": "uploads/a.txt", "size": 21, "contentType": "text/plain", "etag": "…" }
+}
+```
+
+| Rule | Behaviour |
+| --- | --- |
+| Types | `object.created` (also for a replaced object) and `object.deleted` (key only). Deleting a missing object produces no event. |
+| Subscriptions | Each handler is a subscription with its own delivery state, filtered by type and optional `prefix`. Events that happened before a subscription first existed are not delivered to it. |
+| Identity | `event.id` is the same for every delivery of one change; two writes of one key are two events. Discard duplicates by `event.id`, or make the effect idempotent. |
+| Delivery | At least once, in no guaranteed order, with the same lease, retry and dead-letter mechanics as queues. Buckets declare no retry policy: `delivery.objectEvents` is a deployment setting of the runtime, not part of the application's declared requirements, so every runtime that runs the application must pass the same values to behave the same way. |
+| Subscriptions as infrastructure | Against external services, a subscription (a notification configuration) is infrastructure that provisioning creates; a driver attaches to it and fails when it is missing, rather than creating it with data-plane credentials. The local binding creates its own subscriptions. |
+| Input | The handler validates the portable object description (`{ key, size, contentType? }` or `{ key }`); the event's identity, time and attempt are trusted metadata. |
+
+Drivers for external storage services translate their notifications into this envelope; `readObjectEvent` from `@holqa/core` checks its structure.
+
+## Scheduled runs
+
+```ts
+export const cleanup = schedule({ id: "upload-cleanup", cron: "0 * * * *", timezone: "UTC", overlap: "skip" });
+
+export default resources.cleanup.handle({
+  id: "uploads.cleanup",
+  handler: async ({ scheduledTime, trigger, runId }) => removeOlderThan(Date.parse(scheduledTime) - ttl)
+});
+```
+
+The time zone, daylight-saving and missed-run rules below are what every schedule binding must implement; a binding evaluates them itself (the local scheduler uses `parseCronSchedule` and `nextCronTime` from `@holqa/core`) or translates them faithfully for a service, and must refuse a schedule it cannot honour. The overlap policy is applied by the runtime.
+
+| Rule | Behaviour |
+| --- | --- |
+| Cron | Five fields: minute, hour, day of month, month (`1-12` or `JAN-DEC`), day of week (`0-7` or `SUN-SAT`; `0` and `7` are Sunday), each a value, range, step (`*/15`, `5-20/5`) or list. `?` means `*` in the day fields. When both day fields are restricted, a day matches if either does. `L`, `W`, `#` and seconds are rejected at declaration (`HOLQA_DECLARATION_INVALID`) and by bindings (`HOLQA_SCHEDULE_INVALID`). |
+| Time zone | Fields match the wall clock in the declared IANA time zone, at minute precision. An unknown zone, or a schedule that never fires (`0 0 31 2 *`), fails when the runtime starts (`HOLQA_SCHEDULE_INVALID`). |
+| Daylight saving | A matching local time that does not exist (clocks jump forward) runs once, at the first instant after the gap. A local time that occurs twice (clocks fall back) runs once, at its first occurrence. Each matching wall-clock time therefore runs at most once per day. |
+| Overlap | Enforced by the runtime. `skip`: a run due while the previous one of the same schedule is still in progress is not started and is reported `skipped` (`HOLQA_SCHEDULE_RUN_SKIPPED`). `allow`: runs overlap. |
+| Missed runs | Not backfilled. Runs due while no runtime receives the schedule (the application is stopped) never run. When a scheduler wakes up late, only the most recent due run starts; the binding may record the earlier ones as missed. |
+| Duplicates | A scheduler service may report the same run more than once. Make schedule handlers idempotent, keyed on `scheduledTime` (or `runId` where the binding keeps it stable). The local scheduler reports each run once, which is stronger than many services. |
+| Manual runs | Started by the binding (for example `scheduler.trigger(id)` in `@holqa/local`) with `trigger: "manual"` and `scheduledTime` set to the request time, through the same overlap policy. |
+| Results | The runtime reports every run's outcome (`succeeded`, `failed` with the failure code, or `skipped`) and invocation identifier back to the scheduler, which can record it. `scheduledTime` is when the run was due, not when it started. |
+
 ## Compiled applications
 
 `loadCompiledApplication({ root, buildDir? })` reads `manifest.json` and `entrypoints.json` written by `holqa build --manifest`, imports the application module and each handler module, and returns `{ app, handlers, manifestFingerprint }` for `createRuntime`. It fails with `HOLQA_APP_NOT_FOUND` without build output, `HOLQA_MANIFEST_INVALID` for malformed output (including module paths outside the root), `HOLQA_MANIFEST_VERSION_UNSUPPORTED` for another manifest version, `HOLQA_APP_INVALID` when the application module's default export is not an application, `HOLQA_MODULE_EVALUATION_FAILED` when a module throws, and `HOLQA_BUILD_STALE` when the entry point map belongs to another manifest or the application name, resources (kind, identifier, settings, requirements), configuration entries, handler exports or triggers changed since the build. Schema changes and handler modules added after the build are not detected; rebuild after changing either.
@@ -294,7 +418,8 @@ Loading evaluates the application's code in the current process with its permiss
 
 | Capability | Status |
 | --- | --- |
-| Queue, bucket and schedule delivery (consumers run only through `runtime.invoke`) | Planned (`@holqa/local`) |
+| Bindings for external queue, storage and scheduling services | Planned |
+| Topics with independent subscriptions (fan-out) | Planned |
 | Worker or process isolation per application, reload, `holqa dev` | Planned |
 | Middleware for background triggers | Planned |
 | CORS and body limits declared in the application | Proposed |
@@ -303,6 +428,8 @@ Loading evaluates the application's code in the current process with its permiss
 ## Related
 
 - [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md)
+- [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md)
+- [Local environment](local.md)
 - [Triggers and execution](../concepts/triggers-and-execution.md)
 - [Packages](packages.md)
 - [Diagnostic codes](diagnostic-codes.md)

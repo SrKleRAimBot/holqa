@@ -1,6 +1,6 @@
 # Infrastructure providers
 
-> **Status:** Proposed — not implemented. Infrastructure independence is a foundational goal, but the specific three-part split (contract, runtime driver, provisioning provider) and capability negotiation are recorded as **Proposed** in [ADR 0005](../architecture/decisions/0005-infrastructure-independent-resource-contracts.md) until validated by a local provider and at least one external provider. No runtime drivers, provisioning providers, or capability checks exist yet.
+> **Status:** Partly implemented. Capability checks (`checkCapabilities`, `bindApp`), the runtime driver and source contracts in `@holqa/core`, and the first binding, the local one in `@holqa/local`, are **Implemented** ([ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md), [local environment](../reference/local.md)). Provisioning providers and bindings for external services are not implemented. The three-part split (contract, runtime driver, provisioning provider) stays **Proposed** in [ADR 0005](../architecture/decisions/0005-infrastructure-independent-resource-contracts.md) until at least one external provider validates it.
 
 Holqa is infrastructure-agnostic: applications declare **logical** resources, and the same application can run against a local environment, self-managed infrastructure, or third-party services. This page explains how logical requirements are connected to real infrastructure, and why portability is never allowed to hide semantic differences.
 
@@ -37,7 +37,7 @@ A **binding** associates a logical resource with a runtime driver (and optionall
 | Staging | Self-hosted broker driver | S3-compatible storage driver |
 | Production | A managed queue driver | S3-compatible storage driver |
 
-The table above is illustrative; no drivers exist yet. Where bindings are declared (a separate file, CLI configuration, or environment configuration) is **Proposed**. They do not live inside resource declarations.
+The table above is illustrative; only the local drivers in `@holqa/local` exist. Where bindings are declared (a separate file, CLI configuration, or environment configuration) is **Proposed**. They do not live inside resource declarations.
 
 ## No provider configuration bags in core
 
@@ -94,7 +94,7 @@ A local provider is particularly important. Every Holqa application should be ru
 - They declare their capabilities honestly, including where they are weaker or different.
 - They must not falsely guarantee stronger delivery or concurrency semantics than production drivers are expected to provide, so that code that works locally does not depend on local-only behavior.
 
-See [local development](local-development.md).
+`@holqa/local` implements this provider's runtime half for queues, buckets and schedules; its advertised capabilities and semantic differences are listed in the [local environment reference](../reference/local.md). See [local development](local-development.md).
 
 ## Provisioning safety
 

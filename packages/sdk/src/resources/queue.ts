@@ -3,7 +3,10 @@ import type {
   InferInput,
   InferOutput,
   InvocationLogger,
+  QueueBackoff,
   QueueMessageTriggerOptions,
+  QueueSendOptions,
+  QueueSendReceipt,
   ResourceDescriptorOf,
   StandardSchemaV1
 } from "@holqa/core";
@@ -17,7 +20,11 @@ import type { CheckResourceId } from "@/types/checks";
 import {
   descriptorKey,
   descriptorProtocol,
+  diagnosticCodes,
+  failWith,
+  messageEnvelopeFormat,
   prepareWirePayload,
+  requireBinding,
   resolveDriver,
   validateInput
 } from "@holqa/core";
@@ -37,6 +44,8 @@ export interface QueueDeliveryOptions {
   readonly maxAttempts?: number;
   /** Requires messages that exhaust `maxAttempts` to be kept in a dead-letter destination. */
   readonly deadLetter?: boolean;
+  /** The delay before each redelivery. Absent means the runtime's default (1 s, doubling, at most 5 minutes). */
+  readonly backoff?: QueueBackoff;
 }
 
 /**
@@ -66,7 +75,10 @@ export interface QueueMessageContext<Message> {
   readonly delivery: {
     /** 1 for the first delivery; higher values mean redelivery. */
     readonly attempt: number;
+    /** The same for every delivery of one sent message, including duplicates: use it to make processing idempotent. */
     readonly messageId: string;
+    /** The `schemaVersion` the producer sent the message with, when the runtime knows it. */
+    readonly schemaVersion?: number;
   };
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
@@ -114,13 +126,20 @@ export interface QueueConsumer<QueueId extends string, HandlerId extends string,
 export interface QueueHandle<Id extends string, Message extends StandardSchemaV1> extends ResourceHandle<"queue", Id> {
   readonly message: Message;
   /**
-   * Converts a message to its JSON wire form, validates that form and hands it
+   * Converts a message to its JSON wire form, validates that form, wraps it in
+   * a `holqa.message/1` envelope with the queue's `schemaVersion` and hands it
    * to the bound runtime. Consumers decode it again with the same schema.
-   * Rejects values without a JSON form (`HOLQA_PAYLOAD_NOT_SERIALIZABLE`) and
-   * invalid messages (`HOLQA_INPUT_INVALID`). The driver receives the bare
-   * payload; drivers do not use the versioned message envelope yet.
+   * Resolves once the queue has accepted the message, with the identifier it
+   * assigned.
+   *
+   * Sending is not atomic with any other write: a database update and a send
+   * can each succeed or fail on its own. See the outbox guidance in the
+   * runtime reference.
+   *
+   * @throws {HolqaError} `HOLQA_PAYLOAD_NOT_SERIALIZABLE` for values without a JSON form, `HOLQA_INPUT_INVALID` for invalid messages,
+   * `HOLQA_OPERATION_INVALID` for a malformed delay, and `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` when the binding cannot delay messages that long.
    */
-  readonly send: (message: InferInput<Message>) => Promise<void>;
+  readonly send: (message: InferInput<Message>, options?: QueueSendOptions) => Promise<QueueSendReceipt>;
   /** Registers a consumer for this queue. Registration is declarative: nothing runs until a runtime invokes it. */
   readonly consume: <const HandlerId extends string>(options: QueueConsumerOptions<HandlerId, InferOutput<Message>> & CheckResourceId<HandlerId>) => QueueConsumer<Id, HandlerId, Message>;
 }
@@ -155,6 +174,7 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
   problems.positiveInteger(delivery.maxAttempts, "delivery.maxAttempts");
   if (delivery.deadLetter !== undefined && typeof delivery.deadLetter !== "boolean")
     problems.invalid("\"delivery.deadLetter\" must be a boolean.");
+  const backoff = delivery.backoff === undefined ? undefined : readBackoff(delivery.backoff, problems);
   const id = problems.valid(idCandidate);
 
   const descriptor: ResourceDescriptorOf<"queue"> = Object.freeze({
@@ -166,7 +186,7 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
     requirements: freezeJson({
       delivery: "at-least-once" as const,
       deadLetter: options.delivery?.deadLetter ?? false,
-      ...definedEntries({ maxAttempts: options.delivery?.maxAttempts })
+      ...definedEntries({ maxAttempts: options.delivery?.maxAttempts, backoff })
     }),
     schemas: Object.freeze({ message: options.message })
   });
@@ -177,16 +197,24 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
     kind: "queue" as const,
     id: options.id,
     message: options.message,
-    send: async (message: InferInput<Message>) => {
+    send: async (message: InferInput<Message>, sendOptions?: QueueSendOptions) => {
       const operation = `queue "${id}" send`;
-      const driver = resolveDriver(ownerOf(handle, operation), descriptor, operation);
+      const app = ownerOf(handle, operation);
+      const driver = resolveDriver(app, descriptor, operation);
+      const delaySeconds = readDelay(sendOptions, operation);
+      if (delaySeconds > 0) {
+        const binding = requireBinding(app, operation);
+        const supported = binding.capabilities.queue?.maxDelaySeconds ?? 0;
+        if (delaySeconds > supported)
+          failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${binding.name}" cannot delay messages for queue "${id}" by ${delaySeconds} seconds; it supports at most ${supported}.`);
+      }
       // Put the *input* form on the wire, as a JSON copy validated with the
       // same schema consumers decode it with. Forwarding the decoded output
       // would make transformed fields (for example a Date) fail consumer
       // validation, and forwarding the caller's object would let later
       // mutation change what was sent.
       const payload = await prepareWirePayload(options.message, message, subject);
-      await driver.send(payload);
+      return driver.send(Object.freeze({ format: messageEnvelopeFormat, schemaVersion: options.schemaVersion, payload }), delaySeconds > 0 ? { delaySeconds } : {});
     },
     consume: <const HandlerId extends string>(consumer: QueueConsumerOptions<HandlerId, InferOutput<Message>> & CheckResourceId<HandlerId>) => {
       const rawConsumer = requireOptions(consumer, `consumer of queue "${id}"`);
@@ -208,7 +236,11 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
         const validated = await validateInput(options.message, input, subject);
         await consumer.handler({
           message: validated,
-          delivery: { attempt: context.metadata.attempt, messageId: context.metadata.messageId },
+          delivery: {
+            attempt: context.metadata.attempt,
+            messageId: context.metadata.messageId,
+            ...context.metadata.schemaVersion === undefined ? {} : { schemaVersion: context.metadata.schemaVersion }
+          },
           signal: context.signal,
           log: context.log
         });
@@ -233,4 +265,64 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
     }
   });
   return handle;
+}
+
+/**
+ * Validates a declared backoff and returns a normalized copy.
+ *
+ * @param value - The untrusted `delivery.backoff` option.
+ * @param problems - Where to record problems.
+ * @returns The backoff, or `undefined` when it is malformed (the problem is recorded).
+ */
+function readBackoff(value: unknown, problems: DeclarationProblems): QueueBackoff | undefined {
+  const raw = optionalObject<{ readonly strategy?: unknown; readonly delaySeconds?: unknown; readonly initialDelaySeconds?: unknown; readonly maxDelaySeconds?: unknown; readonly multiplier?: unknown }>(value, "delivery.backoff", problems);
+  /**
+   * Reports whether a value is a finite number of seconds that is not negative.
+   *
+   * @param seconds - The candidate.
+   * @returns `true` for finite numbers of at least 0.
+   */
+  const isSeconds = (seconds: unknown): seconds is number => typeof seconds === "number" && Number.isFinite(seconds) && seconds >= 0;
+  if (raw.strategy === "fixed") {
+    if (!isSeconds(raw.delaySeconds)) {
+      problems.invalid("\"delivery.backoff.delaySeconds\" must be a number of seconds of at least 0.");
+      return undefined;
+    }
+    return { strategy: "fixed", delaySeconds: raw.delaySeconds };
+  }
+  if (raw.strategy === "exponential") {
+    const { initialDelaySeconds, maxDelaySeconds, multiplier } = raw;
+    if (!isSeconds(initialDelaySeconds) || !isSeconds(maxDelaySeconds) || maxDelaySeconds < initialDelaySeconds) {
+      problems.invalid("\"delivery.backoff\" needs \"initialDelaySeconds\" and \"maxDelaySeconds\" of at least 0, with the maximum not below the initial delay.");
+      return undefined;
+    }
+    if (multiplier !== undefined && (typeof multiplier !== "number" || !Number.isFinite(multiplier) || multiplier < 1)) {
+      problems.invalid("\"delivery.backoff.multiplier\" must be a number of at least 1.");
+      return undefined;
+    }
+    return { strategy: "exponential", initialDelaySeconds, maxDelaySeconds, ...multiplier === undefined ? {} : { multiplier } };
+  }
+  problems.invalid("\"delivery.backoff.strategy\" must be \"fixed\" or \"exponential\".");
+  return undefined;
+}
+
+/**
+ * Reads the delay of one send.
+ *
+ * @param options - The untrusted send options.
+ * @param operation - The operation, for messages.
+ * @returns The delay in whole seconds; 0 when absent.
+ * @throws {HolqaError} `HOLQA_OPERATION_INVALID` when the options or the delay are malformed.
+ */
+function readDelay(options: QueueSendOptions | undefined, operation: string): number {
+  if (options === undefined)
+    return 0;
+  if (typeof options !== "object" || options === null)
+    failWith(diagnosticCodes.operationInvalid, `${operation} options must be an object.`);
+  const { delaySeconds } = options;
+  if (delaySeconds === undefined)
+    return 0;
+  if (typeof delaySeconds !== "number" || !Number.isSafeInteger(delaySeconds) || delaySeconds < 0)
+    failWith(diagnosticCodes.operationInvalid, `${operation} needs "delaySeconds" to be a whole number of seconds of at least 0.`);
+  return delaySeconds;
 }

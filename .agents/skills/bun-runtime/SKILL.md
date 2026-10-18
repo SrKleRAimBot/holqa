@@ -11,7 +11,7 @@ Bun plays two distinct roles here, and confusing them is the most common mistake
 
 | Role | Where | Tool |
 | --- | --- | --- |
-| Holqa's intended application runtime | `@holqa/cli` and `@holqa/runtime-bun` today; `@holqa/local` (planned) | Bun |
+| Holqa's intended application runtime | `@holqa/cli`, `@holqa/runtime-bun` and `@holqa/local` (uses `bun:sqlite`) | Bun |
 | Runtime for maintainer scripts | `scripts/*.ts` (`agents-sync.ts`, `check-boundaries.ts`) | Bun |
 | Test runner | every package's `test` script (`bun test`) | Bun |
 | **Repository package manager** | installs, lockfile, workspace linking | **pnpm only** |

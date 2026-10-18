@@ -8,7 +8,7 @@ metadata:
 
 # Running local development
 
-> **Preview — not yet available.** `holqa dev`, `invoke`, `queue send`, `storage put` and `cron run` are **proposed** commands. Today each one exits with code 1 and reports `HOLQA_CLI_NOT_IMPLEMENTED`. Local emulators (`@holqa/local`) are planned. `holqa inspect` and `holqa build --manifest` are implemented, and `@holqa/runtime-bun` (unpublished) can serve a compiled application's HTTP routes and RPC procedures with `serve(...)`.
+> **Preview — not yet available.** `holqa dev`, `invoke`, `queue send`, `storage put` and `cron run` are **proposed** commands. Today each one exits with code 1 and reports `HOLQA_CLI_NOT_IMPLEMENTED`. `holqa inspect` and `holqa build --manifest` are implemented. In the Holqa repository (unpublished), `@holqa/runtime-bun` runs a compiled application and `@holqa/local` provides local queues, object storage and a scheduler, so the whole application runs locally from a script.
 
 ## When to use
 
@@ -28,6 +28,20 @@ bun packages/cli/dist/bin.js deploy          # exit 2, HOLQA_CLI_UNKNOWN_COMMAND
 ```
 
 Use the exit code and the `code` field, not the message text, when scripting against the CLI.
+
+The local drivers work today from a script (see [`examples/document-processing`](../../examples/document-processing/README.md) and the [local environment reference](../../docs/reference/local.md)):
+
+```ts
+import { createLocalEnvironment } from "@holqa/local";
+import { createRuntime, loadCompiledApplication } from "@holqa/runtime-bun";
+
+const compiled = await loadCompiledApplication({ root: import.meta.dir });
+const local = await createLocalEnvironment({ app: compiled.app, directory: ".holqa/local" });
+const runtime = createRuntime({ ...compiled, binding: local.binding });
+await runtime.start();
+// Inspect: local.queues.messages("order-processing"), local.queues.deadLetters(...),
+// local.storage.events("uploads"), local.scheduler.runs("nightly"); trigger: local.scheduler.trigger("nightly").
+```
 
 ## Planned workflow
 
