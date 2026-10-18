@@ -264,6 +264,34 @@ importers:
         specifier: 'catalog:'
         version: 6.0.3
 
+  examples/manifest:
+    dependencies:
+      '@holqa/cli':
+        specifier: workspace:*
+        version: link:../../packages/cli
+      '@holqa/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@holqa/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@holqa/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@holqa/zod':
+        specifier: workspace:*
+        version: link:../../packages/integrations/zod
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
+    devDependencies:
+      '@types/bun':
+        specifier: 'catalog:'
+        version: 1.4.3
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+
   examples/package-smoke:
     dependencies:
       '@holqa/cli':
@@ -444,6 +472,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@holqa/compiler':
+        specifier: workspace:*
+        version: link:../compiler
       '@holqa/core':
         specifier: workspace:*
         version: link:../core

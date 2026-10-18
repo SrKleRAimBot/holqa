@@ -1,0 +1,337 @@
+{
+  "application": {
+    "name": "shop"
+  },
+  "config": [
+    {
+      "kind": "secret",
+      "name": "DATABASE_URL",
+      "schema": {
+        "fingerprint": "sha256:bace620eed3ff35c125c4d0ab2b72a6473b00abff2af69db2be6f1b289ce5662",
+        "source": {
+          "fidelity": "verified",
+          "library": "fixture@1",
+          "vendor": "fixture"
+        }
+      }
+    },
+    {
+      "default": "info",
+      "kind": "variable",
+      "name": "LOG_LEVEL",
+      "schema": {
+        "fingerprint": "sha256:9798b2c3f74379d1da94b4736e3ff6cce5ad347df4ef92130160535774ce7457",
+        "source": {
+          "fidelity": "verified",
+          "library": "fixture@1",
+          "vendor": "fixture"
+        }
+      }
+    }
+  ],
+  "handlers": [
+    {
+      "id": "orders.get",
+      "schemas": {
+        "response.200": {
+          "fingerprint": "sha256:a5a0c9bf8df77722b54e6ba1e69e5fb89658997e1ad35a03ed6ee4a0414dffba",
+          "source": {
+            "fidelity": "verified",
+            "library": "fixture@1",
+            "vendor": "fixture"
+          }
+        }
+      },
+      "trigger": {
+        "kind": "http.route",
+        "options": {
+          "method": "GET",
+          "path": "/orders/:orderId"
+        },
+        "resource": {
+          "id": "shop-api",
+          "kind": "http.api"
+        }
+      }
+    },
+    {
+      "id": "orders.list",
+      "schemas": {},
+      "trigger": {
+        "kind": "http.route",
+        "options": {
+          "method": "GET",
+          "path": "/orders"
+        },
+        "resource": {
+          "id": "shop-api",
+          "kind": "http.api"
+        }
+      }
+    },
+    {
+      "id": "orders.process",
+      "schemas": {
+        "message": {
+          "fingerprint": "sha256:a5a0c9bf8df77722b54e6ba1e69e5fb89658997e1ad35a03ed6ee4a0414dffba",
+          "source": {
+            "fidelity": "verified",
+            "library": "fixture@1",
+            "vendor": "fixture"
+          }
+        }
+      },
+      "trigger": {
+        "kind": "queue.message",
+        "options": {
+          "concurrency": 4
+        },
+        "resource": {
+          "id": "order-placed",
+          "kind": "queue"
+        }
+      }
+    },
+    {
+      "id": "receipts.stored",
+      "schemas": {
+        "object": {
+          "fingerprint": "sha256:088561123ac010d0f269affd0a12e51dafd5d6cbce9daa865c9b27d669559e79",
+          "source": {
+            "fidelity": "verified",
+            "library": "fixture@1",
+            "vendor": "fixture"
+          }
+        }
+      },
+      "trigger": {
+        "kind": "bucket.object-created",
+        "options": {
+          "prefix": "incoming/"
+        },
+        "resource": {
+          "id": "receipts",
+          "kind": "bucket"
+        }
+      }
+    },
+    {
+      "id": "reports.nightly",
+      "schemas": {},
+      "trigger": {
+        "kind": "schedule.tick",
+        "options": {},
+        "resource": {
+          "id": "nightly-report",
+          "kind": "schedule"
+        }
+      }
+    }
+  ],
+  "manifestVersion": 1,
+  "requiredCapabilities": [
+    "bucket",
+    "bucket.access.private",
+    "http.api",
+    "queue",
+    "queue.dead-letter",
+    "queue.delivery.at-least-once",
+    "queue.max-attempts",
+    "schedule",
+    "schedule.overlap.skip",
+    "trigger.bucket.object-created",
+    "trigger.http.route",
+    "trigger.queue.message",
+    "trigger.schedule.tick"
+  ],
+  "resources": [
+    {
+      "config": {
+        "cron": "0 3 * * *",
+        "timezone": "UTC"
+      },
+      "id": "nightly-report",
+      "kind": "schedule",
+      "requirements": {
+        "overlap": "skip"
+      },
+      "schemas": {}
+    },
+    {
+      "config": {
+        "schemaVersion": 1
+      },
+      "id": "order-placed",
+      "kind": "queue",
+      "requirements": {
+        "deadLetter": true,
+        "delivery": "at-least-once",
+        "maxAttempts": 5
+      },
+      "schemas": {
+        "message": {
+          "fingerprint": "sha256:a5a0c9bf8df77722b54e6ba1e69e5fb89658997e1ad35a03ed6ee4a0414dffba",
+          "schemaVersion": 1,
+          "source": {
+            "fidelity": "verified",
+            "library": "fixture@1",
+            "vendor": "fixture"
+          }
+        }
+      }
+    },
+    {
+      "config": {},
+      "id": "receipts",
+      "kind": "bucket",
+      "requirements": {
+        "access": "private"
+      },
+      "schemas": {}
+    },
+    {
+      "config": {
+        "basePath": "/api"
+      },
+      "id": "shop-api",
+      "kind": "http.api",
+      "requirements": {},
+      "schemas": {}
+    }
+  ],
+  "runtime": "bun",
+  "schemas": {
+    "sha256:088561123ac010d0f269affd0a12e51dafd5d6cbce9daa865c9b27d669559e79": {
+      "dialect": "https://json-schema.org/draft/2020-12/schema",
+      "encoding": "json",
+      "format": "holqa.schema-contract/1",
+      "input": {
+        "jsonSchema": {
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "key",
+            "size"
+          ],
+          "type": "object"
+        },
+        "runtimeOnly": []
+      },
+      "output": {
+        "jsonSchema": {
+          "properties": {
+            "key": {
+              "type": "string"
+            },
+            "size": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "key",
+            "size"
+          ],
+          "type": "object"
+        },
+        "representable": true,
+        "runtimeOnly": []
+      }
+    },
+    "sha256:9798b2c3f74379d1da94b4736e3ff6cce5ad347df4ef92130160535774ce7457": {
+      "dialect": "https://json-schema.org/draft/2020-12/schema",
+      "encoding": "json",
+      "format": "holqa.schema-contract/1",
+      "input": {
+        "jsonSchema": {
+          "enum": [
+            "debug",
+            "info",
+            "warn"
+          ]
+        },
+        "runtimeOnly": []
+      },
+      "output": {
+        "jsonSchema": {
+          "enum": [
+            "debug",
+            "info",
+            "warn"
+          ]
+        },
+        "representable": true,
+        "runtimeOnly": []
+      }
+    },
+    "sha256:a5a0c9bf8df77722b54e6ba1e69e5fb89658997e1ad35a03ed6ee4a0414dffba": {
+      "dialect": "https://json-schema.org/draft/2020-12/schema",
+      "encoding": "json",
+      "format": "holqa.schema-contract/1",
+      "input": {
+        "jsonSchema": {
+          "properties": {
+            "orderId": {
+              "type": "string"
+            },
+            "quantity": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "orderId",
+            "quantity"
+          ],
+          "type": "object"
+        },
+        "runtimeOnly": []
+      },
+      "output": {
+        "jsonSchema": {
+          "properties": {
+            "orderId": {
+              "type": "string"
+            },
+            "quantity": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "orderId",
+            "quantity"
+          ],
+          "type": "object"
+        },
+        "representable": true,
+        "runtimeOnly": []
+      }
+    },
+    "sha256:bace620eed3ff35c125c4d0ab2b72a6473b00abff2af69db2be6f1b289ce5662": {
+      "dialect": "https://json-schema.org/draft/2020-12/schema",
+      "encoding": "json",
+      "format": "holqa.schema-contract/1",
+      "input": {
+        "jsonSchema": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "runtimeOnly": []
+      },
+      "output": {
+        "jsonSchema": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "representable": true,
+        "runtimeOnly": []
+      }
+    }
+  }
+}

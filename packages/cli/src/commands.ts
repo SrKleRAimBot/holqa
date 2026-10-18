@@ -9,14 +9,22 @@ export interface ProposedCommand {
 }
 
 /**
+ * Commands the CLI implements, with one-line summaries for the help output.
+ * `build` is implemented for `--manifest` only; bundling executable
+ * artifacts is planned.
+ */
+export const implementedCommands: readonly ProposedCommand[] = [
+  { name: "inspect", summary: "Analyze the application and print its resources, handlers, configuration and graph." },
+  { name: "build --manifest", summary: "Write the application's manifest and entry point map." }
+];
+
+/**
  * Commands described in the architecture documentation that the CLI will
  * eventually provide. None of them are implemented yet; invoking one reports
  * `HOLQA_CLI_NOT_IMPLEMENTED`.
  */
 export const proposedCommands: readonly ProposedCommand[] = [
   { name: "dev", summary: "Run the application locally with emulated resources." },
-  { name: "build", summary: "Compile the application into a manifest and runtime artifacts." },
-  { name: "inspect", summary: "Print the application resource graph." },
   { name: "doctor", summary: "Diagnose project configuration and environment problems." },
   { name: "invoke", summary: "Invoke a handler locally with a test event." },
   { name: "queue send", summary: "Send a message to a local queue." },

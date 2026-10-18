@@ -1,7 +1,7 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/bin.ts"],
+  entry: { index: "src/index.ts", bin: "src/bin.ts", analyze: "src/analysis/worker-entry.ts" },
   format: "esm",
   platform: "node",
   fixedExtension: false,

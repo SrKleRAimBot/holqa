@@ -1,0 +1,260 @@
+import type { EvaluatedModule } from "@holqa/compiler";
+import type {
+  Diagnostic,
+  SchemaAdapter
+} from "@holqa/core";
+
+import type { AnalysisReport } from "@/analysis/report";
+
+import {
+  existsSync,
+  readdirSync,
+  readFileSync,
+  statSync
+} from "node:fs";
+import {
+  join,
+  relative,
+  sep
+} from "node:path";
+import { pathToFileURL } from "node:url";
+
+import {
+  compileApplication,
+  hasErrors,
+  moduleEvaluationFailure,
+  selectHandlerModules,
+  sortDiagnostics
+} from "@holqa/compiler";
+import {
+  createDiagnostic,
+  diagnosticCodes,
+  getAppDescriptor,
+  getHandlerDescriptor,
+  isStandardSchema
+} from "@holqa/core";
+
+import { analysisReportFormat } from "@/analysis/report";
+
+/** What the analysis process is asked to analyze. */
+export interface AnalysisRequest {
+  /** The absolute path of the application root: the directory of the application module. */
+  readonly root: string;
+  /** The application module's file name relative to the root, conventionally `infra.ts`. */
+  readonly appModule: string;
+}
+
+/** Directories never searched for handler modules or sources. */
+const skippedDirectories = new Set(["node_modules"]);
+
+/** File extensions whose text is indexed to add line numbers to diagnostics. */
+const sourceExtensions = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+
+/** Larger files are not indexed for diagnostic locations. */
+const maxIndexedSourceBytes = 512 * 1024;
+
+/** Standard Schema vendors that can name an adapter package (`@holqa/<vendor>`). */
+const adapterVendorPattern = /^[a-z][a-z0-9-]*$/;
+
+/**
+ * Evaluates an application and its handler modules and compiles them into a
+ * report. This runs the application's code, in the current process; the CLI
+ * calls it only inside the dedicated analysis process.
+ *
+ * Steps: import the application module; list the files under the root
+ * (skipping `node_modules` and dot directories); select handler modules with
+ * the application's patterns; import them in path order; load schema adapters
+ * named `@holqa/<vendor>` that the application can resolve; compile.
+ * Every problem becomes a diagnostic; no manifest is reported when any is an error.
+ *
+ * @param request - The application root and module.
+ * @returns The analysis report, JSON data only.
+ */
+export async function runAnalysis(request: AnalysisRequest): Promise<AnalysisReport> {
+  const diagnostics: Diagnostic[] = [];
+  const appPath = join(request.root, request.appModule);
+  if (!existsSync(appPath)) {
+    return report(false, [createDiagnostic({
+      code: diagnosticCodes.appNotFound,
+      severity: "error",
+      message: `The application module "${request.appModule}" does not exist.`,
+      hint: "Run the command in the directory that contains infra.ts, or pass --app <path>."
+    })]);
+  }
+
+  let app: unknown;
+  try {
+    app = (await import(pathToFileURL(appPath).href) as { readonly default?: unknown }).default;
+  } catch (error) {
+    return report(false, [moduleEvaluationFailure(request.appModule, error)]);
+  }
+  const descriptor = getAppDescriptor(app);
+
+  const files = listFiles(request.root);
+  const modules: EvaluatedModule[] = [];
+  if (descriptor !== undefined) {
+    const selection = selectHandlerModules(files, { include: descriptor.handlers.include, exclude: descriptor.handlers.exclude ?? [] }, request.appModule);
+    diagnostics.push(...selection.diagnostics);
+    for (const path of selection.modules) {
+      try {
+        modules.push({ path, exports: { ...await import(pathToFileURL(join(request.root, path)).href) as Record<string, unknown> } });
+      } catch (error) {
+        diagnostics.push(moduleEvaluationFailure(path, error));
+      }
+    }
+  }
+
+  const result = await compileApplication({
+    app,
+    appModule: request.appModule,
+    modules,
+    runtime: "bun",
+    adapters: await loadAdapters(request.root, schemaVendors(app, modules)),
+    sources: readSources(request.root, files)
+  });
+  const all = sortDiagnostics([...diagnostics, ...result.diagnostics]);
+  if (!result.ok || hasErrors(all))
+    return report(false, all);
+  return { ...report(true, all), manifest: result.manifest, entrypoints: result.entrypoints };
+}
+
+/**
+ * Builds a report without a manifest.
+ *
+ * @param ok - Whether analysis succeeded.
+ * @param diagnostics - Every diagnostic, sorted.
+ * @returns A report in the analysis report format, without manifest or entry points.
+ */
+function report(ok: boolean, diagnostics: readonly Diagnostic[]): AnalysisReport {
+  return { format: analysisReportFormat, ok, diagnostics };
+}
+
+/**
+ * Lists every regular file under a directory as root-relative POSIX paths.
+ * `node_modules` and directories whose name starts with `.` (such as `.git`
+ * and the default `.holqa` build output) are skipped, and symbolic links are
+ * not followed, so discovery never leaves the application root.
+ *
+ * @param root - The application root.
+ * @returns Root-relative paths in no particular order.
+ */
+function listFiles(root: string): string[] {
+  const files: string[] = [];
+  /**
+   * Adds the regular files of a directory and recurses into its eligible subdirectories.
+   *
+   * @param directory - An absolute directory path inside the root.
+   */
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory() && !entry.name.startsWith(".") && !skippedDirectories.has(entry.name))
+        visit(path);
+      else if (entry.isFile())
+        files.push(relative(root, path).split(sep).join("/"));
+    }
+  };
+  visit(root);
+  return files;
+}
+
+/**
+ * Reads the text of source files, used only to add line and column numbers to diagnostics.
+ *
+ * @param root - The application root.
+ * @param files - Root-relative file paths.
+ * @returns Source texts keyed by root-relative path.
+ */
+function readSources(root: string, files: readonly string[]): Record<string, string> {
+  const sources: Record<string, string> = {};
+  for (const file of files) {
+    if (!sourceExtensions.some(extension => file.endsWith(extension)))
+      continue;
+    const path = join(root, file);
+    if (statSync(path).size <= maxIndexedSourceBytes)
+      sources[file] = readFileSync(path, "utf8");
+  }
+  return sources;
+}
+
+/**
+ * Collects the Standard Schema vendors used by the application's resources,
+ * configuration and handlers.
+ *
+ * @param app - The application module's default export.
+ * @param modules - The evaluated handler modules.
+ * @returns The vendor names, sorted.
+ */
+function schemaVendors(app: unknown, modules: readonly EvaluatedModule[]): string[] {
+  const vendors = new Set<string>();
+  /**
+   * Records the vendor of a schema, or of every schema nested in an object such as a `schemas` record.
+   *
+   * @param schemas - A schema, a record of schemas, or anything else (ignored).
+   */
+  const collect = (schemas: unknown): void => {
+    if (isStandardSchema(schemas)) {
+      vendors.add(schemas["~standard"].vendor);
+      return;
+    }
+    if (typeof schemas === "object" && schemas !== null) {
+      for (const value of Object.values(schemas))
+        collect(value);
+    }
+  };
+  const descriptor = getAppDescriptor(app);
+  for (const resource of descriptor?.resources ?? [])
+    collect(resource.schemas);
+  for (const entry of descriptor?.config ?? [])
+    collect(entry.schema);
+  for (const module of modules) {
+    for (const value of Object.values(module.exports))
+      collect(getHandlerDescriptor(value)?.schemas);
+  }
+  return [...vendors].sort();
+}
+
+/**
+ * Loads the schema adapter package for each vendor, by convention
+ * `@holqa/<vendor>` (for example `@holqa/zod`), resolved from the application
+ * root. A vendor without an installed adapter package gets none; the compiler
+ * then falls back to the schema's own Standard JSON Schema converter with a
+ * warning, or rejects the schema.
+ *
+ * @param root - The application root, where packages are resolved from.
+ * @param vendors - The vendors the application uses.
+ * @returns The adapters found, in vendor order.
+ */
+async function loadAdapters(root: string, vendors: readonly string[]): Promise<SchemaAdapter[]> {
+  const adapters: SchemaAdapter[] = [];
+  for (const vendor of vendors) {
+    if (!adapterVendorPattern.test(vendor) || vendor === "holqa")
+      continue;
+    let resolved: string;
+    try {
+      resolved = Bun.resolveSync(`@holqa/${vendor}`, join(root, "package.json"));
+    } catch {
+      // No adapter package is installed for this vendor; the compiler reports what that means for each schema.
+      continue;
+    }
+    const exports = await import(pathToFileURL(resolved).href) as Record<string, unknown>;
+    const adapter = Object.values(exports).find((value): value is SchemaAdapter => isAdapterFor(value, vendor));
+    if (adapter !== undefined)
+      adapters.push(adapter);
+  }
+  return adapters;
+}
+
+/**
+ * Reports whether a value is a schema adapter for a vendor.
+ *
+ * @param value - A module export.
+ * @param vendor - The Standard Schema vendor.
+ * @returns `true` for an object with that `vendor`, a `library` name and a `describe` function.
+ */
+function isAdapterFor(value: unknown, vendor: string): boolean {
+  return typeof value === "object" && value !== null
+    && "vendor" in value && value.vendor === vendor
+    && "library" in value && typeof value.library === "string"
+    && "describe" in value && typeof value.describe === "function";
+}

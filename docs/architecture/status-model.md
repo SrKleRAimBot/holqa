@@ -24,11 +24,12 @@ Only the following items carry the **Implemented** label. Everything else in the
 | `@holqa/core` | `Result`, `ok`, `err`; `Diagnostic`, `createDiagnostic`, `formatDiagnostic`; the `diagnosticCodes` registry; `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`, `checkIdentities`; `HolqaError`; JSON and Standard Schema types, `validateInput` with structured issues; JSON wire payloads (`toWirePayload`, `prepareWirePayload`), message envelopes and codecs, payload codecs; the `SchemaAdapter` contract; the descriptor protocol with resource and trigger kind registries and readers; `RuntimeBinding`, `bindApp`, `resolveDriver`, `checkCapabilities` |
 | `@holqa/sdk` | `defineApp`, `defineResources`, `composeResources`; `queue`, `bucket`, `schedule`, `http.api` (declaration only); `secret`, `variable`; typed handles and handler registration for queues, buckets and schedules; compile-time identifier and duplicate checks |
 | `@holqa/testing` | Compile-time type assertions (`Equal`, `Expect`, `Accepts`, `HasTypeError`, `assertType`, ...) |
-| `@holqa/compiler` | `canonicalJsonStringify`, `CanonicalJsonError`, `CanonicalJsonValue`; schema normalization (`normalizeSchema`, `describeSchemaContract`, `canonicalizeJsonSchema`), `fingerprintSchemaContract`, `checkSchemaCompatibility` |
+| `@holqa/compiler` | `canonicalJsonStringify`, `CanonicalJsonError`, `CanonicalJsonValue`; schema normalization (`normalizeSchema`, `describeSchemaContract`, `canonicalizeJsonSchema`), `fingerprintSchemaContract`, `checkSchemaCompatibility`; `compileApplication` (handler discovery, graph validation, manifest version 1, entry point map), `selectHandlerModules`, `discoverHandlers`, `validateManifest`, `validateEntrypoints`, `buildResourceGraph`, the manifest and entry point JSON Schemas |
 | `@holqa/zod` | The Zod 4 schema adapter (`zodAdapter`, `createZodAdapter`, `isZodSchema`) |
-| `@holqa/cli` | `holqa --help`, `--version`, `--json`; structured errors for proposed and unknown commands |
+| `@holqa/cli` | `holqa --help`, `--version`, `--json`; `holqa inspect`; `holqa build --manifest`; analysis in a separate process (`createProcessHost`); structured errors for proposed and unknown commands |
 | `examples/package-smoke` | Verification that built packages are consumable through their public exports |
 | `examples/schema-evolution` | End-to-end schema contract corpus with Zod |
+| `examples/manifest` | End-to-end compilation of SDK applications through the built CLI |
 | Repository tooling | pnpm workspace, Turborepo tasks, ESLint configuration, boundary checks, agent instruction sync |
 
 See [packages reference](../reference/packages.md), [CLI reference](../reference/cli.md), and [diagnostic codes](../reference/diagnostic-codes.md) for details.
@@ -45,7 +46,7 @@ Every concept and architecture document begins with a status line directly below
 > **Status:** Accepted design — not implemented.
 ```
 
-When a document mixes statuses (for example, the [compiler](compiler.md) document describes an implemented canonical JSON serializer and a planned pipeline), the status line summarizes the overall state and individual sections or table rows carry their own labels.
+When a document mixes statuses (for example, the [compiler](compiler.md) document describes an implemented manifest pipeline and planned client generation and bundling), the status line summarizes the overall state and individual sections or table rows carry their own labels.
 
 ### Inline labels
 
@@ -55,7 +56,7 @@ Use the exact bold terms in tables and prose when the status of a specific item 
 | Capability | Status |
 | --- | --- |
 | Canonical JSON serialization | **Implemented** |
-| Manifest schema | **Planned** |
+| Client generation | **Planned** |
 ```
 
 ### Illustrative code
@@ -83,7 +84,7 @@ Use the [ADR template](decisions/template.md) for new decisions.
 1. Do not describe an unimplemented capability in the present tense as if it works ("Holqa retries failed messages"). Write "Holqa is designed to retry…" or label the section.
 2. Do not upgrade a status without the evidence listed above.
 3. When unsure, choose the weaker status.
-4. Proposed CLI commands must always be described as not implemented until they are. Today they exit with `HOLQA_CLI_NOT_IMPLEMENTED`.
+4. Proposed CLI commands must always be described as not implemented until they are. Today they exit with `HOLQA_CLI_NOT_IMPLEMENTED`. Only `holqa inspect` and `holqa build --manifest` are implemented workflow commands.
 
 ## Related
 

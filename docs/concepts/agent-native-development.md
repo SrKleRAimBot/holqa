@@ -1,6 +1,6 @@
 # Agent-native development
 
-> **Status:** Planned, with **Implemented** foundations. The CLI's `--json` output and the structured diagnostic model with stable `HOLQA_*` codes are **Implemented**. Repository agent instructions and skills are **Implemented**. Agent-facing framework tooling (graph inspection, local invocation, MCP server) is **Planned**.
+> **Status:** Planned, with **Implemented** foundations. The CLI's `--json` output, the structured diagnostic model with stable `HOLQA_*` codes, and graph inspection (`holqa inspect --json`) are **Implemented**. Repository agent instructions and skills are **Implemented**. Local invocation and an MCP server are **Planned**.
 
 Holqa is designed for both human developers and autonomous coding agents. Tooling that is predictable for an agent (structured output, stable error codes, deterministic behavior, safe defaults) is also better for humans and CI.
 
@@ -8,14 +8,14 @@ Holqa is designed for both human developers and autonomous coding agents. Toolin
 
 | Capability | Planned mechanism | Status |
 | --- | --- | --- |
-| Inspect the resource graph | `holqa inspect --json` | Planned |
-| Understand HTTP/RPC operations and event handlers | Manifest and OpenAPI output | Planned |
+| Inspect the resource graph | `holqa inspect --json` | **Implemented** |
+| Understand HTTP/RPC operations and event handlers | Manifest and OpenAPI output | **Implemented** for event handlers in the manifest; HTTP/RPC operations and OpenAPI planned |
 | Add a resource or handler | Public skills (`define-resources`, `add-queue-consumer`, …) | Skills drafted; framework planned |
-| Infer correct types | Source-based inference ([type safety](type-safety-and-schemas.md)) | Planned |
+| Infer correct types | Source-based inference ([type safety](type-safety-and-schemas.md)) | **Implemented** |
 | Generate clients | Compiler client generation | Planned |
 | Run local tests and simulated events | `holqa invoke`, `holqa queue send`, `@holqa/testing` | Planned |
-| Diagnose compiler and runtime failures | Structured diagnostics with stable codes | **Implemented** (model); compiler/runtime planned |
-| Inspect infrastructure requirements | Manifest capability requirements | Planned |
+| Diagnose compiler and runtime failures | Structured diagnostics with stable codes | **Implemented** (model and compiler); runtime planned |
+| Inspect infrastructure requirements | Manifest capability requirements | **Implemented** |
 | Generate deployment plans | Provisioning provider plans | Planned |
 | Verify behavior through logs and traces | Structured logs; OpenTelemetry integration | Planned |
 
@@ -43,7 +43,7 @@ interface Diagnostic {
 }
 ```
 
-`formatDiagnostic` renders a diagnostic for humans as `file:line:col severity CODE: message`, followed by an indented `hint:` line when present. The same object serializes to JSON for agents. The current registry contains four codes; see [diagnostic codes](../reference/diagnostic-codes.md).
+`formatDiagnostic` renders a diagnostic for humans as `file:line:col severity CODE: message`, followed by an indented `hint:` line when present. The same object serializes to JSON for agents. See [diagnostic codes](../reference/diagnostic-codes.md).
 
 ### `--json` in the CLI
 
@@ -59,6 +59,10 @@ $ echo $?
 `holqa --version --json` prints `{"version":"…"}`. Exit codes are `0` (success), `1` (failure, including not implemented), and `2` (usage error, such as an unknown command). See the [CLI reference](../reference/cli.md).
 
 An agent can therefore check whether a command exists by looking for `HOLQA_CLI_NOT_IMPLEMENTED` rather than guessing from help text.
+
+### Graph inspection
+
+`holqa inspect --json` evaluates the application and prints one canonical JSON document with the diagnostics, the entry point map, the resource graph and the manifest. `holqa build --manifest` writes the manifest and entry point map to files. Both run the application's code; see the [CLI reference](../reference/cli.md) and the [compiler specification](../reference/compiler-specification.md).
 
 ### Repository agent instructions and skills
 
@@ -76,7 +80,7 @@ See [agent instructions](../contributing/agent-instructions.md) and [ADR 0008](.
 
 ### Public skills for application developers
 
-The top-level [`skills/`](../../skills/README.md) directory holds skills intended for developers building applications with Holqa (getting started, defining resources, adding queue consumers, schema evolution, debugging events, and others). They follow portable Agent Skills conventions rather than being specific to one agent product. Because the framework is not implemented, these skills describe intended workflows and must clearly distinguish proposed commands from executable ones. They are not published.
+The top-level [`skills/`](../../skills/README.md) directory holds skills intended for developers building applications with Holqa (getting started, defining resources, adding queue consumers, schema evolution, debugging events, and others). They follow portable Agent Skills conventions rather than being specific to one agent product. Because most of the framework is not implemented, these skills describe intended workflows and must clearly distinguish proposed commands from executable ones. They are not published.
 
 ## Planned
 
@@ -86,7 +90,7 @@ Future Holqa tooling may expose a local Model Context Protocol (MCP) server so a
 
 ### Inspection and simulation
 
-`holqa inspect`, `holqa invoke`, `holqa queue send`, `holqa storage put`, and `holqa cron run` are proposed commands intended to give agents a closed loop: change code, simulate an event, read structured results.
+`holqa invoke`, `holqa queue send`, `holqa storage put`, and `holqa cron run` are proposed commands intended to give agents a closed loop: change code, simulate an event, read structured results. Together with the implemented `holqa inspect`, they would let an agent see the graph and then exercise it.
 
 ## Safety
 

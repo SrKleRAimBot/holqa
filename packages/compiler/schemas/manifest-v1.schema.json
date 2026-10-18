@@ -1,0 +1,733 @@
+{
+  "$defs": {
+    "configEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "default": true,
+        "kind": {
+          "enum": [
+            "secret",
+            "variable"
+          ]
+        },
+        "name": {
+          "pattern": "^[A-Za-z_]\\w*$",
+          "type": "string"
+        },
+        "schema": {
+          "$ref": "#/$defs/schemaReference"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "schema"
+      ],
+      "type": "object"
+    },
+    "fingerprint": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "handler": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "schemas": {
+          "$ref": "#/$defs/schemaReferences"
+        },
+        "trigger": {
+          "$ref": "#/$defs/trigger"
+        }
+      },
+      "required": [
+        "id",
+        "trigger",
+        "schemas"
+      ],
+      "type": "object"
+    },
+    "identifier": {
+      "maxLength": 63,
+      "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "positiveInteger": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "resource": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/resource-queue"
+        },
+        {
+          "$ref": "#/$defs/resource-bucket"
+        },
+        {
+          "$ref": "#/$defs/resource-schedule"
+        },
+        {
+          "$ref": "#/$defs/resource-http-api"
+        }
+      ]
+    },
+    "resource-bucket": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "additionalProperties": false,
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "kind": {
+          "const": "bucket"
+        },
+        "requirements": {
+          "additionalProperties": false,
+          "properties": {
+            "access": {
+              "enum": [
+                "private",
+                "public-read"
+              ]
+            }
+          },
+          "required": [
+            "access"
+          ],
+          "type": "object"
+        },
+        "schemas": {
+          "$ref": "#/$defs/schemaReferences"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "config",
+        "requirements",
+        "schemas"
+      ],
+      "type": "object"
+    },
+    "resource-http-api": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "additionalProperties": false,
+          "properties": {
+            "basePath": {
+              "pattern": "^/$|^(?:/[\\w.~-]+)+$",
+              "type": "string"
+            },
+            "docs": {
+              "additionalProperties": false,
+              "properties": {
+                "title": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "version": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title",
+                "version"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "basePath"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "kind": {
+          "const": "http.api"
+        },
+        "requirements": {
+          "additionalProperties": false,
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "schemas": {
+          "$ref": "#/$defs/schemaReferences"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "config",
+        "requirements",
+        "schemas"
+      ],
+      "type": "object"
+    },
+    "resource-queue": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "additionalProperties": false,
+          "properties": {
+            "schemaVersion": {
+              "$ref": "#/$defs/positiveInteger"
+            }
+          },
+          "required": [
+            "schemaVersion"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "kind": {
+          "const": "queue"
+        },
+        "requirements": {
+          "additionalProperties": false,
+          "properties": {
+            "deadLetter": {
+              "type": "boolean"
+            },
+            "delivery": {
+              "enum": [
+                "at-least-once"
+              ]
+            },
+            "maxAttempts": {
+              "$ref": "#/$defs/positiveInteger"
+            }
+          },
+          "required": [
+            "delivery",
+            "deadLetter"
+          ],
+          "type": "object"
+        },
+        "schemas": {
+          "$ref": "#/$defs/schemaReferences"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "config",
+        "requirements",
+        "schemas"
+      ],
+      "type": "object"
+    },
+    "resource-schedule": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "additionalProperties": false,
+          "properties": {
+            "cron": {
+              "pattern": "^[\\w*?,/-]+(?: [\\w*?,/-]+){4}$",
+              "type": "string"
+            },
+            "timezone": {
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "cron",
+            "timezone"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "kind": {
+          "const": "schedule"
+        },
+        "requirements": {
+          "additionalProperties": false,
+          "properties": {
+            "overlap": {
+              "enum": [
+                "skip",
+                "allow"
+              ]
+            }
+          },
+          "required": [
+            "overlap"
+          ],
+          "type": "object"
+        },
+        "schemas": {
+          "$ref": "#/$defs/schemaReferences"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "config",
+        "requirements",
+        "schemas"
+      ],
+      "type": "object"
+    },
+    "runtimeOnlyConstraint": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "check",
+            "coercion",
+            "fallback",
+            "pipe",
+            "preprocess",
+            "refinement",
+            "rewrite"
+          ]
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "detail"
+      ],
+      "type": "object"
+    },
+    "schemaContract": {
+      "additionalProperties": false,
+      "properties": {
+        "dialect": {
+          "const": "https://json-schema.org/draft/2020-12/schema"
+        },
+        "encoding": {
+          "const": "json"
+        },
+        "format": {
+          "const": "holqa.schema-contract/1"
+        },
+        "input": {
+          "$ref": "#/$defs/schemaSide"
+        },
+        "output": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "jsonSchema": {
+                  "type": "object"
+                },
+                "representable": {
+                  "const": true
+                },
+                "runtimeOnly": {
+                  "items": {
+                    "$ref": "#/$defs/runtimeOnlyConstraint"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "representable",
+                "jsonSchema",
+                "runtimeOnly"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "problem": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "hint": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "reason": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "reason"
+                  ],
+                  "type": "object"
+                },
+                "representable": {
+                  "const": false
+                }
+              },
+              "required": [
+                "representable",
+                "problem"
+              ],
+              "type": "object"
+            }
+          ]
+        }
+      },
+      "required": [
+        "format",
+        "dialect",
+        "encoding",
+        "input",
+        "output"
+      ],
+      "type": "object"
+    },
+    "schemaReference": {
+      "additionalProperties": false,
+      "properties": {
+        "fingerprint": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "schemaVersion": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "source": {
+          "$ref": "#/$defs/schemaSource"
+        }
+      },
+      "required": [
+        "fingerprint",
+        "source"
+      ],
+      "type": "object"
+    },
+    "schemaReferences": {
+      "additionalProperties": {
+        "$ref": "#/$defs/schemaReference"
+      },
+      "propertyNames": {
+        "pattern": "^(?:message|object|params|query|body|value|response\\.[1-5][0-9]{2})$",
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "schemaSide": {
+      "additionalProperties": false,
+      "properties": {
+        "jsonSchema": {
+          "type": "object"
+        },
+        "runtimeOnly": {
+          "items": {
+            "$ref": "#/$defs/runtimeOnlyConstraint"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "jsonSchema",
+        "runtimeOnly"
+      ],
+      "type": "object"
+    },
+    "schemaSource": {
+      "additionalProperties": false,
+      "properties": {
+        "fidelity": {
+          "enum": [
+            "verified",
+            "unverified"
+          ]
+        },
+        "library": {
+          "type": "string"
+        },
+        "vendor": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "vendor",
+        "library",
+        "fidelity"
+      ],
+      "type": "object"
+    },
+    "trigger": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/trigger-queue-message"
+        },
+        {
+          "$ref": "#/$defs/trigger-bucket-object-created"
+        },
+        {
+          "$ref": "#/$defs/trigger-schedule-tick"
+        },
+        {
+          "$ref": "#/$defs/trigger-http-route"
+        }
+      ]
+    },
+    "trigger-bucket-object-created": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "bucket.object-created"
+        },
+        "options": {
+          "additionalProperties": false,
+          "properties": {
+            "prefix": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "resource": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "kind": {
+              "const": "bucket"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "resource",
+        "options"
+      ],
+      "type": "object"
+    },
+    "trigger-http-route": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "http.route"
+        },
+        "options": {
+          "additionalProperties": false,
+          "properties": {
+            "method": {
+              "enum": [
+                "GET",
+                "POST",
+                "PUT",
+                "PATCH",
+                "DELETE"
+              ]
+            },
+            "path": {
+              "pattern": "^/$|^(?:/(?:[\\w.~-]+|:[A-Za-z_]\\w*))+$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "method",
+            "path"
+          ],
+          "type": "object"
+        },
+        "resource": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "kind": {
+              "const": "http.api"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "resource",
+        "options"
+      ],
+      "type": "object"
+    },
+    "trigger-queue-message": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "queue.message"
+        },
+        "options": {
+          "additionalProperties": false,
+          "properties": {
+            "concurrency": {
+              "$ref": "#/$defs/positiveInteger"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "resource": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "kind": {
+              "const": "queue"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "resource",
+        "options"
+      ],
+      "type": "object"
+    },
+    "trigger-schedule-tick": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "schedule.tick"
+        },
+        "options": {
+          "additionalProperties": false,
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "resource": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/identifier"
+            },
+            "kind": {
+              "const": "schedule"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "resource",
+        "options"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "urn:holqa:schema:manifest:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "application": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "$ref": "#/$defs/identifier"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "config": {
+      "items": {
+        "$ref": "#/$defs/configEntry"
+      },
+      "type": "array"
+    },
+    "handlers": {
+      "items": {
+        "$ref": "#/$defs/handler"
+      },
+      "type": "array"
+    },
+    "manifestVersion": {
+      "const": 1
+    },
+    "requiredCapabilities": {
+      "items": {
+        "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$",
+        "type": "string"
+      },
+      "type": "array",
+      "uniqueItems": true
+    },
+    "resources": {
+      "items": {
+        "$ref": "#/$defs/resource"
+      },
+      "type": "array"
+    },
+    "runtime": {
+      "enum": [
+        "bun"
+      ]
+    },
+    "schemas": {
+      "additionalProperties": {
+        "$ref": "#/$defs/schemaContract"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/fingerprint"
+      },
+      "type": "object"
+    }
+  },
+  "required": [
+    "manifestVersion",
+    "application",
+    "runtime",
+    "resources",
+    "handlers",
+    "config",
+    "requiredCapabilities",
+    "schemas"
+  ],
+  "title": "Holqa application manifest, version 1",
+  "type": "object"
+}

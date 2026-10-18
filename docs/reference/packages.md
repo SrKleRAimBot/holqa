@@ -1,18 +1,19 @@
 # Packages
 
-> **Status:** Reference for the current repository state. Five framework packages, one integration package and three example packages (`package-smoke` and `schema-evolution` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
+> **Status:** Reference for the current repository state. Five framework packages, one integration package and four example packages (`package-smoke`, `schema-evolution` and `manifest` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
 
-All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single entry point (`.`) through their `exports` map. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
+All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single code entry point (`.`) through their `exports` map. `@holqa/compiler` additionally exports its JSON Schema files. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
 
 ## Summary
 
 | Package | Path | Status | Purpose |
 | --- | --- | --- | --- |
 | `@holqa/core` | `packages/core` | **Implemented** (contracts) | Framework-neutral contracts: diagnostics, identity, descriptor protocol, resource and trigger registries, runtime binding. |
-| `@holqa/compiler` | `packages/compiler` | **Implemented** (canonical JSON, schema contracts) | Compiler; today deterministic serialization, schema normalization, fingerprints and compatibility checks. |
-| `@holqa/cli` | `packages/cli` | **Implemented** (help, version, `--json`) | The `holqa` command-line interface. |
+| `@holqa/compiler` | `packages/compiler` | **Implemented** (manifest pipeline, schema contracts) | Handler discovery, graph validation, manifest version 1, schema contracts and compatibility checks. |
+| `@holqa/cli` | `packages/cli` | **Implemented** (help, version, `--json`, `inspect`, `build --manifest`) | The `holqa` command-line interface. |
 | `@holqa/example-package-smoke` | `examples/package-smoke` | **Implemented** | Verifies built package outputs. |
 | `@holqa/example-schema-evolution` | `examples/schema-evolution` | **Implemented** | End-to-end schema contract corpus with Zod. |
+| `@holqa/example-manifest` | `examples/manifest` | **Implemented** | End-to-end compilation of SDK applications through the built CLI. |
 | `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model) | Public developer-facing SDK. |
 | `@holqa/runtime-bun` | `packages/runtime-bun` | Planned | Bun execution and invocation adapters. |
 | `@holqa/local` | `packages/local` | Planned | Local execution and resource emulation. |
@@ -90,7 +91,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | --- | --- | --- |
 | `defineApp(definition)` | Function | Validates and defines an application; returns `{ name, resources, env, "~holqa" }`. See [application model](../concepts/application-model.md). |
 | `defineResources(group)`, `composeResources(...groups)` | Functions | Typed resource groups for registries split across modules; `composeResources` rejects duplicate aliases. |
-| `queue`, `bucket`, `schedule`, `http.api` | Functions | Resource factories returning typed handles. |
+| `queue`, `bucket`, `schedule`, `http.api` | Functions | Resource factories returning typed handles. The object-created event schema of `bucket(...).onObjectCreated` implements Standard JSON Schema (vendor `holqa`), so compilers can record it. |
 | `secret(schema)`, `variable(schema, { default? })` | Functions | Configuration entries. |
 | `App`, `AppDefinition`, `ConfigValues`, `HandlerDiscoveryOptions` | Types | Application types. |
 | `QueueHandle`, `BucketHandle`, `ScheduleHandle`, `HttpApiHandle`, `ResourceHandle`, `AnyResource`, `ResourceRecord` | Types | Handle types. |
@@ -116,13 +117,28 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/compiler`
 
 - **Path:** `packages/compiler`
-- **Status:** Implemented (canonical JSON, schema contracts). Private. The compilation pipeline and manifest schema are planned ([compiler](../architecture/compiler.md)).
-- **Purpose:** Resource analysis, manifest IR, diagnostics, and compilation.
-- **Entry point:** `@holqa/compiler` → `dist/index.js`, `dist/index.d.ts`.
+- **Status:** Implemented (manifest pipeline, canonical JSON, schema contracts). Private. Client generation, bundling and comparison with a deployed manifest are planned ([compiler](../architecture/compiler.md)).
+- **Purpose:** Turns an evaluated application into a deterministic manifest and entry point map, with structured diagnostics. Runtime-neutral: hosts evaluate modules and pass them in. See the [compiler specification](compiler-specification.md).
+- **Entry points:** `@holqa/compiler` → `dist/index.js`, `dist/index.d.ts`; `@holqa/compiler/manifest-v1.schema.json`; `@holqa/compiler/entrypoints-v1.schema.json`.
 - **Internal dependencies:** `@holqa/core`.
 
 | Export | Kind | Description |
 | --- | --- | --- |
+| `compileApplication(input)` | Function | Compiles `{ app, appModule, modules, runtime, adapters?, sources? }` into `{ ok: true, manifest, entrypoints, diagnostics }` or `{ ok: false, diagnostics }`. Collects every problem. |
+| `CompileApplicationInput`, `CompileApplicationResult`, `CompileApplicationSuccess`, `CompileApplicationFailure` | Types | Its input and result. |
+| `selectHandlerModules(files, discovery, appModule)`, `HandlerModuleSelection` | Function, type | Selects handler modules from root-relative file paths with the application's patterns. |
+| `compileGlob(pattern)`, `GlobMatcher` | Function, type | Host-independent glob matching (`*`, `?`, `**`, `{a,b}`). |
+| `portableModulePath(path)` | Function | Normalizes a root-relative path; `undefined` for absolute or escaping paths. |
+| `discoverHandlers(modules)`, `EvaluatedModule`, `DiscoveredHandler`, `HandlerDiscoveryResult` | Function, types | Finds handler registrations among evaluated modules' exports. |
+| `Manifest`, `ManifestApplication`, `ManifestResource`, `ManifestResourceOf`, `ManifestHandler`, `ManifestTrigger`, `ManifestTriggerOf`, `ManifestConfigEntry`, `ManifestSchema`, `ManifestSchemaReference`, `ManifestSchemaReferences`, `ManifestRuntime`, `ManifestVersion` | Types | Manifest version 1. |
+| `manifestVersion`, `manifestRuntimes`, `manifestJsonSchema` | Constants | `1`, `["bun"]`, and the manifest's JSON Schema. |
+| `EntrypointMap`, `HandlerEntrypoint`, `entrypointsFormat`, `entrypointsJsonSchema` | Types, constants | The `holqa.entrypoints/1` map and its JSON Schema. |
+| `serializeManifest(manifest)`, `serializeEntrypoints(map)` | Functions | Canonical JSON text. |
+| `fingerprintManifest(manifest)`, `manifestFingerprintPrefix` | Function, constant | `sha256:` over the canonical manifest text. |
+| `validateManifest(value)`, `validateEntrypoints(value, manifest)` | Functions | Readers for untrusted documents: `HOLQA_MANIFEST_INVALID`, `HOLQA_MANIFEST_VERSION_UNSUPPORTED`. |
+| `buildResourceGraph(manifest)`, `ResourceGraph`, `GraphNode`, `GraphEdge`, `GraphRelation` | Function, types | The graph of declared relationships. |
+| `moduleEvaluationFailure(path, error)` | Function | `HOLQA_MODULE_EVALUATION_FAILED` for an error thrown while a host imported a module. |
+| `sortDiagnostics(diagnostics)`, `hasErrors(diagnostics)` | Functions | Deterministic ordering; error detection. |
 | `canonicalJsonStringify(value)` | Function | Deterministic JSON: sorted keys at every depth, 2-space indent, no trailing newline, `-0` → `0`. Throws `CanonicalJsonError` for values with no canonical form. |
 | `CanonicalJsonError` | Class | Error with a `diagnostic` property (code `HOLQA_MANIFEST_NOT_SERIALIZABLE`); the message includes the JSON path, such as `$.resources[0].id`. |
 | `CanonicalJsonValue` | Type | `null`, boolean, number, string, arrays, and plain objects of these. |
@@ -154,17 +170,19 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/cli`
 
 - **Path:** `packages/cli`
-- **Status:** Implemented (help, version, `--json`). Private. Workflow commands are proposed. See [CLI reference](cli.md).
+- **Status:** Implemented (help, version, `--json`, `inspect`, `build --manifest`). Private. Other workflow commands and bundling are proposed. See [CLI reference](cli.md).
 - **Purpose:** Holqa developer CLI.
-- **Entry points:** library `@holqa/cli` → `dist/index.js`; binary `holqa` → `dist/bin.js` (runs on Bun, `engines.bun >= 1.3.13`).
-- **Internal dependencies:** `@holqa/core`. Allowed in future: `@holqa/compiler`, `@holqa/local`, `@holqa/runtime-bun`.
+- **Entry points:** library `@holqa/cli` → `dist/index.js`; binary `holqa` → `dist/bin.js`; analysis process entry `dist/analyze.js` (internal, spawned by the CLI). Runs on Bun, `engines.bun >= 1.3.13`.
+- **Internal dependencies:** `@holqa/core`, `@holqa/compiler`. Allowed in future: `@holqa/local`, `@holqa/runtime-bun`.
 
 | Export | Kind | Description |
 | --- | --- | --- |
-| `runCli(argv, io, version)` | Function | Runs the CLI against split arguments; writes through `io`; returns an exit code. No other side effects. |
+| `runCli(argv, io, version, host?)` | Function | Runs the CLI against split arguments; writes through `io`; resolves to an exit code. `host` defaults to `createProcessHost()`. |
 | `CliIo` | Type | `{ stdout(text), stderr(text) }`. |
+| `CliHost`, `AnalysisOutcome`, `AnalysisSuccess`, `AnalysisFailure` | Types | Working directory, analysis and file writing, injected for tests. |
+| `createProcessHost(options?)`, `ProcessHostOptions`, `forwardedEnvironment` | Function, type, constant | The default host: analysis in a separate Bun process with an allowlisted environment, `--no-install` and a timeout. |
 | `exitCodes` | Constant | `{ success: 0, failure: 1, usage: 2 }`. |
-| `proposedCommands` | Constant | The list of proposed commands with one-line summaries. |
+| `implementedCommands`, `proposedCommands` | Constants | Implemented and proposed commands with one-line summaries. |
 | `ProposedCommand` | Type | `{ name, summary }`. |
 | `findProposedCommand(positionals)` | Function | Finds the longest proposed command matching the leading positional arguments. |
 
@@ -174,11 +192,17 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 - **Status:** Implemented. Private; not published.
 - **Purpose:** One Zod order message, validated on publish (`queue(...).send`, message codecs) and on receipt, normalized, fingerprinted, and checked against compatible and breaking versions. See its [README](../../examples/schema-evolution/README.md).
 
+## `@holqa/example-manifest`
+
+- **Path:** `examples/manifest`
+- **Status:** Implemented. Private; not published.
+- **Purpose:** Applications written with `@holqa/sdk` and Zod, compiled by the built `holqa` binary: a golden manifest, identical bytes across processes, directories and a relocated copy, an unchanged manifest after renaming every local name, and diagnostics for an invalid application. See its [README](../../examples/manifest/README.md).
+
 ## `@holqa/example-package-smoke`
 
 - **Path:** `examples/package-smoke`
 - **Status:** Implemented. Private; not published.
-- **Purpose:** Consumes `@holqa/core`, `@holqa/compiler`, `@holqa/cli`, `@holqa/sdk`, `@holqa/testing`, and `@holqa/zod` through their public exports after they are built. It verifies that `dist/` contains JavaScript and declarations, that no unresolved `@/` aliases remain in emitted `.js` or `.d.ts` files, and that the built `holqa` binary runs.
+- **Purpose:** Consumes `@holqa/core`, `@holqa/compiler`, `@holqa/cli`, `@holqa/sdk`, `@holqa/testing`, and `@holqa/zod` through their public exports after they are built. It verifies that `dist/` contains JavaScript and declarations, that no unresolved `@/` aliases remain in emitted `.js` or `.d.ts` files, that the built `holqa` binary runs, that the built compiler compiles an SDK application, and that the manifest JSON Schemas and the CLI's analysis entry point are shipped.
 - **Run:** `pnpm --filter @holqa/example-package-smoke test` (after `pnpm build`), or as part of `pnpm test` / `pnpm check`.
 
 ## Planned packages

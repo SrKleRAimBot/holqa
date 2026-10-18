@@ -1,6 +1,6 @@
 # Type safety and schemas
 
-> **Status:** Partly implemented. Source-based inference, Standard Schema validation with structured errors, JSON wire payloads, schema normalization through adapters (with `@holqa/zod` as the first), fingerprints and compatibility checks are **Implemented**; see [schema contracts](../reference/schema-contracts.md) and [ADR 0021](../architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md). Recording contracts in a manifest, comparing against a previous deployment, migrations and generated clients are **Planned**.
+> **Status:** Partly implemented. Source-based inference, Standard Schema validation with structured errors, JSON wire payloads, schema normalization through adapters (with `@holqa/zod` as the first), fingerprints and compatibility checks are **Implemented**; see [schema contracts](../reference/schema-contracts.md) and [ADR 0021](../architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md). Recording contracts and their fingerprints in the manifest is **Implemented** by the compiler ([compiler specification](../reference/compiler-specification.md)). Comparing against a previous deployment, migrations and generated clients are **Planned**.
 
 Type safety is one of Holqa's defining characteristics. Holqa connects resources and operations with strict TypeScript types **and** runtime schemas, because static types alone cannot protect data that crosses a process, network, or time boundary.
 
@@ -74,7 +74,7 @@ Standard Schema covers validation and type inference. The compiler and runtime n
 | Compatibility checking | To compare a new contract against a previously deployed one. |
 | Unsupported-schema reporting | To fail explicitly when a schema cannot be represented. |
 
-So Holqa defines a **normalized internal schema representation**, the schema contract: a portable, JSON-serializable description produced from each schema by a library-specific adapter. It is JSON Schema draft 2020-12 per side (input and output), plus fidelity, runtime-only constraints and the converter's library version. Normalization, canonical form, fingerprints and compatibility checks are **Implemented** in `@holqa/compiler` ([schema contracts](../reference/schema-contracts.md)). Storing contracts in the manifest is **Planned**.
+So Holqa defines a **normalized internal schema representation**, the schema contract: a portable, JSON-serializable description produced from each schema by a library-specific adapter. It is JSON Schema draft 2020-12 per side (input and output), plus fidelity, runtime-only constraints and the converter's library version. Normalization, canonical form, fingerprints and compatibility checks are **Implemented** in `@holqa/compiler` ([schema contracts](../reference/schema-contracts.md)). Storing contracts in the manifest's schema table is **Implemented** as well.
 
 ## Honest limits of normalization
 
@@ -121,14 +121,12 @@ Framework integrations such as TanStack Query build on these clients ([TanStack]
 
 Compile-time type correctness does not imply compatibility with data produced by earlier deployments. A queue may hold messages written by the previous version of the producer; a bucket may hold objects from last year; a mobile client may call last month's API.
 
-The future compiler must account for:
+The compiler must account for:
 
-| Concern | Planned mechanism |
-| --- | --- |
 | Concern | Mechanism | Status |
 | --- | --- | --- |
 | Versioned messages | Queue declarations carry an explicit `schemaVersion`; the `holqa.message/1` envelope carries the version a message was produced with. | **Implemented** (drivers do not use the envelope yet) |
-| Contract change detection | Stable fingerprints over canonical contracts. | **Implemented**; recording them in the manifest is **Planned** |
+| Contract change detection | Stable fingerprints over canonical contracts. | **Implemented**, including recording them in the manifest |
 | Breaking-change diagnostics | `checkSchemaCompatibility` classifies each change as safe, potentially breaking, unverifiable or breaking. | **Implemented**; comparing against a deployed manifest is **Planned** |
 | Public HTTP/RPC contract changes | The same checker with the `request` and `response` roles. | **Implemented** as a library function; routes are **Proposed** |
 | Migration guidance | Diagnostics with hints, the [evolution guidance](../reference/schema-contracts.md#evolution-guidance), and a public `schema-evolution` agent skill. | Guidance **Implemented**; the skill is available as a preview; migration engine **Planned** |

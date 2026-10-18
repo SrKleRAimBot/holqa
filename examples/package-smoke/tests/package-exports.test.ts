@@ -12,7 +12,9 @@ import type {
 import {
   canonicalJsonStringify,
   checkSchemaCompatibility,
-  describeSchemaContract
+  compileApplication,
+  describeSchemaContract,
+  validateManifest
 } from "@holqa/compiler";
 import {
   createMessageCodec,
@@ -47,6 +49,15 @@ describe("@holqa/core public exports", () => {
 describe("@holqa/compiler public exports", () => {
   it("serializes deterministically through the built package", () => {
     expect(canonicalJsonStringify({ b: 1, a: 2 })).toBe("{\n  \"a\": 2,\n  \"b\": 1\n}");
+  });
+
+  it("compiles an SDK application into a manifest its reader accepts", async () => {
+    const app = defineApp({ name: "smoke", resources: { orders: queue({ id: "orders", message: z.object({ id: z.string() }), schemaVersion: 1 }) } });
+    const consumer = app.resources.orders.consume({ id: "orders.process", handler: () => {} });
+    const result = await compileApplication({ app, appModule: "infra.ts", modules: [{ path: "src/orders.ts", exports: { default: consumer } }], runtime: "bun", adapters: [zodAdapter] });
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(validateManifest(JSON.parse(canonicalJsonStringify(result.manifest))).ok).toBe(true);
   });
 });
 

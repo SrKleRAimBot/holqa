@@ -4,7 +4,7 @@ import type {
   InvocationLogger,
   PutObjectOptions,
   ResourceDescriptorOf,
-  StandardSchemaV1
+  StandardJsonSchemaV1
 } from "@holqa/core";
 
 import type {
@@ -92,14 +92,27 @@ export interface BucketHandle<Id extends string> extends ResourceHandle<"bucket"
   readonly onObjectCreated: <const HandlerId extends string>(options: ObjectCreatedOptions<HandlerId> & CheckResourceId<HandlerId>) => ObjectCreatedHandler<Id, HandlerId>;
 }
 
+/** The portable JSON Schema of the object event's fields, shared by both sides. */
+const objectInfoProperties = {
+  key: { type: "string", minLength: 1 },
+  size: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+  contentType: { type: "string" }
+};
+
 /**
  * A dependency-free Standard Schema for the portable object event, so the SDK
- * can validate its own trigger payloads without a schema library.
+ * can validate its own trigger payloads without a schema library. It also
+ * implements Standard JSON Schema, so the compiler can record the event
+ * contract: unknown properties are accepted on input and removed on output.
  */
-const objectInfoSchema: StandardSchemaV1<ObjectInfo> = {
+const objectInfoSchema: StandardJsonSchemaV1<ObjectInfo> = {
   "~standard": {
     version: 1,
     vendor: "holqa",
+    jsonSchema: {
+      input: () => ({ type: "object", properties: objectInfoProperties, required: ["key", "size"] }),
+      output: () => ({ type: "object", properties: objectInfoProperties, required: ["key", "size"], additionalProperties: false })
+    },
     validate: (value) => {
       if (typeof value !== "object" || value === null)
         return { issues: [{ message: "Expected an object event." }] };

@@ -1,6 +1,6 @@
 # Resource model
 
-> **Status:** Implemented — the descriptor protocol, kind registries, handler model and runtime binding contract in `@holqa/core`, and the declaration API in `@holqa/sdk`. Execution (a runtime that invokes handlers), the compiler pipeline and real drivers are **Planned**.
+> **Status:** Implemented — the descriptor protocol, kind registries, handler model and runtime binding contract in `@holqa/core`, and the declaration API in `@holqa/sdk`. The compiler pipeline that reads descriptors into a manifest is **Implemented** ([compiler specification](../reference/compiler-specification.md)). Execution (a runtime that invokes handlers) and real drivers are **Planned**.
 
 This page describes how Holqa represents an application internally: the descriptors every SDK value carries, the typed registries that define resource and trigger kinds, how handlers separate metadata from code, how a logical handle reaches an implementation at run time, and which modules and packages depend on which. For the developer-facing view, see the [application model](../concepts/application-model.md).
 
@@ -27,7 +27,7 @@ Every SDK value carries its descriptor under the string key `~holqa`. A string k
 
 All descriptors have `protocol: 1` and a `type`. Readers (`getDescriptor`, `getAppDescriptor`, `getResourceDescriptor`, `getHandlerDescriptor`, `getConfigDescriptor`) check the shape structurally and return `undefined` for another protocol version, a malformed value, or a resource or trigger kind their copy of `@holqa/core` does not define.
 
-`config`, `requirements`, `definition` and `defaultValue` are JSON data. Schemas are Standard Schema objects and `invoke` is a function; neither is serialized as is. The future manifest will normalize schemas through schema adapters ([ADR 0016](decisions/0016-schema-adapters-and-conversion-fidelity.md)).
+`config`, `requirements`, `definition` and `defaultValue` are JSON data. Schemas are Standard Schema objects and `invoke` is a function; neither is serialized as is. The manifest records schemas normalized through schema adapters ([ADR 0016](decisions/0016-schema-adapters-and-conversion-fidelity.md)).
 
 ## Resource kind registry
 
@@ -63,7 +63,7 @@ There is no open `Record<string, unknown>` anywhere in the model, so provider-sp
 
 A handler registration such as `resources.orders.consume({ id, handler })` produces a descriptor with two parts:
 
-- `definition` is plain JSON: the handler's identifier and its trigger, including a reference `{ kind, id }` to the resource it belongs to. The future compiler reads it, together with `schemas`, without importing any driver or calling user code.
+- `definition` is plain JSON: the handler's identifier and its trigger, including a reference `{ kind, id }` to the resource it belongs to. The compiler reads it, together with `schemas`, without importing any driver or calling user code.
 - `invoke(input, context)` is the only executable part. A runtime calls it with **untrusted** input; it validates the input against the handler's schemas (`validateInput`, which always awaits) and only then calls the user's function with a typed context.
 
 Registration is declarative: calling `consume` runs nothing. Queue and HTTP execution belong to the planned runtime.

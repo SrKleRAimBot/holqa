@@ -90,7 +90,7 @@ description: Use when designing or changing schemas for Holqa contracts, includi
 - The **folder name must equal `name`**: lowercase letters, digits and hyphens.
 - `description` says **when to use the skill**. Agents choose skills from this text alone, so name the tasks, files and keywords that should trigger it. Keep it to one or two sentences.
 - The body includes: clear steps, the relevant conventions, correct commands, at least one example, and a verification checklist (for example `pnpm check`).
-- Do not reference scripts or commands that do not exist. Label future guidance explicitly (for example "`holqa inspect` is proposed and not implemented").
+- Do not reference scripts or commands that do not exist. Label future guidance explicitly (for example "`holqa dev` is proposed and not implemented").
 - Prefer extending an existing skill to creating a near-duplicate one.
 - Run `pnpm agents:sync`.
 

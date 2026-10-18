@@ -1,17 +1,18 @@
 # Compiler
 
-> **Status:** Planned, with **Implemented** foundations. Canonical JSON serialization (`canonicalJsonStringify`), the structured diagnostic model, and stage 4's schema normalization, fingerprints and compatibility checks ([schema contracts](../reference/schema-contracts.md)) are **Implemented** as library functions. The compilation pipeline, manifest schema, and client generation are **Planned**. See [ADR 0007](decisions/0007-separate-compiler-and-runtime.md).
+> **Status:** **Implemented** for stages 1 to 5 and 8: application loading, handler discovery, resource graph construction, schema normalization, static validation and manifest serialization, exposed as `holqa inspect` and `holqa build --manifest`. Client generation (stage 6) and executable artifact creation (stage 7) are **Planned**. The normative format and rules are in the [compiler specification](../reference/compiler-specification.md). See [ADR 0007](decisions/0007-separate-compiler-and-runtime.md), [ADR 0014](decisions/0014-evaluation-based-manifest-extraction.md) and [ADR 0022](decisions/0022-manifest-v1-and-entry-point-map.md).
 
-The compiler (`@holqa/compiler`) will be one of Holqa's most important packages. It transforms an application's declarations and handlers into artifacts that the runtime, local environment, providers, and tools consume.
+The compiler (`@holqa/compiler`) transforms an application's declarations and handlers into artifacts that the runtime, local environment, providers, and tools consume.
 
 ## Outputs
 
 | Output | Description | Status |
 | --- | --- | --- |
-| Application manifest | Deterministic, versioned, infrastructure-neutral description of the resource graph. | Planned (serialization **Implemented**) |
+| Application manifest | Deterministic, versioned, infrastructure-neutral description of the resource graph (`manifest.json`). | **Implemented** (version 1) |
+| Entry point map | Where each handler is implemented, tied to the manifest by fingerprint (`entrypoints.json`). | **Implemented** |
 | Executable artifacts | Bundled handler code for the Bun runtime. | Planned |
 | Generated clients and API contracts | Browser-safe clients; OpenAPI documents. | Planned |
-| Structured diagnostics | `Diagnostic` values with `HOLQA_*` codes. | Model **Implemented**; compiler diagnostics planned |
+| Structured diagnostics | `Diagnostic` values with `HOLQA_*` codes. | **Implemented** |
 
 ## Separation from the runtime
 
@@ -19,11 +20,11 @@ The compiler is conceptually and physically separate from the runtime ([ADR 0007
 
 - The compiler runs at build time and produces artifacts. The runtime executes artifacts and never needs the compiler.
 - `@holqa/sdk` and `@holqa/client` are forbidden from importing `@holqa/compiler` ([package boundaries](package-boundaries.md)).
-- The compiler's own source must not import `bun`, `bun:*`, or `node:*` (enforced by ESLint). Host access such as file reading is expected to be injected or isolated, which keeps the core logic testable and deterministic.
+- The compiler's own source must not import `bun`, `bun:*`, or `node:*` (enforced by ESLint). Host access is injected: the CLI lists files, evaluates modules and passes the results to `compileApplication`, which keeps the compiler testable in memory and deterministic.
 
 ## Pipeline
 
-The planned pipeline stages:
+The pipeline stages:
 
 ```mermaid
 flowchart TB
@@ -36,22 +37,24 @@ flowchart TB
   E --> H[8. Deterministic manifest serialization]
 ```
 
-| Stage | Responsibility | Example diagnostics (planned unless noted) |
-| --- | --- | --- |
-| 1. Configuration discovery and analysis | Locate `infra.ts`; obtain the application definition. | Missing or invalid `infra.ts`. |
-| 2. Handler discovery | Resolve the `handlers` globs; find handler registrations and their identifiers. | Handler for an unknown resource. |
-| 3. Resource graph construction | Build nodes (resources, handlers, configuration) and edges (triggers, uses, reads). | Duplicate identifiers; `HOLQA_RESOURCE_ID_INVALID` (**Implemented** via `parseResourceId`). |
-| 4. Contract and schema normalization | Convert Standard Schema schemas into the normalized representation; compute fingerprints. | `HOLQA_SCHEMA_UNSUPPORTED`. |
-| 5. Static validation | Check references, uniqueness, routes, requirements. | `HOLQA_RESOURCE_NOT_FOUND`; ambiguous routes; multiple queue consumers; incompatible requirements. |
-| 6. Client generation | Emit browser-safe clients and OpenAPI for public contracts. | A public contract referencing a private type. |
-| 7. Executable artifact creation | Hand off to a bundler to produce Bun artifacts. | Bundling failures. |
-| 8. Manifest serialization | Serialize the validated graph with canonical JSON. | `HOLQA_MANIFEST_NOT_SERIALIZABLE` (**Implemented**). |
+| Stage | Responsibility | Diagnostics | Status |
+| --- | --- | --- | --- |
+| 1. Configuration discovery and analysis | Locate `infra.ts` (or `--app`); evaluate it in the analysis process. | `HOLQA_APP_NOT_FOUND`, `HOLQA_APP_INVALID`, `HOLQA_MODULE_EVALUATION_FAILED`, `HOLQA_ANALYSIS_FAILED` | **Implemented** |
+| 2. Handler discovery | Match the `handlers` globs (`selectHandlerModules`); find exported registrations (`discoverHandlers`). | `HOLQA_HANDLER_PATTERN_UNMATCHED`, `HOLQA_HANDLER_ID_DUPLICATE` | **Implemented** |
+| 3. Resource graph construction | Normalize resources, handlers and configuration; derive required capabilities; `buildResourceGraph` builds nodes and declared edges. | `HOLQA_RESOURCE_ID_DUPLICATE`, `HOLQA_DECLARATION_INVALID` | **Implemented** |
+| 4. Contract and schema normalization | Convert Standard Schema schemas into the normalized representation; compute fingerprints. | `HOLQA_SCHEMA_UNSUPPORTED`, `HOLQA_SCHEMA_FIDELITY_UNVERIFIED`, `HOLQA_SCHEMA_RUNTIME_ONLY` | **Implemented** |
+| 5. Static validation | Check references, trigger kinds, one consumer per queue, routes. | `HOLQA_RESOURCE_NOT_FOUND`, `HOLQA_TRIGGER_INVALID`, `HOLQA_QUEUE_CONSUMER_DUPLICATE`, `HOLQA_ROUTE_CONFLICT` | **Implemented**; checking requirements against a binding is Planned |
+| 6. Client generation | Emit browser-safe clients and OpenAPI for public contracts. | A public contract referencing a private type. | Planned |
+| 7. Executable artifact creation | Hand the entry point map to a bundler to produce Bun artifacts. | Bundling failures. | Planned |
+| 8. Manifest serialization | Serialize the manifest and entry point map with canonical JSON. | `HOLQA_MANIFEST_NOT_SERIALIZABLE` | **Implemented** |
 
-The compiler must detect at least: duplicate identifiers, invalid references, incompatible resource requirements, ambiguous routes, and invalid schemas.
+The compiler detects duplicate identifiers, invalid references, trigger mismatches, conflicting routes and invalid schemas. Incompatible requirements are detected when a binding is installed (`checkCapabilities`); doing so at build time is planned.
 
 ## Analysis and untrusted code
 
-Stage 1 obtains the application by **evaluating** `infra.ts` and the handler modules in a host process, then passes the resulting descriptors to the runtime-neutral compiler (**Accepted design**, [ADR 0014](decisions/0014-evaluation-based-manifest-extraction.md)). M0 found that static analysis cannot recover imported or composed schemas; it remains useful only as a partial index for editors. See the [compilation experiment](../../experiments/compiler/README.md) for the measured results.
+Stage 1 obtains the application by **evaluating** `infra.ts` and the handler modules, then passes the results to the runtime-neutral compiler (**Implemented**, [ADR 0014](decisions/0014-evaluation-based-manifest-extraction.md)). M0 found that static analysis cannot recover imported or composed schemas; the compiler uses it only to add line and column numbers to diagnostics.
+
+The CLI evaluates in a dedicated Bun process with an allowlisted environment (no application secrets), `--no-install`, closed standard input and a timeout, and validates the report it sends back ([ADR 0022](decisions/0022-manifest-v1-and-entry-point-map.md)). This reduces exposure; it is not a sandbox. See the [security model](../reference/compiler-specification.md#security-model). See the [compilation experiment](../../experiments/compiler/README.md) for the measured results.
 
 Constraint: **the compiler must not execute arbitrary user configuration code unsandboxed while claiming that evaluation is secure.** Because the compiler evaluates modules ([ADR 0014](decisions/0014-evaluation-based-manifest-extraction.md)), the documentation says plainly that compiling an application runs its code. Declarations are pure and deterministic ([ADR 0003](decisions/0003-explicit-resource-declarations.md)) so that evaluation stays predictable. See [security](../concepts/security.md#untrusted-build-time-execution).
 
@@ -59,13 +62,13 @@ Constraint: **the compiler must not execute arbitrary user configuration code un
 
 Compilation (analysis, graph, validation, manifest, client generation) and bundling (producing executable JavaScript) are separate concerns:
 
-- The manifest can be produced and inspected without bundling, which keeps `holqa inspect` fast and makes the manifest usable by tools that never execute code.
+- The manifest is produced and inspected without bundling (`holqa inspect`, `holqa build --manifest`), which keeps inspection fast and makes the manifest usable by tools that never execute code. Bundling is planned and will consume the entry point map.
 - Bundler choice can change without changing the manifest format.
 - Bundling failures and graph validation failures are reported separately.
 
 ## Manifest principles
 
-The manifest is the compiler's primary output and the contract between compilation and everything downstream. Its schema does not exist yet. It must be:
+The manifest is the compiler's primary output and the contract between compilation and everything downstream. Version 1 is specified in the [compiler specification](../reference/compiler-specification.md#manifest-version-1), with a published JSON Schema. It is:
 
 | Principle | Meaning |
 | --- | --- |
@@ -100,55 +103,9 @@ canonicalJsonStringify({ b: 1, a: [true, null] });
 
 Because `JSON.stringify` silently drops `undefined` and functions and converts `NaN` to `null`, it is not suitable for a manifest whose bytes must faithfully represent the graph.
 
-### Illustrative manifest excerpt
+### Example
 
-> **Illustrative only.** The manifest schema has not been designed. Field names and structure below are examples of the principles, not a specification.
-
-```json
-{
-  "app": {
-    "name": "commerce"
-  },
-  "configuration": [
-    {
-      "kind": "secret",
-      "name": "DATABASE_URL",
-      "schema": {
-        "minLength": 1,
-        "type": "string"
-      }
-    }
-  ],
-  "handlers": [
-    {
-      "id": "orders.process",
-      "module": "src/orders/process.handler.ts",
-      "trigger": {
-        "kind": "queue.message",
-        "resource": "order-processing"
-      },
-      "uses": []
-    }
-  ],
-  "manifestVersion": 1,
-  "resources": [
-    {
-      "id": "order-processing",
-      "kind": "queue",
-      "message": {
-        "fingerprint": "sha256:…",
-        "schemaVersion": 1
-      },
-      "requires": [
-        "queue.deadLetter",
-        "queue.delivery.atLeastOnce"
-      ]
-    }
-  ]
-}
-```
-
-Note the absence of provider details: nothing says which queue service backs `order-processing`. That is the binding's job ([infrastructure providers](../concepts/infrastructure-providers.md)).
+[`examples/manifest/expected/shop.manifest.json`](../../examples/manifest/expected/shop.manifest.json) is the real manifest of the example shop application, checked by its tests. Note the absence of provider details: nothing says which queue service backs `order-placed`. That is the binding's job ([infrastructure providers](../concepts/infrastructure-providers.md)).
 
 ## Diagnostics
 
@@ -158,16 +115,17 @@ Every compiler failure is a `Diagnostic` from `@holqa/core`:
 - `severity`: `error` (the compilation fails), `warning`, or `info`.
 - `message`, an optional source `location` (`file`, 1-based `line` and `column`), and an optional actionable `hint`.
 
-Compiler output must be machine-readable, stable, and suitable for agents: the planned `holqa build --json` and `holqa inspect --json` will emit diagnostics in the same `{"diagnostics":[...]}` shape the CLI already uses. See [diagnostic codes](../reference/diagnostic-codes.md).
+Compiler output is machine-readable, stable, and suitable for agents: `holqa inspect --json` and `holqa build --manifest --json` report failures in the same `{"diagnostics":[...]}` shape as every CLI error, and include warnings in their output documents. Compilation reports every problem at once, sorted by location. See [diagnostic codes](../reference/diagnostic-codes.md).
 
 ## Future: compatibility checking
 
-> **Status:** The checker itself is **Implemented** as `checkSchemaCompatibility` in `@holqa/compiler` ([schema contracts](../reference/schema-contracts.md#compatibility)); running it against a deployed manifest is **Planned**.
+> **Status:** The checker itself is **Implemented** as `checkSchemaCompatibility` in `@holqa/compiler` ([schema contracts](../reference/schema-contracts.md#compatibility)), and manifests record every contract's fingerprint and version; running the checker against a deployed manifest is **Planned**.
 
 Schema fingerprints in the manifest enable comparing a new manifest with a previously deployed one to detect breaking changes in queue messages and public HTTP/RPC contracts. A compatibility engine is not part of the initial compiler; see [type safety and schemas](../concepts/type-safety-and-schemas.md#compatibility-and-evolution).
 
 ## Related
 
+- [Compiler specification](../reference/compiler-specification.md)
 - [Architecture overview](overview.md)
 - [Resource graph](../concepts/resource-graph.md)
 - [Diagnostic codes](../reference/diagnostic-codes.md)

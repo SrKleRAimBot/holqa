@@ -1,0 +1,111 @@
+{
+  "$defs": {
+    "fingerprint": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "identifier": {
+      "maxLength": 63,
+      "pattern": "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$",
+      "type": "string"
+    },
+    "modulePath": {
+      "pattern": "^(?![a-zA-Z]:)(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[^\\\\]+$",
+      "type": "string"
+    },
+    "positiveInteger": {
+      "minimum": 1,
+      "type": "integer"
+    }
+  },
+  "$id": "urn:holqa:schema:entrypoints:1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "application": {
+      "additionalProperties": false,
+      "properties": {
+        "handlers": {
+          "additionalProperties": false,
+          "properties": {
+            "exclude": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "include": {
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "include",
+            "exclude"
+          ],
+          "type": "object"
+        },
+        "module": {
+          "$ref": "#/$defs/modulePath"
+        }
+      },
+      "required": [
+        "module",
+        "handlers"
+      ],
+      "type": "object"
+    },
+    "format": {
+      "const": "holqa.entrypoints/1"
+    },
+    "handlers": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "export": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "exports": {
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "id": {
+            "$ref": "#/$defs/identifier"
+          },
+          "module": {
+            "$ref": "#/$defs/modulePath"
+          }
+        },
+        "required": [
+          "id",
+          "module",
+          "export",
+          "exports"
+        ],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "manifest": {
+      "$ref": "#/$defs/fingerprint"
+    }
+  },
+  "required": [
+    "format",
+    "manifest",
+    "application",
+    "handlers"
+  ],
+  "title": "Holqa entry point map, version 1",
+  "type": "object"
+}

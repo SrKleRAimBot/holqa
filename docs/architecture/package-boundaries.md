@@ -11,16 +11,16 @@ Holqa's packages are layered so that framework-neutral contracts never depend on
 | `@holqa/core` | `packages/core` | Framework-neutral contracts, resource identity, diagnostics, descriptor protocol, runtime binding contract. | **Implemented** (contracts) | none |
 | `@holqa/sdk` | `packages/sdk` | Primary public developer-facing SDK: `defineApp`, resource factories, typed handles. | **Implemented** (application and resource model) | `core` |
 | `@holqa/client` | `packages/client` | Framework-independent, browser-safe generated-client runtime. | Planned | `core` |
-| `@holqa/compiler` | `packages/compiler` | Resource analysis, manifest IR, diagnostics, compilation. | **Implemented** (canonical JSON only) | `core` |
+| `@holqa/compiler` | `packages/compiler` | Resource analysis, manifest IR, diagnostics, compilation. | **Implemented** (canonical JSON, application compilation, graph validation, manifest version 1 and entry point map); client generation and bundling Planned | `core` |
 | `@holqa/runtime-bun` | `packages/runtime-bun` | Bun execution and invocation adapters. | Planned | `core` |
 | `@holqa/local` | `packages/local` | Local execution and resource emulation. | Planned | `core`, `runtime-bun` |
 | `@holqa/testing` | `packages/testing` | Testing utilities, fixtures, deterministic execution. | **Implemented** (type assertions only) | `core`, `sdk`, `local`, `runtime-bun` |
-| `@holqa/cli` | `packages/cli` | Developer CLI. | **Implemented** (help, version, `--json`) | `core`, `compiler`, `local`, `runtime-bun` |
+| `@holqa/cli` | `packages/cli` | Developer CLI. | **Implemented** (help, version, `--json`, `inspect`, `build --manifest`); other workflow commands Proposed | `core`, `compiler`, `local`, `runtime-bun` |
 | Schema adapters | `packages/integrations/{zod,valibot,...}` | Convert one schema library's schemas for the compiler ([ADR 0016](decisions/0016-schema-adapters-and-conversion-fidelity.md)). | **Implemented** for Zod (`@holqa/zod`); others Planned | `core` only (enforced for `@holqa/zod`) |
 | Framework adapters | `packages/integrations/{orpc,tanstack-query,effect,...}` | Handler, transport, and client adapters. | Planned | `core`, `sdk`, `client` |
 | Drivers and providers | future `packages/providers/*` | Runtime drivers and provisioning providers. | Planned | `core` only (Accepted design; no packages yet) |
 | Experiments | `experiments/*` | Disposable M0 prototypes ([experiments](../../experiments/README.md)). | Not framework code | Mirror of this table (`experimentDependencies`); never a dependency of `packages/*` |
-| Examples | `examples/*` | Example applications and smoke tests. | `package-smoke` **Implemented**; `commerce` type-checked against the experiments | anything |
+| Examples | `examples/*` | Example applications and smoke tests. | `package-smoke`, `schema-evolution` and `manifest` **Implemented**; `commerce` type-checked against the experiments | anything |
 
 Final npm names for integration packages are not decided. The layer decisions for schema adapters, framework adapters, drivers, providers and experiments are recorded in [ADR 0017](decisions/0017-package-layers-after-m0.md), which also confirms the existing directions with the M0 prototypes.
 

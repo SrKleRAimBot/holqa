@@ -5,8 +5,10 @@ behavior through one strongly typed programming model, without coupling business
 
 > [!IMPORTANT]
 > **Holqa is in early development.** This repository currently contains the monorepo foundation, architecture
-> documentation, and a few small, tested building blocks. The SDK, compiler, runtime, and local development environment
-> described below are **design, not shipped software**. See the [roadmap](docs/roadmap.md) for what exists today.
+> documentation, the application and resource model (`@holqa/sdk`), and a compiler that turns an application into a
+> deterministic manifest (`holqa inspect`, `holqa build --manifest`). The runtime, local development environment and
+> providers described below are **design, not shipped software**. Nothing is published. See the
+> [roadmap](docs/roadmap.md) for what exists today.
 
 ## The problem
 
@@ -25,7 +27,8 @@ three concerns apart:
 2. **Operations and handlers** — how application code uses resources and reacts to events.
 3. **Infrastructure bindings** — how a provider or the local runtime fulfils those requirements.
 
-The intended developer experience looks like this (**illustrative, not implemented**):
+The developer experience looks like this (**illustrative**: the declarations and handler registration use the implemented,
+unpublished `@holqa/sdk`, but nothing runs handlers yet):
 
 ```ts
 // infra.ts
@@ -85,10 +88,13 @@ runtime. These integrations are planned; see [integrations](docs/integrations/in
 
 | Package | Path | Status |
 | --- | --- | --- |
-| `@holqa/core` | [packages/core](packages/core) | Implemented foundations: `Result`, structured diagnostics with stable `HOLQA_*` codes, resource identifier validation |
-| `@holqa/compiler` | [packages/compiler](packages/compiler) | Implemented foundation: deterministic canonical JSON serialization for future manifests |
-| `@holqa/cli` | [packages/cli](packages/cli) | `holqa --help`, `--version`, and `--json` diagnostics; every workflow command is proposed |
-| `@holqa/sdk`, `@holqa/runtime-bun`, `@holqa/local`, `@holqa/testing`, `@holqa/client`, integrations | [packages](packages) | Planned (design documents only) |
+| `@holqa/core` | [packages/core](packages/core) | Implemented contracts: `Result`, structured diagnostics with stable `HOLQA_*` codes, resource identity, schema validation, the descriptor protocol and the runtime binding contract |
+| `@holqa/sdk` | [packages/sdk](packages/sdk) | Implemented application and resource model: `defineApp`, queues, buckets, schedules, HTTP API declarations, configuration, typed handles |
+| `@holqa/compiler` | [packages/compiler](packages/compiler) | Implemented: handler discovery, graph validation, deterministic manifest version 1, schema contracts and compatibility checks |
+| `@holqa/cli` | [packages/cli](packages/cli) | Implemented: `holqa --help`, `--version`, `--json`, `holqa inspect` and `holqa build --manifest`; other workflow commands are proposed |
+| `@holqa/testing` | [packages/testing](packages/testing) | Implemented: compile-time type assertions only |
+| `@holqa/zod` | [packages/integrations/zod](packages/integrations/zod) | Implemented: Zod 4 schema adapter |
+| `@holqa/runtime-bun`, `@holqa/local`, `@holqa/client`, other integrations | [packages](packages) | Planned (design documents only) |
 
 All packages are private and unpublished. The full list is in [docs/reference/packages.md](docs/reference/packages.md).
 
@@ -96,7 +102,7 @@ All packages are private and unpublished. The full list is in [docs/reference/pa
 
 ```text
 packages/          Holqa libraries (core, compiler, cli, and planned packages)
-examples/          package-smoke (runs in CI) and illustrative application examples
+examples/          package-smoke, schema-evolution and manifest (run in CI) and illustrative application examples
 docs/              Concepts, architecture, ADRs, integrations, reference, contributing guides
 skills/            Agent Skills for developers building with Holqa (preview)
 .agents/           Canonical rules and skills for agents working on this repository

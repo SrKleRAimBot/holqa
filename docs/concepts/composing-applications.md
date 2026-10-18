@@ -1,6 +1,6 @@
 # Composing applications
 
-> **Status:** Implemented — `defineResources`, `composeResources` and cross-module type inference in `@holqa/sdk`. Handler discovery from the `handlers` patterns is **Planned** (compiler).
+> **Status:** Implemented — `defineResources`, `composeResources` and cross-module type inference in `@holqa/sdk`. Handler discovery from the `handlers` patterns is **Implemented** in the compiler (`holqa inspect`, `holqa build --manifest`).
 
 Large applications should not need one enormous `infra.ts`. Because `infra.ts` is an ordinary TypeScript module, a registry can be split across modules with normal imports and exports. Types flow through those imports: no code generation, development server or external infrastructure is involved.
 

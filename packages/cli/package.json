@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.0",
   "private": true,
-  "description": "The Holqa command-line interface. Currently provides help and version output only; all workflow commands are planned.",
+  "description": "The Holqa command-line interface: help, version, inspect and build --manifest. Other workflow commands are planned.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -39,6 +39,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@holqa/compiler": "workspace:*",
     "@holqa/core": "workspace:*"
   },
   "devDependencies": {

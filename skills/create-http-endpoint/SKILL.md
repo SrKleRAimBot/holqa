@@ -69,7 +69,7 @@ Streaming: return a standard `Response` with a `ReadableStream` body; Holqa is p
 - **Trusting the type of `body`.** Static types do not validate requests; always declare a schema.
 - **Leaking internals.** Map database rows to the response schema; do not return them directly.
 - **Authorization in the wrong place.** Authentication middleware proves identity; the handler must still check ownership (`user.id`).
-- **Ambiguous routes.** `/orders/:id` and `/orders/export` can collide; the planned compiler reports ambiguous routes.
+- **Conflicting routes.** Two routes with the same method and path shape on one API (`/orders/:id` and `/orders/:orderId`) conflict; the compiler reports `HOLQA_ROUTE_CONFLICT`. A static segment and a parameter (`/orders/export`, `/orders/:id`) do not conflict: the static segment wins. Route registration itself is still proposed.
 - **Non-idempotent `POST` retries.** Accept an idempotency key for operations that create resources.
 - **Holqa identity assumptions.** Holqa does not provide an identity service; use your own middleware or an integration.
 

@@ -8,7 +8,7 @@ metadata:
 
 # Validating infrastructure bindings
 
-> **Preview — not yet available.** Bindings, capability validation, the application manifest and `holqa doctor` are **accepted design / proposed** and not implemented. No provider exists yet. This skill describes the intended review process.
+> **Preview — mostly not available.** The application manifest is implemented in the Holqa repository (`holqa build --manifest`), including the capabilities each resource requires. Bindings, capability validation at build time and `holqa doctor` are **accepted design / proposed** and not implemented. No provider exists yet. This skill describes the intended review process.
 
 ## When to use
 
@@ -31,11 +31,12 @@ Providers do not all offer the same guarantees. A binding must **prove** that it
 ## Works today
 
 - Resource IDs can be checked against `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$` (at most 63 characters).
-- `holqa doctor --json` and `holqa build --json` report `HOLQA_CLI_NOT_IMPLEMENTED`.
+- `holqa build --manifest` writes `manifest.json`, whose `requiredCapabilities` and per-resource `requirements` list what a binding must provide. `holqa inspect` prints the same requirements.
+- `holqa doctor --json` and `holqa build --json` without `--manifest` report `HOLQA_CLI_NOT_IMPLEMENTED`.
 
 ## Planned workflow
 
-1. **Build the manifest** with `holqa build` (proposed). It is a deterministic, provider-neutral description of resources and their requirements.
+1. **Build the manifest** with `holqa build --manifest` (implemented). It is a deterministic, provider-neutral description of resources and their requirements.
 2. **List requirements per resource** — for example, for `order-processing`: at-least-once delivery, 5 attempts with backoff, dead-letter queue, message size limit, consumer concurrency.
 3. **Select a binding per environment** and compare each requirement with the binding's declared capabilities.
 4. **Run validation** (`holqa doctor`, proposed). Expect an explicit diagnostic for each unsupported capability.

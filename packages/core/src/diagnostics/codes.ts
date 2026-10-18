@@ -47,7 +47,35 @@ export const diagnosticCodes = {
   /** Received wire bytes are not a well-formed payload or message envelope. */
   payloadMalformed: "HOLQA_PAYLOAD_MALFORMED",
   /** A received message was produced with a schema version the consumer does not accept. */
-  payloadVersionUnsupported: "HOLQA_PAYLOAD_VERSION_UNSUPPORTED"
+  payloadVersionUnsupported: "HOLQA_PAYLOAD_VERSION_UNSUPPORTED",
+  /** The application module (conventionally `infra.ts`) does not exist. */
+  appNotFound: "HOLQA_APP_NOT_FOUND",
+  /** The application module's default export is not a Holqa application this version can read. */
+  appInvalid: "HOLQA_APP_INVALID",
+  /** Evaluating the application module or a handler module threw. */
+  moduleEvaluationFailed: "HOLQA_MODULE_EVALUATION_FAILED",
+  /** A handler discovery pattern matched no module. */
+  handlerPatternUnmatched: "HOLQA_HANDLER_PATTERN_UNMATCHED",
+  /** Two different handlers in one application share an identifier. */
+  handlerIdDuplicate: "HOLQA_HANDLER_ID_DUPLICATE",
+  /** A handler's trigger references a resource the application does not declare. */
+  resourceNotFound: "HOLQA_RESOURCE_NOT_FOUND",
+  /** A trigger registration is invalid: wrong resource kind, malformed options, or a contract that differs from the resource's. */
+  triggerInvalid: "HOLQA_TRIGGER_INVALID",
+  /** More than one consumer is registered for a queue. */
+  queueConsumerDuplicate: "HOLQA_QUEUE_CONSUMER_DUPLICATE",
+  /** Two HTTP routes match the same requests. */
+  routeConflict: "HOLQA_ROUTE_CONFLICT",
+  /** A manifest document does not match the manifest schema. */
+  manifestInvalid: "HOLQA_MANIFEST_INVALID",
+  /** A manifest document declares a manifest version this reader does not understand. */
+  manifestVersionUnsupported: "HOLQA_MANIFEST_VERSION_UNSUPPORTED",
+  /** The isolated analysis process failed, timed out or returned malformed output. */
+  analysisFailed: "HOLQA_ANALYSIS_FAILED",
+  /** The CLI received a malformed option or option value. */
+  cliArgumentInvalid: "HOLQA_CLI_ARGUMENT_INVALID",
+  /** The CLI could not write a build output file. */
+  buildOutputFailed: "HOLQA_BUILD_OUTPUT_FAILED"
 } as const;
 
 /**

@@ -29,7 +29,21 @@ describe("diagnosticCodes", () => {
       schemaVersionInvalid: "HOLQA_SCHEMA_VERSION_INVALID",
       payloadNotSerializable: "HOLQA_PAYLOAD_NOT_SERIALIZABLE",
       payloadMalformed: "HOLQA_PAYLOAD_MALFORMED",
-      payloadVersionUnsupported: "HOLQA_PAYLOAD_VERSION_UNSUPPORTED"
+      payloadVersionUnsupported: "HOLQA_PAYLOAD_VERSION_UNSUPPORTED",
+      appNotFound: "HOLQA_APP_NOT_FOUND",
+      appInvalid: "HOLQA_APP_INVALID",
+      moduleEvaluationFailed: "HOLQA_MODULE_EVALUATION_FAILED",
+      handlerPatternUnmatched: "HOLQA_HANDLER_PATTERN_UNMATCHED",
+      handlerIdDuplicate: "HOLQA_HANDLER_ID_DUPLICATE",
+      resourceNotFound: "HOLQA_RESOURCE_NOT_FOUND",
+      triggerInvalid: "HOLQA_TRIGGER_INVALID",
+      queueConsumerDuplicate: "HOLQA_QUEUE_CONSUMER_DUPLICATE",
+      routeConflict: "HOLQA_ROUTE_CONFLICT",
+      manifestInvalid: "HOLQA_MANIFEST_INVALID",
+      manifestVersionUnsupported: "HOLQA_MANIFEST_VERSION_UNSUPPORTED",
+      analysisFailed: "HOLQA_ANALYSIS_FAILED",
+      cliArgumentInvalid: "HOLQA_CLI_ARGUMENT_INVALID",
+      buildOutputFailed: "HOLQA_BUILD_OUTPUT_FAILED"
     });
   });
 });

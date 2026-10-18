@@ -52,14 +52,14 @@ Invariants to preserve in every design:
 | Package | Responsibility | Status | May depend on |
 | --- | --- | --- | --- |
 | `@holqa/core` | Neutral contracts: `Result`, `Diagnostic`, `diagnosticCodes`, `ResourceId`, `HolqaError`, descriptor protocol with resource/trigger kind registries, `RuntimeBinding` | **Implemented** (contracts) | none |
-| `@holqa/compiler` | Canonical JSON today; analysis, manifest IR, diagnostics later | **Implemented** (`canonicalJsonStringify` only) | core |
-| `@holqa/cli` | `holqa` bin: `--help`, `--version`, `--json`; proposed commands report `HOLQA_CLI_NOT_IMPLEMENTED` | **Implemented** (help/version only) | core, compiler, local, runtime-bun |
+| `@holqa/compiler` | Canonical JSON, schema contracts, `compileApplication` (handler discovery, graph validation), manifest version 1, entry point map; client generation and bundling later | **Implemented** (manifest pipeline) | core |
+| `@holqa/cli` | `holqa` bin: `--help`, `--version`, `--json`, `inspect`, `build --manifest` (analysis in a separate Bun process); other commands report `HOLQA_CLI_NOT_IMPLEMENTED` | **Implemented** (help, version, `inspect`, `build --manifest`) | core, compiler, local, runtime-bun |
 | `@holqa/sdk` | Public developer SDK (`defineApp`, `queue`/`bucket`/`schedule`/`http.api`, typed handles, handler registration) | **Implemented** (no HTTP routes yet) | core |
 | `@holqa/client` | Browser-safe generated-client runtime | Planned | core |
 | `@holqa/runtime-bun` | Bun execution and invocation adapters | Planned | core |
 | `@holqa/local` | Local execution and resource emulation | Planned | core, runtime-bun |
 | `@holqa/testing` | Test utilities: type assertions today, deterministic execution later | **Implemented** (type assertions only) | core, sdk, local, runtime-bun |
-| `packages/integrations/*` | Zod, Valibot, Effect, oRPC, TanStack Query adapters | Planned (names undecided) | core, sdk, client |
+| `packages/integrations/*` | Zod, Valibot, Effect, oRPC, TanStack Query adapters | **Implemented** for Zod (`@holqa/zod`); others Planned (names undecided) | core, sdk, client |
 
 Planned packages are directories with a README only. Enforcement: `scripts/check-boundaries.ts` (`pnpm boundaries:check`) and `no-restricted-imports` in `eslint.config.mjs`. `core`, `compiler`, `sdk`, `client` never import `bun`, `bun:*`, `node:*`; `sdk`/`client` never import compiler, runtime, local, cli, or testing.
 
@@ -76,9 +76,9 @@ Creating a planned package is an architectural change: it needs a `package.json`
 
 ## Compiler vs. runtime (ADR 0007)
 
-The compiler turns declarations and handlers into a deterministic, versioned, infrastructure-neutral **manifest**, executable artifacts, generated clients, and structured diagnostics. The runtime executes handlers against bindings. They share contracts through `core` only. Compilation and bundling are separate concerns. Today only canonical JSON exists; the manifest schema does not.
+The compiler turns declarations and handlers into a deterministic, versioned, infrastructure-neutral **manifest**, executable artifacts, generated clients, and structured diagnostics. The runtime executes handlers against bindings. They share contracts through `core` only. Compilation and bundling are separate concerns. Today the manifest (version 1), its JSON Schema and the entry point map exist ([compiler specification](../../../docs/reference/compiler-specification.md)); bundling and client generation do not.
 
-The compiler must never evaluate user configuration unsandboxed while claiming the evaluation is secure.
+The compiler must never evaluate user configuration unsandboxed while claiming the evaluation is secure. The CLI evaluates application modules in a separate Bun process with an allowlisted environment; that process is **not** a sandbox (it can still use the file system and network).
 
 ## Providers and capabilities (ADR 0005)
 

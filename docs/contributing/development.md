@@ -78,8 +78,8 @@ pnpm --filter @holqa/core test:watch
 holqa/
 ├── packages/
 │   ├── core/            @holqa/core: contracts, diagnostics, descriptors, validation, wire payloads (implemented, private)
-│   ├── compiler/        @holqa/compiler: canonical JSON, schema contracts (implemented, private)
-│   ├── cli/             @holqa/cli: `holqa` bin, help/version only (implemented, private)
+│   ├── compiler/        @holqa/compiler: canonical JSON, schema contracts, manifest pipeline (implemented, private)
+│   ├── cli/             @holqa/cli: `holqa` bin: help, version, inspect, build --manifest (implemented, private)
 │   ├── sdk/             @holqa/sdk: application and resource model (implemented, private)
 │   ├── testing/         @holqa/testing: type assertions (implemented, private)
 │   ├── runtime-bun/ local/ client/     planned: README only
@@ -89,6 +89,7 @@ holqa/
 ├── examples/
 │   ├── package-smoke/   consumes built packages, checks dist output (runs in pnpm test)
 │   ├── schema-evolution/  end-to-end schema contract corpus with Zod (runs in pnpm test)
+│   ├── manifest/        compiles SDK applications through the built CLI (runs in pnpm test)
 │   ├── commerce/        reference application, tested against the M0 experiments
 │   ├── basic-backend/   illustrative application structure (does not run)
 │   └── fullstack-vite/  illustrative application structure (does not run)

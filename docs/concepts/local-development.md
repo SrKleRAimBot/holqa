@@ -1,6 +1,6 @@
 # Local development
 
-> **Status:** Planned — not implemented. `holqa dev` and every other workflow command are proposed; today the CLI reports `HOLQA_CLI_NOT_IMPLEMENTED` for them. See Phase 3 of the [roadmap](../roadmap.md).
+> **Status:** Planned — not implemented. `holqa dev` and the other local workflow commands are proposed; today the CLI reports `HOLQA_CLI_NOT_IMPLEMENTED` for them. Only `holqa inspect` and `holqa build --manifest` are **Implemented**. See Phase 3 of the [roadmap](../roadmap.md).
 
 Local development is central to Holqa. A developer should be able to clone an application and run it, including its queues, storage, and schedules, without cloud credentials. This page describes the planned local environment and the constraints it must respect.
 
@@ -32,9 +32,8 @@ The following commands are **proposed and not implemented**. Running any of them
 | `holqa queue send` | Send a message to a local queue. |
 | `holqa storage put` | Upload an object to local storage. |
 | `holqa cron run` | Trigger a scheduled task immediately. |
-| `holqa inspect` | Print the application resource graph. |
 
-See the [CLI reference](../reference/cli.md).
+`holqa inspect`, which prints the application's resources, handlers, configuration and required capabilities, is **Implemented**, as is `holqa build --manifest`. See the [CLI reference](../reference/cli.md).
 
 ## Architecture
 

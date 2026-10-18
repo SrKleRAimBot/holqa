@@ -1,0 +1,53 @@
+import { compiledOutcome } from "@test/support/fake-host";
+
+import {
+  describe,
+  expect,
+  it
+} from "bun:test";
+import {
+  analysisReportFormat,
+  readAnalysisReport
+} from "@/analysis/report";
+
+/**
+ * Builds a report text from a valid outcome with overrides.
+ *
+ * @param overrides - Fields to replace in the report.
+ * @returns The JSON text an analysis process would send.
+ */
+async function reportText(overrides: Record<string, unknown> = {}): Promise<string> {
+  const outcome = await compiledOutcome();
+  if (!outcome.ok)
+    throw new Error("Expected the fixture to compile.");
+  return JSON.stringify({ format: analysisReportFormat, ok: true, manifest: outcome.manifest, entrypoints: outcome.entrypoints, diagnostics: outcome.diagnostics, ...overrides });
+}
+
+describe("readAnalysisReport", () => {
+  it("accepts a valid report and keeps the process output", async () => {
+    const outcome = await readAnalysisReport(await reportText(), "printed");
+    expect(outcome.ok).toBe(true);
+    expect(outcome.output).toBe("printed");
+    expect(outcome.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_SCHEMA_FIDELITY_UNVERIFIED"]);
+  });
+
+  it.each([
+    ["not JSON", "{"],
+    ["another format", JSON.stringify({ format: "other", ok: true, diagnostics: [] })],
+    ["an unregistered diagnostic code", JSON.stringify({ format: analysisReportFormat, ok: false, diagnostics: [{ code: "HOLQA_MADE_UP", severity: "error", message: "x" }] })],
+    ["a malformed location", JSON.stringify({ format: analysisReportFormat, ok: false, diagnostics: [{ code: "HOLQA_APP_INVALID", severity: "error", message: "x", location: { file: "a.ts", line: 0 } }] })],
+    ["failure without an error", JSON.stringify({ format: analysisReportFormat, ok: false, diagnostics: [] })]
+  ])("rejects a report with %s", async (_name, text) => {
+    const outcome = await readAnalysisReport(text, "");
+    expect(outcome.ok).toBe(false);
+    expect(outcome.diagnostics.map(diagnostic => diagnostic.code)).toContain("HOLQA_ANALYSIS_FAILED");
+  });
+
+  it("validates the manifest and entry points it receives", async () => {
+    const tampered = JSON.parse(await reportText()) as { manifest: { manifestVersion: number }; entrypoints: { manifest: string } };
+    const wrongVersion = await readAnalysisReport(JSON.stringify({ ...tampered, manifest: { ...tampered.manifest, manifestVersion: 9 } }), "");
+    expect(wrongVersion.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_MANIFEST_VERSION_UNSUPPORTED"]);
+    const otherManifest = await readAnalysisReport(JSON.stringify({ ...tampered, entrypoints: { ...tampered.entrypoints, manifest: `sha256:${"f".repeat(64)}` } }), "");
+    expect(otherManifest.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_MANIFEST_INVALID"]);
+  });
+});

@@ -1,8 +1,8 @@
 # Resource identity
 
-> **Status:** Implemented — identifier grammar, declaration-time validation, duplicate detection in `defineApp` (run time and compile time). Tracking identities across deployments is **Planned**.
+> **Status:** Implemented — identifier grammar, declaration-time validation, duplicate resource detection in `defineApp` (run time and compile time), and duplicate handler detection in the compiler (`holqa inspect`, `holqa build --manifest`). Tracking identities across deployments is **Planned**.
 
-Every resource and every handler in a Holqa application has an explicit, stable identifier, its `id`. The identifier is the persistent identity of the logical resource: it ends up in descriptors, diagnostics and, in the future, manifests, logs and physical resource names. The object key a handle is stored under is only a local alias. See [ADR 0004](../architecture/decisions/0004-stable-logical-resource-identities.md) for the reasoning.
+Every resource and every handler in a Holqa application has an explicit, stable identifier, its `id`. The identifier is the persistent identity of the logical resource: it ends up in descriptors, diagnostics and the manifest, and in the future in logs and physical resource names. The object key a handle is stored under is only a local alias. See [ADR 0004](../architecture/decisions/0004-stable-logical-resource-identities.md) for the reasoning.
 
 ## Rules
 
@@ -12,7 +12,7 @@ Every resource and every handler in a Holqa application has an explicit, stable 
 | Identifiers match `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$` and are 1 to 63 characters long. | `parseResourceId`; literal identifiers also at compile time | `HOLQA_RESOURCE_ID_INVALID` |
 | Resource identifiers are unique within an application, across every module that contributes resources. | `defineApp`; literal identifiers also at compile time | `HOLQA_RESOURCE_ID_DUPLICATE` |
 | A resource handle belongs to exactly one application instance. | `defineApp` | `HOLQA_DECLARATION_INVALID` |
-| Handler identifiers are unique within an application. | Planned: the compiler discovers handler modules | Planned |
+| Handler identifiers are unique within an application. | The compiler, after discovering handler modules (`holqa inspect`, `holqa build --manifest`) | `HOLQA_HANDLER_ID_DUPLICATE` |
 | Configuration entry names are their keys in `env` (for example `DATABASE_URL`). This is the one deliberate exception to "keys are only aliases": names map to environment variables, so renaming one is a breaking change for every environment that supplies it. | `defineApp` checks the name grammar | `HOLQA_DECLARATION_INVALID` |
 | Aliases (object keys) are unique within one record. | JavaScript object semantics; `composeResources` rejects aliases declared by two groups | Compile error, `HOLQA_DECLARATION_INVALID` |
 

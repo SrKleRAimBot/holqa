@@ -27,7 +27,8 @@ Contracts are the part of Holqa that outlives a single deployment: resource IDs 
 | JSON wire payloads, message envelopes, payload codecs, the `SchemaAdapter` contract | **Implemented** (`@holqa/core`) |
 | Normalized contracts, canonical JSON Schema, fingerprints, compatibility checks | **Implemented** (`@holqa/compiler`; ADR 0021) |
 | Zod adapter | **Implemented** (`@holqa/zod`) |
-| Manifest schema, storing contract records in it, migration engine | Planned |
+| Manifest version 1 and its JSON Schema, contract records in its schema table, `validateManifest` | **Implemented** (`@holqa/compiler`; ADR 0022) |
+| Comparing with a deployed manifest, migration engine | Planned |
 
 The authoritative description is [docs/reference/schema-contracts.md](../../../docs/reference/schema-contracts.md).
 
