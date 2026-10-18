@@ -11,8 +11,8 @@ Contracts are the part of Holqa that outlives a single deployment: resource IDs 
 
 ## When to use
 
-- Editing `packages/core/src/identity/**`, `packages/core/src/diagnostics/**`, or `packages/compiler/src/manifest/**`.
-- Designing resource definitions, message schemas, or schema adapters (future `sdk` and `integrations/*`).
+- Editing `packages/core/src/identity/**`, `packages/core/src/diagnostics/**`, `packages/core/src/schema/**`, `packages/core/src/wire/**`, `packages/compiler/src/manifest/**`, `packages/compiler/src/schema/**`, or `packages/integrations/zod/**`.
+- Designing resource definitions, message schemas, wire payloads, or schema adapters.
 - Adding a diagnostic code.
 - Producing anything that must be byte-for-byte reproducible.
 
@@ -23,9 +23,13 @@ Contracts are the part of Holqa that outlives a single deployment: resource IDs 
 | `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength` | **Implemented** (`@holqa/core`) |
 | `Diagnostic`, `createDiagnostic`, `formatDiagnostic`, `diagnosticCodes` | **Implemented** (`@holqa/core`) |
 | `canonicalJsonStringify`, `CanonicalJsonError`, `CanonicalJsonValue` | **Implemented** (`@holqa/compiler`) |
-| Standard Schema-based contracts, Zod integration | Accepted design (see ADR 0016, superseding ADR 0006); not implemented |
-| Normalized schema representation, fingerprints, evolution checks | Design; not implemented |
-| Manifest schema | Planned |
+| Standard Schema validation with structured issues (`validateInput`, `InputValidationError`) | **Implemented** (`@holqa/core`) |
+| JSON wire payloads, message envelopes, payload codecs, the `SchemaAdapter` contract | **Implemented** (`@holqa/core`) |
+| Normalized contracts, canonical JSON Schema, fingerprints, compatibility checks | **Implemented** (`@holqa/compiler`; ADR 0021) |
+| Zod adapter | **Implemented** (`@holqa/zod`) |
+| Manifest schema, storing contract records in it, migration engine | Planned |
+
+The authoritative description is [docs/reference/schema-contracts.md](../../../docs/reference/schema-contracts.md).
 
 ## Instructions
 
@@ -44,21 +48,24 @@ if (!result.ok)
 const id = result.value;      // ResourceId
 ```
 
-### 2. Schema contracts (design guidance)
+### 2. Schema contracts
 
 - Core generics depend on the **Standard Schema** interface (the `~standard` property with `validate`, `vendor`, and inferred input/output types), not on Zod types.
-- Zod is the first integration; Valibot and Effect Schema follow through adapters in `packages/integrations/*` (planned). Never import a schema library from `core`.
+- Zod is the first integration (`@holqa/zod`); Valibot and Effect Schema adapters are planned in `packages/integrations/*`. Never import a schema library from `core` or `compiler`.
 - Infer input and decoded output separately; do not assume they are the same type.
 - Validate at every trust boundary (HTTP input, queue messages, storage events, config). TypeScript types are not validation.
-- Standard Schema alone cannot provide JSON Schema, fingerprints, or compatibility data. A separate **normalized representation** is designed to carry: input/output shape, serialization rules, portable JSON Schema metadata, a stable fingerprint, and evolution metadata.
-- If a schema cannot be normalized faithfully (custom refinements, transforms, non-JSON types like `Date`, `bigint`, `Map`), produce an explicit diagnostic. Never emit an approximate JSON Schema silently.
+- Standard Schema alone cannot provide JSON Schema, fingerprints, or compatibility data. `normalizeSchema` (`@holqa/compiler`) builds a `SchemaContract` through a library adapter: canonical JSON Schema per side, `source` with fidelity, and structured `runtimeOnly` constraints.
+- If a schema cannot be normalized faithfully, an adapter returns a problem (reported as `HOLQA_SCHEMA_UNSUPPORTED`) or records a runtime-only constraint (`HOLQA_SCHEMA_RUNTIME_ONLY`). Never emit an approximate JSON Schema silently, and never add a construct to an adapter's supported list without a corpus test.
+- Adapters live in `packages/integrations/*`, depend only on `@holqa/core`, and may read library internals. Unknown library types must fail; unknown checks must become runtime-only.
+- Values crossing an execution boundary are JSON. Use `prepareWirePayload` (encode, then validate the encoded copy) rather than validating and sending the caller's object, and never send a schema's output. Binary data needs an explicit `PayloadCodec`.
 
-### 3. Versioning and evolution (design guidance)
+### 3. Versioning and evolution
 
 - Type compatibility is not data compatibility: a message persisted by an older deployment may fail a new schema that type-checks.
-- Message-carrying resources are designed to declare a `schemaVersion` (illustrative). Breaking changes (removing fields, narrowing types, making optional fields required, changing enum members) need a version bump and a migration story.
-- Additive changes (new optional fields, widened unions) are generally safe for consumers but not always for producers; document which side is affected.
-- The compatibility engine is not implemented; do not build an elaborate one without an accepted design.
+- Queues declare a `schemaVersion`; `holqa.message/1` envelopes carry it. Fingerprints (`fingerprintSchemaContract`) exclude the version and the source library.
+- `checkSchemaCompatibility` classifies changes by role (`message`, `request`, `response`) and direction. Breaking changes without a version increase are `HOLQA_SCHEMA_CHANGE_BREAKING` errors; with one, `HOLQA_SCHEMA_MIGRATION_REQUIRED` warnings.
+- The evolution guidance table in the reference is pinned by `packages/compiler/tests/schema/compatibility.test.ts`. Change both together.
+- A migration engine is not implemented; do not build one without an accepted design.
 
 ### 4. Canonical JSON
 
@@ -74,7 +81,7 @@ See [references/canonical-json-and-diagnostics.md](references/canonical-json-and
 
 ### 5. Diagnostic codes
 
-Codes are public, versioned contract. Current codes: `HOLQA_RESOURCE_ID_INVALID`, `HOLQA_CLI_UNKNOWN_COMMAND`, `HOLQA_CLI_NOT_IMPLEMENTED`, `HOLQA_MANIFEST_NOT_SERIALIZABLE`.
+Codes are public, versioned contract. The registry in `packages/core/src/diagnostics/codes.ts` and [docs/reference/diagnostic-codes.md](../../../docs/reference/diagnostic-codes.md) list every current code, including the `HOLQA_SCHEMA_*` and `HOLQA_PAYLOAD_*` codes. Keys of a diagnostic's `details` are documented per code and are contract too.
 
 To add one:
 
@@ -87,7 +94,7 @@ Never rename, remove, or reuse a code for a new meaning. Never put secrets or en
 
 ## Examples
 
-Illustrative resource definition (proposed API, not implemented, may change):
+A resource definition (implemented in `@holqa/sdk`):
 
 ```ts
 orders: queue({

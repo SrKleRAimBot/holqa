@@ -19,5 +19,9 @@ The project follows [Semantic Versioning](https://semver.org/) and [Conventional
 - Core application and resource model: the descriptor protocol, typed resource and trigger kind registries and the
   runtime binding contract in `@holqa/core`; `defineApp`, resource declarations, typed handles and handler registration
   in the new `@holqa/sdk`; compile-time type assertions in the new `@holqa/testing`. ADRs 0018 to 0020.
+- Schema system and contract compatibility: structured validation errors, JSON wire payloads validated after encoding,
+  versioned message envelopes and the `SchemaAdapter` contract in `@holqa/core`; schema normalization, canonical JSON
+  Schema, fingerprints and a role-aware compatibility checker in `@holqa/compiler`; the Zod 4 adapter in the new
+  `@holqa/zod`; the `examples/schema-evolution` corpus. ADR 0021.
 - Architecture documentation, ADRs, roadmap, contributor guides, agent instructions (`AGENTS.md`, `CLAUDE.md`,
   `.agents/`, `.claude/`), contributor skills, preview public skills, and examples.

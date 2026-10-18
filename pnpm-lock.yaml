@@ -281,6 +281,37 @@ importers:
       '@holqa/testing':
         specifier: workspace:*
         version: link:../../packages/testing
+      '@holqa/zod':
+        specifier: workspace:*
+        version: link:../../packages/integrations/zod
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
+    devDependencies:
+      '@types/bun':
+        specifier: 'catalog:'
+        version: 1.4.3
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+
+  examples/schema-evolution:
+    dependencies:
+      '@holqa/compiler':
+        specifier: workspace:*
+        version: link:../../packages/compiler
+      '@holqa/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@holqa/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@holqa/zod':
+        specifier: workspace:*
+        version: link:../../packages/integrations/zod
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
     devDependencies:
       '@types/bun':
         specifier: 'catalog:'
@@ -454,6 +485,25 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+
+  packages/integrations/zod:
+    dependencies:
+      '@holqa/core':
+        specifier: workspace:*
+        version: link:../../core
+    devDependencies:
+      '@types/bun':
+        specifier: 'catalog:'
+        version: 1.4.3
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.23.1(typescript@6.0.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
 
   packages/sdk:
     dependencies:

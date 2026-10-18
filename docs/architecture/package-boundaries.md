@@ -16,7 +16,7 @@ Holqa's packages are layered so that framework-neutral contracts never depend on
 | `@holqa/local` | `packages/local` | Local execution and resource emulation. | Planned | `core`, `runtime-bun` |
 | `@holqa/testing` | `packages/testing` | Testing utilities, fixtures, deterministic execution. | **Implemented** (type assertions only) | `core`, `sdk`, `local`, `runtime-bun` |
 | `@holqa/cli` | `packages/cli` | Developer CLI. | **Implemented** (help, version, `--json`) | `core`, `compiler`, `local`, `runtime-bun` |
-| Schema adapters | `packages/integrations/{zod,valibot,...}` | Convert one schema library's schemas for the compiler ([ADR 0016](decisions/0016-schema-adapters-and-conversion-fidelity.md)). | Planned | `core` only (Accepted design; enforced today only as an integration) |
+| Schema adapters | `packages/integrations/{zod,valibot,...}` | Convert one schema library's schemas for the compiler ([ADR 0016](decisions/0016-schema-adapters-and-conversion-fidelity.md)). | **Implemented** for Zod (`@holqa/zod`); others Planned | `core` only (enforced for `@holqa/zod`) |
 | Framework adapters | `packages/integrations/{orpc,tanstack-query,effect,...}` | Handler, transport, and client adapters. | Planned | `core`, `sdk`, `client` |
 | Drivers and providers | future `packages/providers/*` | Runtime drivers and provisioning providers. | Planned | `core` only (Accepted design; no packages yet) |
 | Experiments | `experiments/*` | Disposable M0 prototypes ([experiments](../../experiments/README.md)). | Not framework code | Mirror of this table (`experimentDependencies`); never a dependency of `packages/*` |

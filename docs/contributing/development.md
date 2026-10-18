@@ -77,13 +77,18 @@ pnpm --filter @holqa/core test:watch
 ```text
 holqa/
 ├── packages/
-│   ├── core/            @holqa/core: Result, diagnostics, ResourceId (implemented, private)
-│   ├── compiler/        @holqa/compiler: canonical JSON serializer (implemented, private)
+│   ├── core/            @holqa/core: contracts, diagnostics, descriptors, validation, wire payloads (implemented, private)
+│   ├── compiler/        @holqa/compiler: canonical JSON, schema contracts (implemented, private)
 │   ├── cli/             @holqa/cli: `holqa` bin, help/version only (implemented, private)
-│   ├── sdk/ runtime-bun/ local/ testing/ client/     planned: README only
-│   └── integrations/{zod,valibot,effect,orpc,tanstack-query}/   planned: README only
+│   ├── sdk/             @holqa/sdk: application and resource model (implemented, private)
+│   ├── testing/         @holqa/testing: type assertions (implemented, private)
+│   ├── runtime-bun/ local/ client/     planned: README only
+│   └── integrations/
+│       ├── zod/         @holqa/zod: Zod 4 schema adapter (implemented, private)
+│       └── {valibot,effect,orpc,tanstack-query}/   planned: README only
 ├── examples/
 │   ├── package-smoke/   consumes built packages, checks dist output (runs in pnpm test)
+│   ├── schema-evolution/  end-to-end schema contract corpus with Zod (runs in pnpm test)
 │   ├── commerce/        reference application, tested against the M0 experiments
 │   ├── basic-backend/   illustrative application structure (does not run)
 │   └── fullstack-vite/  illustrative application structure (does not run)

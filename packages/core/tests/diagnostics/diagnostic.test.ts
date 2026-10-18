@@ -56,3 +56,18 @@ describe("formatDiagnostic", () => {
       .toBe("infra.ts:3:7 warning HOLQA_RESOURCE_ID_INVALID: Check this.\n  hint: Rename it.");
   });
 });
+
+describe("diagnostic details", () => {
+  it("are copied and frozen at every level", () => {
+    const details = { issues: [{ path: "a" }] };
+    const diagnostic = createDiagnostic({ code: diagnosticCodes.inputInvalid, severity: "error", message: "Invalid.", details });
+    details.issues[0]!.path = "changed";
+    expect(diagnostic.details).toEqual({ issues: [{ path: "a" }] });
+    expect(Object.isFrozen(diagnostic.details)).toBe(true);
+    expect(Object.isFrozen((diagnostic.details as { issues: readonly object[] }).issues[0])).toBe(true);
+  });
+
+  it("are omitted when absent", () => {
+    expect("details" in createDiagnostic({ code: diagnosticCodes.inputInvalid, severity: "error", message: "Invalid." })).toBe(false);
+  });
+});

@@ -126,10 +126,24 @@ export type {
   Ok,
   Result
 } from "@/result";
-export { isStandardSchema } from "@/schema/standard-schema";
+export { schemaSides } from "@/schema/schema-adapter";
+export type {
+  RuntimeOnlyConstraint,
+  RuntimeOnlyKind,
+  SchemaAdapter,
+  SchemaConversionProblem,
+  SchemaSide,
+  SchemaSideConversion,
+  SchemaSideDescription
+} from "@/schema/schema-adapter";
+export { hasStandardJsonSchema, isStandardSchema } from "@/schema/standard-schema";
 export type {
   InferInput,
   InferOutput,
+  StandardJsonSchemaConverter,
+  StandardJsonSchemaOptions,
+  StandardJsonSchemaTarget,
+  StandardJsonSchemaV1,
   StandardSchemaFailure,
   StandardSchemaIssue,
   StandardSchemaOptions,
@@ -140,5 +154,34 @@ export type {
   StandardSchemaTypes,
   StandardSchemaV1
 } from "@/schema/standard-schema";
-export { InputValidationError, validateInput } from "@/schema/validate-input";
-export type { ValidationIssue } from "@/schema/validate-input";
+export {
+  InputValidationError,
+  normalizeIssue,
+  validateInput
+} from "@/schema/validate-input";
+export type {
+  ValidationIssue,
+  ValidationIssueInit,
+  ValidationPathSegment
+} from "@/schema/validate-input";
+export {
+  decodeJsonPayload,
+  encodeJsonPayload,
+  jsonPayloadMediaType,
+  PayloadError,
+  toWirePayload
+} from "@/wire/json-payload";
+export { createMessageCodec, prepareWirePayload } from "@/wire/message-codec";
+export type {
+  DecodedMessage,
+  MessageCodec,
+  MessageCodecOptions
+} from "@/wire/message-codec";
+export {
+  decodeMessageEnvelope,
+  encodeMessageEnvelope,
+  messageEnvelopeFormat
+} from "@/wire/message-envelope";
+export type { MessageEnvelope } from "@/wire/message-envelope";
+export { bytesPayloadCodec, jsonPayloadCodec } from "@/wire/payload-codec";
+export type { PayloadCodec } from "@/wire/payload-codec";

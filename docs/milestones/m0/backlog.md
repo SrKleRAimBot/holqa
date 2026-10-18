@@ -11,9 +11,11 @@ Identifiers are stable for cross-referencing (`HB-NN`). "Depends on" lists items
 | HB-05 | Done | Descriptor protocol in `@holqa/core`, with typed kind registries ([ADR 0018](../../architecture/decisions/0018-typed-kind-registries-in-the-descriptor-protocol.md)). A test loads a second copy of the module. |
 | HB-06 | Done | Standard Schema types, `isStandardSchema`, `validateInput`. |
 | HB-07 | Done | Binding slot on the application descriptor; `bindApp` also checks capabilities ([ADR 0020](../../architecture/decisions/0020-runtime-binding-resolution.md)). |
-| HB-09 | Partly done | `HOLQA_RESOURCE_ID_DUPLICATE`, `HOLQA_DECLARATION_INVALID`, `HOLQA_INPUT_INVALID`, `HOLQA_RUNTIME_NOT_BOUND` are registered, plus the new `HOLQA_RUNTIME_ALREADY_BOUND` and `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`. Compiler and runtime codes are registered with their emitters. |
+| HB-09 | Partly done | `HOLQA_RESOURCE_ID_DUPLICATE`, `HOLQA_DECLARATION_INVALID`, `HOLQA_INPUT_INVALID`, `HOLQA_RUNTIME_NOT_BOUND` are registered, plus the new `HOLQA_RUNTIME_ALREADY_BOUND` and `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`, and the schema and payload codes (`HOLQA_SCHEMA_*`, `HOLQA_PAYLOAD_*`). Other compiler and runtime codes are registered with their emitters. |
 | HB-10 | Done | `defineApp`, `defineResources`, `composeResources`, `queue`, `secret`, `variable`, with a type-level corpus and `package-smoke` coverage. |
 | HB-12 | Done | `bucket` with a portable object event schema, `schedule` with `scheduledTime` metadata. |
+| HB-08 | Done | `SchemaAdapter` in `@holqa/core` with structured `runtimeOnly` entries and an exact `library`. Fidelity is recorded on the contract's `source` by the normalizer ([ADR 0021](../../architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md)). |
+| HB-16 | Partly done | `@holqa/zod` with the M0 corpus extended (`packages/integrations/zod/tests`). The corpus runs against the installed Zod 4.6.7 only; running it against every supported minor version is open. |
 | HB-33 | Started | `checkIdentities` in `@holqa/core` is shared by `defineApp` and, later, the compiler. |
 
 ## Dependency overview

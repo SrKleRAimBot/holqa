@@ -1,6 +1,6 @@
 # Diagnostic codes
 
-> **Status:** Ten codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). Other codes on this page are planned examples and are not emitted by any code.
+> **Status:** Twenty-one codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). Other codes on this page are planned examples and are not emitted by any code.
 
 Every problem Holqa reports is a structured `Diagnostic` with a stable code. Tools, CI scripts, and agents should match on the code, never on the message text, which may be reworded.
 
@@ -13,6 +13,7 @@ interface Diagnostic {
   readonly message: string;
   readonly location?: { readonly file: string; readonly line?: number; readonly column?: number };
   readonly hint?: string;
+  readonly details?: JsonObject;
 }
 ```
 
@@ -23,6 +24,7 @@ interface Diagnostic {
 | `message` | A human-readable description. Not stable. |
 | `location` | Optional source position; `line` and `column` are 1-based. |
 | `hint` | Optional actionable guidance. |
+| `details` | Optional structured data, such as the failing field paths of `HOLQA_INPUT_INVALID` or the JSON path of `HOLQA_PAYLOAD_NOT_SERIALIZABLE`. Never contains rejected values or secrets. Its keys are documented per code below and are part of the contract. |
 
 Human-readable form (from `formatDiagnostic`; the location is shown for illustration, since `parseResourceId` itself does not attach one):
 
@@ -51,8 +53,21 @@ JSON form (as emitted by `holqa --json`):
 | `HOLQA_RUNTIME_NOT_BOUND` | `runtimeNotBound` | `requireBinding`, `resolveDriver`, `readConfig` (`@holqa/core`); handles and `app.env` (`@holqa/sdk`) | A resource handle or configuration value was used while no runtime binding is installed, for example at module top level. |
 | `HOLQA_RUNTIME_ALREADY_BOUND` | `runtimeAlreadyBound` | `bindApp` (`@holqa/core`) | A binding was installed on an application instance that already has one. |
 | `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` | `bindingCapabilityUnsupported` | `bindApp`, `checkCapabilities`, `resolveDriver` (`@holqa/core`) | A binding does not support a declared resource kind, cannot satisfy a declared requirement, or has no driver for a kind with operations. One diagnostic per shortfall. |
+| `HOLQA_SCHEMA_UNSUPPORTED` | `schemaUnsupported` | `normalizeSchema`, `describeSchemaContract` (`@holqa/compiler`) | A schema, or its wire side, has no faithful portable description: not a Standard Schema, no adapter and no Standard JSON Schema, a non-JSON type such as `Date`, or an adapter failure. `details`: `subject`, `path`. |
+| `HOLQA_SCHEMA_FIDELITY_UNVERIFIED` | `schemaFidelityUnverified` | `normalizeSchema` (`@holqa/compiler`) | Warning. The schema was described by its own Standard JSON Schema converter because no Holqa adapter matches its vendor. `details`: `subject`, `vendor`. |
+| `HOLQA_SCHEMA_RUNTIME_ONLY` | `schemaRuntimeOnly` | `normalizeSchema` (`@holqa/compiler`) | Warning. A constraint (refinement, rewrite, coercion, ...) is validated at runtime but missing from the portable description. One per constraint. `details`: `subject`, `path`, `kind`. |
+| `HOLQA_SCHEMA_CHANGE_BREAKING` | `schemaChangeBreaking` | `checkSchemaCompatibility` (`@holqa/compiler`) | A contract change rejects data the previous contract accepted, for the contract's role, and `schemaVersion` was not increased. `details`: `subject`, `path`, `kind`, `direction`, `classification`, `previousVersion`, `nextVersion`. |
+| `HOLQA_SCHEMA_CHANGE_POTENTIALLY_BREAKING` | `schemaChangePotentiallyBreaking` | `checkSchemaCompatibility` (`@holqa/compiler`) | Warning. A change may reject some data, for example during a rolling deployment or with a changed pattern. Same `details`. |
+| `HOLQA_SCHEMA_CHANGE_UNVERIFIABLE` | `schemaChangeUnverifiable` | `checkSchemaCompatibility` (`@holqa/compiler`) | Warning. A change uses constructs the checker does not analyze, or a contract is unverified (for every role). Same `details`. |
+| `HOLQA_SCHEMA_MIGRATION_REQUIRED` | `schemaMigrationRequired` | `checkSchemaCompatibility` (`@holqa/compiler`) | Warning. A breaking change came with a higher `schemaVersion`; data written with the old version must be drained or migrated. Same `details`. |
+| `HOLQA_SCHEMA_VERSION_INVALID` | `schemaVersionInvalid` | `describeSchemaContract`, `checkSchemaCompatibility` (`@holqa/compiler`); `createMessageCodec` (`@holqa/core`) | A schema version is not a positive integer, or is lower than the previous version. |
+| `HOLQA_PAYLOAD_NOT_SERIALIZABLE` | `payloadNotSerializable` | `toWirePayload`, `encodeJsonPayload`, `prepareWirePayload`, message codecs via `PayloadError` (`@holqa/core`); queue `send` (`@holqa/sdk`) | A value has no JSON wire form (`Date`, `bigint`, `NaN`, `Map`, a cycle, ...). `details`: `subject`, `path` (for example `$.lines[0].placedAt`). |
+| `HOLQA_PAYLOAD_MALFORMED` | `payloadMalformed` | `decodeJsonPayload`, `decodeMessageEnvelope`, message codecs (`@holqa/core`) | Received bytes are not valid UTF-8 JSON, or not a well-formed `holqa.message/1` envelope. `details`: `subject`, `path`. |
+| `HOLQA_PAYLOAD_VERSION_UNSUPPORTED` | `payloadVersionUnsupported` | Message codecs (`@holqa/core`) | A received message was produced with a schema version the consumer does not accept. `details`: `subject`, `path`. |
 
-All ten currently use severity `error`. Errors thrown by `@holqa/core` and `@holqa/sdk` are `HolqaError` instances whose `diagnostics` list every problem found.
+`HOLQA_INPUT_INVALID` carries `details: { subject, issues }`, where each issue has `path`, `pointer`, `segments`, `message` and optional scalar library `details` (for example Zod's `code` and `minimum`). See [schema contracts](schema-contracts.md).
+
+Codes are `error` severity unless marked as a warning above. Errors thrown by `@holqa/core` and `@holqa/sdk` are `HolqaError` instances whose `diagnostics` list every problem found.
 
 ## Stability policy
 
@@ -80,7 +95,6 @@ The following are **examples of planned codes**. They are not in the registry an
 | --- | --- | --- |
 | `HOLQA_RESOURCE_NOT_FOUND` | A handler or reference names a resource that is not declared. | Compiler (static validation) |
 | `HOLQA_HANDLER_ID_DUPLICATE` | Two handlers share an identifier. | Compiler (handler discovery) |
-| `HOLQA_SCHEMA_UNSUPPORTED` | A schema cannot be safely normalized into the portable representation. | Compiler (schema normalization), schema adapters |
 | `HOLQA_ROUTE_AMBIGUOUS` | Two HTTP routes or procedures match the same request. | Compiler (static validation) |
 | `HOLQA_QUEUE_CONSUMER_DUPLICATE` | More than one consumer is registered for a queue. | Compiler (static validation) |
 | `HOLQA_CONFIG_INVALID` | A secret or variable fails validation at startup. | Runtime |

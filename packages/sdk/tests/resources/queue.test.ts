@@ -1,3 +1,4 @@
+import type { HolqaError } from "@holqa/core";
 import type {
   QueueConsumer,
   QueueConsumerFor,
@@ -138,6 +139,66 @@ describe("queue", () => {
       expect(error).toBeInstanceOf(InputValidationError);
       expect((error as InputValidationError).issues.map(issue => issue.path)).toEqual(["at"]);
       expect(binding.sent).toHaveLength(1);
+    } finally {
+      unbind();
+    }
+  });
+
+  it("sends a JSON copy, so later mutation of the caller's object cannot change what was sent", async () => {
+    const notes = queue({ id: "notes", message: z.object({ text: z.string(), tag: z.string().optional() }), schemaVersion: 1 });
+    const app = defineApp({ name: "copies", resources: { notes } });
+    const binding = createTestBinding();
+    const unbind = bindApp(getAppDescriptor(app)!, binding);
+    try {
+      const message = { text: "hello", tag: undefined };
+      await notes.send(message);
+      message.text = "changed";
+      expect(binding.sent).toEqual([{ queue: "notes", message: { text: "hello" } }]);
+    } finally {
+      unbind();
+    }
+  });
+
+  it("rejects values without a JSON form before they reach the runtime", async () => {
+    const loose = queue({ id: "loose", message: z.object({ at: z.unknown() }), schemaVersion: 1 });
+    const app = defineApp({ name: "loose", resources: { loose } });
+    const binding = createTestBinding();
+    const unbind = bindApp(getAppDescriptor(app)!, binding);
+    try {
+      const error: unknown = await loose.send({ at: new Date(0) }).catch((caught: unknown) => caught);
+      expect((error as HolqaError).code).toBe("HOLQA_PAYLOAD_NOT_SERIALIZABLE");
+      expect(binding.sent).toEqual([]);
+    } finally {
+      unbind();
+    }
+  });
+
+  it("validates the same message on send and on receipt, with input and output types", async () => {
+    const event = z.object({ at: z.codec(z.iso.datetime(), z.date(), { decode: text => new Date(text), encode: date => date.toISOString() }) });
+    const events = queue({ id: "dated-events", message: event, schemaVersion: 1 });
+    const received: Date[] = [];
+    const consumer = events.consume({ id: "dated-events.read", handler: ({ message }) => {
+      expectTypeOf(message.at).toEqualTypeOf<Date>();
+      received.push(message.at);
+    } });
+    expectTypeOf<Parameters<typeof events.send>[0]>().toEqualTypeOf<{ at: string }>();
+    /**
+     * Never called: only its type-checking matters.
+     *
+     * @returns The pending call, which would reject at run time.
+     */
+    const sendDecoded = () => events.send(
+      // @ts-expect-error `send` takes the wire (input) form, not the decoded Date.
+      { at: new Date(0) }
+    );
+    expect(typeof sendDecoded).toBe("function");
+    const app = defineApp({ name: "round-trip", resources: { events } });
+    const binding = createTestBinding();
+    const unbind = bindApp(getAppDescriptor(app)!, binding);
+    try {
+      await events.send({ at: "2026-10-18T09:00:00.000Z" });
+      await consumer["~holqa"].invoke(binding.sent[0]!.message, createContext({ attempt: 1, messageId: "m-1" }));
+      expect(received.map(date => date.toISOString())).toEqual(["2026-10-18T09:00:00.000Z"]);
     } finally {
       unbind();
     }

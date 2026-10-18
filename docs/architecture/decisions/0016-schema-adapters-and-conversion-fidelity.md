@@ -5,7 +5,7 @@
 - **Deciders:** Holqa maintainers
 - **Supersedes:** [0006](0006-standard-schema-and-portable-schema-representation.md)
 
-> **Implementation status:** Accepted design, validated by the disposable [schema interoperability experiment](../../../experiments/schema-adapters/README.md) for Zod 4.6.7 and Valibot 1.5.0. No schema support exists in `@holqa/core` or `packages/integrations/*` yet.
+> **Implementation status:** Implemented for Zod, following a proposed refinement of decision 2 in [ADR 0021](0021-schema-contracts-wire-payloads-and-compatibility.md) (one fidelity per contract rather than per side), which is pending acceptance. Validated first by the disposable [schema interoperability experiment](../../../experiments/schema-adapters/README.md) for Zod 4.6.7 and Valibot 1.5.0.
 
 ## Context
 

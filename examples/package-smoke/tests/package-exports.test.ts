@@ -9,8 +9,13 @@ import type {
   Expect
 } from "@holqa/testing";
 
-import { canonicalJsonStringify } from "@holqa/compiler";
 import {
+  canonicalJsonStringify,
+  checkSchemaCompatibility,
+  describeSchemaContract
+} from "@holqa/compiler";
+import {
+  createMessageCodec,
   getAppDescriptor,
   parseResourceId
 } from "@holqa/core";
@@ -19,12 +24,14 @@ import {
   queue
 } from "@holqa/sdk";
 import { assertType } from "@holqa/testing";
+import { zodAdapter } from "@holqa/zod";
 import {
   describe,
   expect,
   expectTypeOf,
   it
 } from "bun:test";
+import { z } from "zod";
 
 describe("@holqa/core public exports", () => {
   it("validates resource identifiers through the built package", () => {
@@ -58,6 +65,24 @@ describe("@holqa/sdk public exports", () => {
     expectTypeOf(app.resources.counts.id).toEqualTypeOf<"counts">();
     expectTypeOf<QueueMessageInput<typeof app.resources.counts>>().toEqualTypeOf<number>();
     expect(getAppDescriptor(app)?.resources.map(resource => resource.kind)).toEqual(["queue"]);
+  });
+});
+
+describe("schema contracts through the built packages", () => {
+  it("encodes and decodes a versioned message with @holqa/core", async () => {
+    const codec = createMessageCodec(count, { schemaVersion: 1, subject: "count" });
+    expect((await codec.decode(await codec.encode(3))).message).toBe(3);
+  });
+
+  it("describes, fingerprints and compares Zod contracts with @holqa/zod and @holqa/compiler", async () => {
+    const options = { subject: "message", schemaVersion: 1, adapters: [zodAdapter] };
+    const previous = await describeSchemaContract(z.object({ id: z.string() }), options);
+    const next = await describeSchemaContract(z.object({ id: z.string(), customer: z.string() }), options);
+    if (!previous.ok || !next.ok)
+      throw new Error("Expected both schemas to be described.");
+    expect(previous.value.record.fingerprint).toMatch(/^sha256:[0-9a-f]{64}$/);
+    const report = checkSchemaCompatibility(previous.value.record, next.value.record, { role: "message", subject: "message" });
+    expect(report.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_SCHEMA_CHANGE_BREAKING"]);
   });
 });
 

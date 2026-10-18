@@ -67,6 +67,15 @@ const experimentDependencies: Readonly<Record<string, readonly string[]>> = {
 /** Allowed internal dependencies for any package under `packages/integrations/`. */
 const integrationDependencies = ["@holqa/core", "@holqa/sdk", "@holqa/client"];
 
+/**
+ * Schema adapters are integrations with a narrower rule (ADR 0017, ADR 0021):
+ * they may depend on `@holqa/core` only, so that the compiler can load them
+ * without pulling in the SDK or client.
+ */
+const schemaAdapterDependencies: Readonly<Record<string, readonly string[]>> = {
+  "@holqa/zod": ["@holqa/core"]
+};
+
 /** Source file extensions considered when scanning modules. */
 const sourceExtensions = [".ts", ".tsx", ".mts", ".cts"];
 
@@ -133,7 +142,7 @@ function checkDependencyDirections(pkg: WorkspacePackage): string[] {
   const allowed = pkg.kind === "example"
     ? undefined
     : pkg.kind === "integration"
-      ? integrationDependencies
+      ? schemaAdapterDependencies[pkg.name] ?? integrationDependencies
       : pkg.kind === "experiment" ? experimentDependencies[pkg.name] : allowedDependencies[pkg.name];
 
   if (pkg.kind === "framework" && allowed === undefined)

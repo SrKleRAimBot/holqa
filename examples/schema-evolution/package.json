@@ -1,0 +1,25 @@
+{
+  "name": "@holqa/example-schema-evolution",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "End-to-end schema contract corpus: one Zod message schema validated on publish and receipt, normalized, fingerprinted and checked for compatible evolution.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@holqa/compiler": "workspace:*",
+    "@holqa/core": "workspace:*",
+    "@holqa/sdk": "workspace:*",
+    "@holqa/zod": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

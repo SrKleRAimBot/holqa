@@ -1,6 +1,6 @@
 # API design specification
 
-> **Status:** Partly implemented. The application definition, the `queue`, `bucket`, `schedule` and `http.api` declarations, configuration entries, typed handles, queue, bucket and schedule handler registration, the descriptor protocol and the runtime binding contract are **Implemented** in `@holqa/core` and `@holqa/sdk`, with the differences listed under [implementation status](#implementation-status). HTTP routes, `reply`, RPC procedures, `staticSite`, schema adapters and infrastructure bindings remain **Proposed**. Parts marked **Validated in M0** were prototyped in the disposable [`experiments/`](../../experiments/README.md) packages, which are not part of the framework.
+> **Status:** Partly implemented. The application definition, the `queue`, `bucket`, `schedule` and `http.api` declarations, configuration entries, typed handles, queue, bucket and schedule handler registration, the descriptor protocol and the runtime binding contract are **Implemented** in `@holqa/core` and `@holqa/sdk`, with the differences listed under [implementation status](#implementation-status). Schema adapters are **Implemented** as described in [schema contracts](schema-contracts.md). HTTP routes, `reply`, RPC procedures, `staticSite` and infrastructure bindings remain **Proposed**. Parts marked **Validated in M0** were prototyped in the disposable [`experiments/`](../../experiments/README.md) packages, which are not part of the framework.
 
 This page specifies the public APIs for application definitions, typed resources, handlers, schema adapters and bindings. It is the target for the first real implementation of `@holqa/sdk` and the descriptor contracts in `@holqa/core`. Decisions behind it are recorded in ADRs [0012](../architecture/decisions/0012-source-inferred-types-and-reply-helpers.md) to [0017](../architecture/decisions/0017-package-layers-after-m0.md). The [commerce example](../../examples/commerce/README.md) is the reference application written against it.
 
@@ -14,7 +14,8 @@ This page specifies the public APIs for application definitions, typed resources
 | Handler registrations `consume`, `onObjectCreated`, `handle` | **Implemented** | Registrations expose `trigger` (the trigger kind), `id` and `resourceId`. |
 | Descriptor protocol | **Implemented** | Typed kind registries instead of open `config` objects; handler descriptors hold `definition` (JSON metadata) separately from `invoke`; resource descriptors add `requirements` ([ADR 0018](../architecture/decisions/0018-typed-kind-registries-in-the-descriptor-protocol.md)). |
 | Runtime bindings | **Implemented** (contract only) | `RuntimeBinding` is `{ name, capabilities, drivers, config }`; `bindApp` checks capabilities and drivers before installing; rebinding fails with `HOLQA_RUNTIME_ALREADY_BOUND` ([ADR 0020](../architecture/decisions/0020-runtime-binding-resolution.md)). No runtime installs bindings yet. |
-| Schema adapters, infrastructure bindings, routes, procedures, `staticSite` | Proposed | — |
+| Schema adapters | **Implemented** | The method is `describe(schema, side)` and returns a description with structured `runtimeOnly` entries, or a problem with a `path` and `hint`. Fidelity is recorded on the normalized contract's `source`, not per conversion ([ADR 0021](../architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md)). |
+| Infrastructure bindings, routes, procedures, `staticSite` | Proposed | — |
 
 The [resource model](../architecture/resource-model.md) and the [packages reference](packages.md) describe the implemented API; this page keeps the original proposal for the parts that are not built.
 
@@ -149,7 +150,7 @@ Trigger kinds used in M0: `http.route`, `queue.message`, `bucket.object-created`
 
 ## Schema adapters (`@holqa/core` contract, integration packages)
 
-The following code is illustrative. The API is proposed, not implemented, and may change.
+This is the original M0 proposal. The implemented contract differs as listed under [implementation status](#implementation-status); see [schema contracts](schema-contracts.md) for the implemented API.
 
 ```ts
 export interface SchemaAdapter {

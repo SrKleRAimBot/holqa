@@ -17,6 +17,7 @@ import type { CheckResourceId } from "@/types/checks";
 import {
   descriptorKey,
   descriptorProtocol,
+  prepareWirePayload,
   resolveDriver,
   validateInput
 } from "@holqa/core";
@@ -113,8 +114,11 @@ export interface QueueConsumer<QueueId extends string, HandlerId extends string,
 export interface QueueHandle<Id extends string, Message extends StandardSchemaV1> extends ResourceHandle<"queue", Id> {
   readonly message: Message;
   /**
-   * Validates a message and hands it to the bound runtime in its input (wire)
-   * form. Consumers decode it again with the same schema.
+   * Converts a message to its JSON wire form, validates that form and hands it
+   * to the bound runtime. Consumers decode it again with the same schema.
+   * Rejects values without a JSON form (`HOLQA_PAYLOAD_NOT_SERIALIZABLE`) and
+   * invalid messages (`HOLQA_INPUT_INVALID`). The driver receives the bare
+   * payload; drivers do not use the versioned message envelope yet.
    */
   readonly send: (message: InferInput<Message>) => Promise<void>;
   /** Registers a consumer for this queue. Registration is declarative: nothing runs until a runtime invokes it. */
@@ -176,11 +180,13 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
     send: async (message: InferInput<Message>) => {
       const operation = `queue "${id}" send`;
       const driver = resolveDriver(ownerOf(handle, operation), descriptor, operation);
-      // Validate early to catch producer bugs, but put the *input* form on the
-      // wire: consumers decode it with the same schema, so forwarding the
-      // decoded output would make transformed fields fail consumer validation.
-      await validateInput(options.message, message, subject);
-      await driver.send(message);
+      // Put the *input* form on the wire, as a JSON copy validated with the
+      // same schema consumers decode it with. Forwarding the decoded output
+      // would make transformed fields (for example a Date) fail consumer
+      // validation, and forwarding the caller's object would let later
+      // mutation change what was sent.
+      const payload = await prepareWirePayload(options.message, message, subject);
+      await driver.send(payload);
     },
     consume: <const HandlerId extends string>(consumer: QueueConsumerOptions<HandlerId, InferOutput<Message>> & CheckResourceId<HandlerId>) => {
       const rawConsumer = requireOptions(consumer, `consumer of queue "${id}"`);

@@ -1,6 +1,6 @@
 # Packages
 
-> **Status:** Reference for the current repository state. Five framework packages and one example package exist; all are `"private": true` and unpublished. Other packages are planned.
+> **Status:** Reference for the current repository state. Five framework packages, one integration package and three example packages (`package-smoke` and `schema-evolution` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
 
 All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single entry point (`.`) through their `exports` map. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
 
@@ -9,15 +9,16 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | Package | Path | Status | Purpose |
 | --- | --- | --- | --- |
 | `@holqa/core` | `packages/core` | **Implemented** (contracts) | Framework-neutral contracts: diagnostics, identity, descriptor protocol, resource and trigger registries, runtime binding. |
-| `@holqa/compiler` | `packages/compiler` | **Implemented** (canonical JSON only) | Compiler; today only deterministic serialization. |
+| `@holqa/compiler` | `packages/compiler` | **Implemented** (canonical JSON, schema contracts) | Compiler; today deterministic serialization, schema normalization, fingerprints and compatibility checks. |
 | `@holqa/cli` | `packages/cli` | **Implemented** (help, version, `--json`) | The `holqa` command-line interface. |
 | `@holqa/example-package-smoke` | `examples/package-smoke` | **Implemented** | Verifies built package outputs. |
+| `@holqa/example-schema-evolution` | `examples/schema-evolution` | **Implemented** | End-to-end schema contract corpus with Zod. |
 | `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model) | Public developer-facing SDK. |
 | `@holqa/runtime-bun` | `packages/runtime-bun` | Planned | Bun execution and invocation adapters. |
 | `@holqa/local` | `packages/local` | Planned | Local execution and resource emulation. |
 | `@holqa/testing` | `packages/testing` | **Implemented** (type assertions only) | Testing utilities; deterministic execution is planned. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
-| Zod integration | `packages/integrations/zod` | Planned | Zod schema adapter. |
+| `@holqa/zod` | `packages/integrations/zod` | **Implemented** | Zod 4 schema adapter. |
 | Valibot integration | `packages/integrations/valibot` | Planned | Valibot schema adapter. |
 | Effect integration | `packages/integrations/effect` | Planned | Effect handlers, Effect Schema, Effect HTTP. |
 | oRPC integration | `packages/integrations/orpc` | Planned | oRPC interoperability. |
@@ -37,7 +38,7 @@ Planned packages are directories containing only a README. They have no `package
 | --- | --- | --- |
 | `Result<T, E>`, `Ok<T>`, `Err<E>` | Types | Discriminated union for recoverable failures: `{ ok: true, value }` or `{ ok: false, error }`. |
 | `ok(value)`, `err(error)` | Functions | Create frozen `Ok` / `Err` results. |
-| `Diagnostic` | Type | `{ code, severity, message, location?, hint? }`. |
+| `Diagnostic` | Type | `{ code, severity, message, location?, hint?, details? }`. |
 | `DiagnosticSeverity` | Type | `"error" \| "warning" \| "info"`. |
 | `DiagnosticLocation` | Type | `{ file, line?, column? }`, 1-based. |
 | `createDiagnostic(input)` | Function | Creates a frozen diagnostic, omitting absent optional fields. |
@@ -54,7 +55,16 @@ Planned packages are directories containing only a README. They have no `package
 | `isHolqaError(value)`, `diagnosticsOf(value)` | Functions | Recognize Holqa errors by shape, including errors from another copy of the package. |
 | `JsonValue`, `JsonObject`, `isJsonValue(value)` | Types, function | Plain JSON data and a guard that rejects non-finite numbers, non-plain objects and cycles. |
 | `StandardSchemaV1`, `InferInput`, `InferOutput`, `isStandardSchema(value)` | Types, function | Structural copies of the Standard Schema v1 interfaces, and a structural guard. |
-| `validateInput(schema, value, subject)` | Function | Validates untrusted input (always awaited) and returns the schema output; throws `InputValidationError` (`HOLQA_INPUT_INVALID`) with normalized issue paths. |
+| `StandardJsonSchemaV1`, `StandardJsonSchemaConverter`, `StandardJsonSchemaOptions`, `StandardJsonSchemaTarget`, `hasStandardJsonSchema(schema)` | Types, function | Structural copies of the Standard JSON Schema extension, and a guard. |
+| `validateInput(schema, value, subject)` | Function | Validates untrusted input (always awaited) and returns the schema output; throws `InputValidationError` (`HOLQA_INPUT_INVALID`). |
+| `InputValidationError`, `ValidationIssue`, `ValidationIssueInit`, `ValidationPathSegment`, `normalizeIssue(issue)` | Class, types, function | Per-field issues with `path`, `segments`, `pointer` and scalar `details`; the rejected input is never kept. The diagnostic's `details.issues` repeats them. |
+| `toWirePayload(value, subject)`, `encodeJsonPayload`, `decodeJsonPayload`, `jsonPayloadMediaType` | Functions, constant | The JSON wire format: exact copies; `HOLQA_PAYLOAD_NOT_SERIALIZABLE` or `HOLQA_PAYLOAD_MALFORMED` with a JSON path. |
+| `prepareWirePayload(schema, value, subject)` | Function | Encodes a value and validates the encoded copy; what queue `send` uses. |
+| `PayloadError` | Class | `HolqaError` with the offending JSON `path`. |
+| `createMessageCodec(schema, options)`, `MessageCodec`, `MessageCodecOptions`, `DecodedMessage` | Function, types | Versioned envelopes, encoded and decoded with one schema; rejects unaccepted versions with `HOLQA_PAYLOAD_VERSION_UNSUPPORTED`. |
+| `MessageEnvelope`, `messageEnvelopeFormat`, `encodeMessageEnvelope`, `decodeMessageEnvelope` | Type, constant, functions | The `holqa.message/1` envelope. |
+| `PayloadCodec`, `jsonPayloadCodec`, `bytesPayloadCodec` | Type, constants | Explicit codecs for JSON and binary payloads. |
+| `SchemaAdapter`, `SchemaSide`, `schemaSides`, `SchemaSideConversion`, `SchemaSideDescription`, `SchemaConversionProblem`, `RuntimeOnlyConstraint`, `RuntimeOnlyKind` | Types, constant | The contract schema-library adapters implement. See [schema contracts](schema-contracts.md). |
 | `descriptorKey`, `descriptorProtocol` | Constants | `"~holqa"` and `1`. |
 | `AppDescriptor`, `ResourceDescriptor`, `ResourceDescriptorOf<K>`, `HandlerDescriptor`, `HandlerDescriptorOf<T>`, `ConfigDescriptor`, `Described<D>` | Types | The descriptor protocol. |
 | `getDescriptor`, `getAppDescriptor`, `getResourceDescriptor`, `getHandlerDescriptor`, `getConfigDescriptor` | Functions | Structural descriptor readers; return `undefined` for other protocol versions, unknown kinds and malformed values. |
@@ -106,7 +116,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/compiler`
 
 - **Path:** `packages/compiler`
-- **Status:** Implemented (canonical JSON only). Private. The compilation pipeline and manifest schema are planned ([compiler](../architecture/compiler.md)).
+- **Status:** Implemented (canonical JSON, schema contracts). Private. The compilation pipeline and manifest schema are planned ([compiler](../architecture/compiler.md)).
 - **Purpose:** Resource analysis, manifest IR, diagnostics, and compilation.
 - **Entry point:** `@holqa/compiler` → `dist/index.js`, `dist/index.d.ts`.
 - **Internal dependencies:** `@holqa/core`.
@@ -116,8 +126,30 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `canonicalJsonStringify(value)` | Function | Deterministic JSON: sorted keys at every depth, 2-space indent, no trailing newline, `-0` → `0`. Throws `CanonicalJsonError` for values with no canonical form. |
 | `CanonicalJsonError` | Class | Error with a `diagnostic` property (code `HOLQA_MANIFEST_NOT_SERIALIZABLE`); the message includes the JSON path, such as `$.resources[0].id`. |
 | `CanonicalJsonValue` | Type | `null`, boolean, number, string, arrays, and plain objects of these. |
+| `normalizeSchema(schema, options)`, `NormalizeSchemaOptions`, `NormalizedSchema` | Function, types | Converts a Standard Schema into a canonical `SchemaContract` through a vendor adapter (or, unverified, its Standard JSON Schema converter). Returns warnings, or `HOLQA_SCHEMA_UNSUPPORTED` errors. |
+| `describeSchemaContract(schema, options)`, `DescribeSchemaContractOptions`, `DescribedSchemaContract` | Function, types | Normalizes and fingerprints a schema into a `SchemaContractRecord` with its `schemaVersion`. |
+| `SchemaContract`, `SchemaContractRecord`, `SchemaOutputContract`, `SchemaSource`, `SchemaFidelity`, `schemaContractFormat`, `jsonSchemaDialect` | Types, constants | The `holqa.schema-contract/1` format. |
+| `canonicalizeJsonSchema(schema)` | Function | Sorts and de-duplicates set-like keywords; never removes a constraint. |
+| `fingerprintSchemaContract(contract)`, `schemaFingerprintPrefix` | Function, constant | `sha256:` over the canonical JSON of the contract's wire-relevant parts. |
+| `checkSchemaCompatibility(previous, next, options)` | Function | Classifies changes by role (`message`, `request`, `response`) as safe, potentially breaking, unverifiable or breaking, with diagnostics. |
+| `SchemaCompatibilityReport`, `SchemaChange`, `SchemaChangeKind`, `ChangeClassification`, `ChangeDirection`, `ContractRole`, `ContractVersion`, `CheckSchemaCompatibilityOptions`, `AcceptanceCertainty` | Types | The JSON-serializable compatibility report. |
 
-Rejected values: `undefined`, functions, symbols, bigints, `NaN`, `Infinity`, non-plain objects (such as `Date`, `Map`, class instances), and circular references.
+`canonicalJsonStringify` rejects `undefined`, functions, symbols, bigints, `NaN`, `Infinity`, non-plain objects (such as `Date`, `Map`, class instances), and circular references. Schema contracts are described in [schema contracts](schema-contracts.md).
+
+## `@holqa/zod`
+
+- **Path:** `packages/integrations/zod`
+- **Status:** Implemented. Private.
+- **Purpose:** The Zod 4 schema adapter (classic and Mini). See [schema contracts](schema-contracts.md#zod-support) and the [package README](../../packages/integrations/zod/README.md).
+- **Entry point:** `@holqa/zod` → `dist/index.js`, `dist/index.d.ts`.
+- **Internal dependencies:** `@holqa/core`. Peer dependency: `zod` `^4.6.7`.
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `zodAdapter` | Constant | The default `SchemaAdapter` for the `zod` vendor; `library` is the installed Zod version. |
+| `createZodAdapter(options?)`, `ZodAdapterOptions` | Function, type | Creates an adapter with an optional `library` identifier; throws when Zod is not version 4. |
+| `isZodSchema(value)` | Function | Structural check for Zod 4 schemas. |
+| `zodVendor` | Constant | `"zod"`. |
 
 ## `@holqa/cli`
 
@@ -136,11 +168,17 @@ Rejected values: `undefined`, functions, symbols, bigints, `NaN`, `Infinity`, no
 | `ProposedCommand` | Type | `{ name, summary }`. |
 | `findProposedCommand(positionals)` | Function | Finds the longest proposed command matching the leading positional arguments. |
 
+## `@holqa/example-schema-evolution`
+
+- **Path:** `examples/schema-evolution`
+- **Status:** Implemented. Private; not published.
+- **Purpose:** One Zod order message, validated on publish (`queue(...).send`, message codecs) and on receipt, normalized, fingerprinted, and checked against compatible and breaking versions. See its [README](../../examples/schema-evolution/README.md).
+
 ## `@holqa/example-package-smoke`
 
 - **Path:** `examples/package-smoke`
 - **Status:** Implemented. Private; not published.
-- **Purpose:** Consumes `@holqa/core`, `@holqa/compiler`, `@holqa/cli`, `@holqa/sdk`, and `@holqa/testing` through their public exports after they are built. It verifies that `dist/` contains JavaScript and declarations, that no unresolved `@/` aliases remain in emitted `.js` or `.d.ts` files, and that the built `holqa` binary runs.
+- **Purpose:** Consumes `@holqa/core`, `@holqa/compiler`, `@holqa/cli`, `@holqa/sdk`, `@holqa/testing`, and `@holqa/zod` through their public exports after they are built. It verifies that `dist/` contains JavaScript and declarations, that no unresolved `@/` aliases remain in emitted `.js` or `.d.ts` files, and that the built `holqa` binary runs.
 - **Run:** `pnpm --filter @holqa/example-package-smoke test` (after `pnpm build`), or as part of `pnpm test` / `pnpm check`.
 
 ## Planned packages
@@ -151,7 +189,7 @@ Rejected values: `undefined`, functions, symbols, bigints, `NaN`, `Infinity`, no
 | `@holqa/local` | Local runtime drivers: queue, storage, and scheduler emulation; event inspection. | `core`, `runtime-bun` |
 | `@holqa/testing` (extensions) | Deterministic test harness; simulated deliveries, retries, failures; fixtures. | `core`, `sdk`, `local`, `runtime-bun` |
 | `@holqa/client` | Fetch-based runtime for generated, browser-safe clients. Runtime-neutral. | `core` |
-| `packages/integrations/*` | Schema, handler, transport, and client adapters. See [integrations](../integrations/index.md). | `core`, `sdk`, `client` |
+| `packages/integrations/*` (except `zod`) | Schema, handler, transport, and client adapters. See [integrations](../integrations/index.md). | `core`, `sdk`, `client` |
 
 See the [roadmap](../roadmap.md) for when each is expected.
 

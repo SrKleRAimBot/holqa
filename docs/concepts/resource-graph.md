@@ -81,7 +81,7 @@ The compiler (planned, see [compiler](../architecture/compiler.md)) is responsib
 | References resolve. | A handler for a resource that was removed. | `HOLQA_RESOURCE_NOT_FOUND` (planned) |
 | A queue has at most one consumer. | Two `consume` calls on `order-processing`. | Planned |
 | Routes are unambiguous. | Two handlers for `GET /api/orders/:id`. | Planned |
-| Schemas can be normalized. | A schema transformation with no portable form. | `HOLQA_SCHEMA_UNSUPPORTED` (planned) |
+| Schemas can be normalized. | A schema transformation with no portable form. | `HOLQA_SCHEMA_UNSUPPORTED` (emitted by `normalizeSchema`; graph validation is planned) |
 | Requirements are satisfiable by the selected binding. | `deadLetter: true` on a driver without dead-letter support. | Planned |
 
 See [diagnostic codes](../reference/diagnostic-codes.md) for the naming convention and current registry.

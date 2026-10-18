@@ -8,7 +8,7 @@ metadata:
 
 # Evolving schemas safely
 
-> **Preview — not yet available.** Schema fingerprints, compatibility diagnostics and versioned message decoding are **planned** compiler features. Nothing checks compatibility automatically today; apply this workflow by review.
+> **Preview.** Schema fingerprints, the compatibility checker and versioned message codecs exist as library functions in `@holqa/compiler`, `@holqa/core` and `@holqa/zod` (private, unpublished packages). Nothing runs them automatically yet: there is no manifest or CLI command that compares a deployment with the previous one. Call them from a test, as shown below.
 
 ## When to use
 
@@ -22,15 +22,31 @@ TypeScript checks the code you are deploying. It cannot see messages written by 
 
 ## Works today
 
-Nothing Holqa-specific. You can test schemas directly: keep fixtures of every previous message shape and assert the new schema still parses them (`schema.safeParse(fixture).success`).
+Compare the deployed and the new schema in a test. The checker classifies each change for the contract's role (`message`, `request` or `response`) and fails on a breaking change unless `schemaVersion` was increased:
 
-## Planned workflow
+```ts
+import { checkSchemaCompatibility, describeSchemaContract } from "@holqa/compiler";
+import { zodAdapter } from "@holqa/zod";
+
+const subject = "message for queue \"order-processing\"";
+const previous = await describeSchemaContract(orderV1, { subject, schemaVersion: 1, adapters: [zodAdapter] });
+const next = await describeSchemaContract(orderV2, { subject, schemaVersion: 1, adapters: [zodAdapter] });
+if (previous.ok && next.ok) {
+  const report = checkSchemaCompatibility(previous.value.record, next.value.record, { role: "message", subject });
+  // report.compatible is false and report.diagnostics contains HOLQA_SCHEMA_CHANGE_BREAKING
+  // with details.path "$.currency" and details.kind "required-property-added".
+}
+```
+
+Keep fixtures of every previous message shape as well, and assert the new schema still parses them (`schema.safeParse(fixture).success`). The checker only reasons about the portable description; fixtures also cover refinements. The full policy is in [schema contracts](../../docs/reference/schema-contracts.md#evolution-guidance).
+
+## Workflow
 
 1. **Classify the change.**
 
    | Change | Producers → consumers | Safe in one deploy? |
    | --- | --- | --- |
-   | Add optional field / field with default | Old messages still parse | Yes |
+   | Add optional field / field with default | Old messages still parse | Yes, unless old consumers reject undeclared fields |
    | Add required field | Old messages fail | No — stage it |
    | Remove field consumers read | New messages fail old consumers | No — stage it |
    | Rename field | Both of the above | No — add new, migrate, remove old |
@@ -41,10 +57,10 @@ Nothing Holqa-specific. You can test schemas directly: keep fixtures of every pr
 3. **Deploy consumers before producers.** Consumers must understand the new shape before anything sends it.
 4. **Remove the old shape** only after confirming no old messages remain.
 5. **For HTTP/RPC, keep deployed clients working**: additive outputs, optional inputs, or a new route/procedure `id` for incompatible behavior.
-6. **Review compiler diagnostics** once the planned compatibility checks exist.
+6. **Run the compatibility check** in a test (above) until the compiler runs it against the previous deployment (planned).
 
 ```ts
-// infra.ts — illustrative, proposed API: version 2 adds a required currency
+// infra.ts: version 2 adds a required currency
 const orderV1 = z.object({ orderId: z.string(), priority: z.enum(["normal", "urgent"]) });
 const orderV2 = orderV1.extend({ currency: z.string().length(3) });
 
@@ -56,7 +72,7 @@ orders: queue({
 })
 ```
 
-Transforms like the one above may not be representable as portable JSON Schema; the planned compiler is expected to report such schemas explicitly rather than approximate them.
+A transform like the one above has no portable decoded side. The normalizer still describes its wire side and records the decoded side as unrepresentable, rather than approximating it.
 
 ## Pitfalls
 
