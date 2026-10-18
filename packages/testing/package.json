@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.0",
   "private": true,
-  "description": "Testing utilities for Holqa applications. Today: compile-time type assertions for declarations and typed handles.",
+  "description": "Testing utilities for Holqa applications: createTestApp for deterministic integration tests on the local environment (virtual clock, event flushing, failure injection), and compile-time type assertions.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -36,10 +36,12 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@holqa/core": "workspace:*",
+    "@holqa/local": "workspace:*",
+    "@holqa/runtime-bun": "workspace:*",
     "@holqa/sdk": "workspace:*"
   },
   "devDependencies": {
-    "@holqa/core": "workspace:*",
     "@types/bun": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"

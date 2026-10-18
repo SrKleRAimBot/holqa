@@ -26,4 +26,12 @@ describe("parseOptions", () => {
   ])("rejects %p", (args, problem) => {
     expect(parseOptions(args, spec)).toEqual({ ok: false, problems: [problem] });
   });
+
+  it("reads exactly the positional arguments a command requires", () => {
+    const withPositionals = { flags: [], values: ["data"], positionals: ["queue"] };
+    expect(parseOptions(["orders", "--data", "{}"], withPositionals)).toEqual({ ok: true, flags: new Set(), values: new Map([["data", "{}"]]), positionals: ["orders"] });
+    expect(parseOptions(["--data", "{}"], withPositionals)).toEqual({ ok: false, problems: ["The argument <queue> is missing."] });
+    expect(parseOptions(["orders", "more"], withPositionals)).toEqual({ ok: false, problems: ["Unexpected argument \"more\"."] });
+    expect(parseOptions(["--", "--odd-name"], withPositionals)).toMatchObject({ ok: true, positionals: ["--odd-name"] });
+  });
 });

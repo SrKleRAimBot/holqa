@@ -1,3 +1,4 @@
+import type { DeliveryTrace } from "@/binding/trace";
 import type { ScheduleRunTrigger } from "@/handlers/triggers";
 import type { JsonObject } from "@/json";
 import type { ObjectEventType } from "@/resources/kinds";
@@ -28,6 +29,8 @@ export interface LeasedDelivery<Body> {
   /** 1 for the first delivery; increases with every lease, including leases that expired. */
   readonly attempt: number;
   readonly body: Body;
+  /** Where the delivery came from, when the binding recorded it. */
+  readonly trace?: DeliveryTrace;
 }
 
 /** Settings of one receive call. */

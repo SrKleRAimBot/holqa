@@ -28,6 +28,16 @@ describe("ManualClock", () => {
     expect(clock.pendingTimers()).toBe(0);
   });
 
+  it("reports when the next timer is due", () => {
+    const clock = new ManualClock(0);
+    expect(clock.nextTimerDue()).toBeUndefined();
+    const cancel = clock.setTimer(30, () => {});
+    clock.setTimer(50, () => {});
+    expect(clock.nextTimerDue()).toBe(30);
+    cancel();
+    expect(clock.nextTimerDue()).toBe(50);
+  });
+
   it("jumps first and fires due timers late, as after a suspended process", () => {
     const clock = new ManualClock(0);
     const fired: number[] = [];

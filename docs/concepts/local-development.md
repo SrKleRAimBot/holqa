@@ -1,108 +1,112 @@
 # Local development
 
-> **Status:** Partly implemented. The local drivers in `@holqa/local` (queues, object storage with events and signed URLs, a scheduler driven by an injectable clock, inspection) are **Implemented** ([local environment reference](../reference/local.md)), and `@holqa/runtime-bun` runs a compiled application on them ([runtime reference](../reference/runtime.md)). `holqa dev` and the other local workflow commands are proposed; today the CLI reports `HOLQA_CLI_NOT_IMPLEMENTED` for them. Only `holqa inspect` and `holqa build --manifest` are **Implemented**. Reloads, Vite integration and `@holqa/testing` beyond type assertions are not implemented. See Phase 3 of the [roadmap](../roadmap.md).
+> **Status:** **Implemented** for the local drivers (`@holqa/local`), the Bun runtime (`@holqa/runtime-bun`), the development supervisor `holqa dev` with reload by process restart, the operation commands (`holqa invoke`, `queue send`, `storage put`, `cron run`, `state`, `doctor`) and `createTestApp` in `@holqa/testing`. Module-level hot-swapping, worker isolation and the Vite integration are **Planned**. All packages are private and unpublished. See Phase 3 of the [roadmap](../roadmap.md).
 
-Local development is central to Holqa. A developer should be able to clone an application and run it, including its queues, storage, and schedules, without cloud credentials. This page describes the local environment, what exists of it today, and the constraints it must respect.
+Local development is central to Holqa. A developer should be able to clone an application and run it, including its queues, storage, and schedules, without cloud credentials, Docker, or several terminal processes. This page describes the local environment, what exists of it today, and the constraints it must respect. For a step-by-step walkthrough, see the [local development guide](../guides/local-development.md); for every command and its JSON output, see the [CLI reference](../reference/cli.md).
 
 ## Goals
 
-| Capability | Description |
+| Capability | Description | Status |
+| --- | --- | --- |
+| Bun-based function execution | Handlers run in Bun, the same runtime as production ([ADR 0002](../architecture/decisions/0002-bun-as-primary-runtime.md)). | **Implemented** |
+| HTTP and RPC routing | A local server for declared APIs and RPC procedures (`@holqa/runtime-bun`). | **Implemented** |
+| Local queue emulation | SQLite-backed queue with leases, delays, retries, backoff, and dead-lettering (`@holqa/local`). | **Implemented** |
+| Object storage emulation | Filesystem-backed storage that emits object-created and object-deleted events and serves development signed URLs. | **Implemented** |
+| Local scheduler | Fires schedule handlers according to cron, timezone, and overlap policy, driven by an injectable clock. | **Implemented** |
+| Development supervisor | `holqa dev` analyzes the application, writes its build, starts a generation process with the local drivers, serves it at a stable address, and reports resources, handlers, endpoints, errors and logs. | **Implemented** |
+| CLI operations | `holqa invoke`, `queue send`, `storage put` and `cron run` run in the running dev session, or in a process started for the command; every command supports `--json` and stable exit codes. | **Implemented** |
+| Local state inspection | `holqa state` lists queue messages with their states and attempts, stored objects, object events with their deliveries, and schedule runs. The same data is available as an API (`queues`, `storage`, `scheduler`). | **Implemented** |
+| Structured logs and trace correlation | JSON log entries with `correlationId`, `invocationId`, `causationId`, trigger kind, delivery attempt, emitted messages and objects, and the failing handler's source. | **Implemented** |
+| Backend reloads | Changed files are classified and the generation process is restarted in two phases; local state survives. | **Implemented** (process restart); module-level hot-swapping **Planned** |
+| Deterministic integration testing | `createTestApp` in `@holqa/testing`: isolated local state, a virtual clock, event flushing, failure injection, duplicate delivery, inspection and disposal. | **Implemented** |
+| Failure simulation | Duplicate deliveries, injected handler failures, retries, dead letters and redrive. | **Implemented** |
+| Diagnostics | `holqa doctor` checks Bun, the application, its configuration and capabilities, the local state, the dev session and the dev port. | **Implemented** |
+| Vite frontend HMR | Reuse Vite's dev server and HMR for the frontend. | **Planned** |
+| Single-origin development | Frontend and backend served from one origin. | **Planned** |
+
+## Commands
+
+| Command | Behavior |
 | --- | --- |
-| Bun-based function execution | Handlers run in Bun, the same runtime as production ([ADR 0002](../architecture/decisions/0002-bun-as-primary-runtime.md)). |
-| HTTP and RPC routing | A local server for declared APIs and RPC procedures. **Implemented** by `@holqa/runtime-bun` (`serve`). |
-| Local queue emulation | SQLite-backed queue with leases, delays, retries, backoff, and dead-lettering. **Implemented** by `@holqa/local`. |
-| Object storage emulation | Filesystem-backed storage that emits object-created and object-deleted events and serves development signed URLs. **Implemented** by `@holqa/local`. |
-| Local scheduler | Fires schedule handlers according to cron, timezone, and overlap policy, driven by an injectable clock. **Implemented** by `@holqa/local`. |
-| Event inspection | View messages, storage events, schedule runs, and handler outcomes. **Implemented** as an API (`queues`, `storage`, `scheduler`); a CLI or UI is Planned. |
-| Structured logs and diagnostics | Machine-readable logs and `HOLQA_*` diagnostics. |
-| Deterministic integration testing | Drive events and assert outcomes in tests. **Implemented** with `@holqa/local` (`ManualClock`, `settle`); dedicated `@holqa/testing` helpers are Planned. |
-| Fast backend reloads | Reload changed handlers without restarting the whole environment. |
-| Vite frontend HMR | Reuse Vite's dev server and HMR for the frontend. |
-| Single-origin development | Frontend and backend served from one origin where possible. |
-| Failure simulation | Duplicate deliveries, retries, and handler failures on demand. **Implemented** for duplicate messages and events, redrive, and late scheduler wake-ups. |
+| `holqa dev` | Run the application locally with the local drivers, and rebuild when files change. |
+| `holqa invoke <handler>` | Invoke a queue, object event or schedule handler once with a test input. |
+| `holqa queue send <queue>` | Send a validated message to a local queue. |
+| `holqa storage put <bucket> <file>` | Upload a file to a local bucket, which emits `object.created`. |
+| `holqa cron run <schedule>` | Run a schedule's handler now, recorded as a manual run. |
+| `holqa state` | Print local queue messages, objects, events and schedule runs. |
+| `holqa doctor` | Check the project, its configuration and the local environment. |
+| `holqa inspect` | Print the application's resources, handlers, configuration and graph. |
 
-## Planned commands
-
-The following commands are **proposed and not implemented**. Running any of them today exits with code `1` and a `HOLQA_CLI_NOT_IMPLEMENTED` diagnostic.
-
-| Command | Intended behavior |
-| --- | --- |
-| `holqa dev` | Run the application locally with emulated resources. |
-| `holqa invoke` | Invoke a handler locally with a test event. |
-| `holqa queue send` | Send a message to a local queue. |
-| `holqa storage put` | Upload an object to local storage. |
-| `holqa cron run` | Trigger a scheduled task immediately. |
-
-`holqa inspect`, which prints the application's resources, handlers, configuration and required capabilities, is **Implemented**, as is `holqa build --manifest`. See the [CLI reference](../reference/cli.md).
+When `holqa dev` is running for the application, the operation commands send their work to it over an authenticated local endpoint, so invocations appear in the session's logs and share its process. Otherwise they analyze the application and start a process for the one operation. `holqa openapi generate` is the only listed command that is still **proposed**; it exits with `HOLQA_CLI_NOT_IMPLEMENTED`.
 
 ## Architecture
 
-The runtime and the local drivers are **Implemented**; `holqa dev`, the Vite integration and `@holqa/testing` helpers in the diagram are **Planned**.
-
 ```mermaid
 flowchart TB
-  CLI[holqa dev] --> C["Compiler<br/>manifest + handler discovery"]
-  C --> R["Bun runtime<br/>@holqa/runtime-bun"]
-  R --> L["Local drivers<br/>@holqa/local"]
+  CLI[holqa dev supervisor] --> C["Compiler<br/>analysis process"]
+  CLI -- proxies requests --> G["Generation process<br/>@holqa/runtime-bun"]
+  G --> L["Local drivers<br/>@holqa/local"]
   L --> Q[(Queue emulator)]
   L --> S[(Storage emulator)]
   L --> SC[Scheduler]
-  V[Vite dev server] <-- single origin --> R
-  T["@holqa/testing"] --> R
-  T --> L
+  OPS["holqa invoke / queue send / ..."] -- control endpoint --> CLI
+  T["@holqa/testing<br/>createTestApp"] --> R2["Runtime in the test process"]
+  R2 --> L
 ```
 
-- `@holqa/local` implements the runtime driver and source contracts for each resource kind, the same contract production drivers implement ([infrastructure providers](infrastructure-providers.md)).
-- `@holqa/runtime-bun` executes handlers. `@holqa/local` depends on it; it does not depend on `@holqa/local` ([package boundaries](../architecture/package-boundaries.md)).
-- The CLI is designed to compose the compiler, runtime, and local drivers (**Planned**); today an application composes them in code, as the [document-processing example](../../examples/document-processing/README.md) does.
-
-## Frontend development with Vite
-
-Holqa should not build another frontend development server. The plan is to reuse Vite's existing dev server and HMR machinery:
-
-- A Vite plugin or middleware integration routes API and RPC requests to the Holqa runtime, so the frontend and backend share one origin and cookies, CORS, and relative URLs behave as in production.
-- Vite keeps ownership of frontend module graphs, HMR, and static builds.
-- Static site resources (`staticSite`) use the Vite build output in production.
-
-See [Vite](../integrations/vite.md).
+- The supervisor owns the stable HTTP address and the session file (`.holqa/dev/session.json`, readable by its owner only). It never runs application code itself.
+- Each generation is a separate Bun process that loads the build, creates a runtime and a local environment on the shared state directory, and serves on a loopback port the supervisor forwards to.
+- `@holqa/local` implements the runtime driver and source contracts for each resource kind, the same contracts production drivers implement ([infrastructure providers](infrastructure-providers.md)). `@holqa/runtime-bun` executes handlers and does not depend on `@holqa/local` ([package boundaries](../architecture/package-boundaries.md)).
+- The Vite integration is **Planned**.
 
 ## Backend reloads
 
-Fast backend reloads are planned, with correctness taking priority over speed:
+Reloads favor correctness over speed. The design is recorded in [ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md).
 
-- When a handler module changes, the runtime should invalidate that module and its dependents, and swap the handler without restarting the whole environment.
-- Stale resources (timers, open connections, in-flight consumers belonging to the old module) must be cleaned up.
-- When `infra.ts` changes, the resource graph is recompiled. Emulated resource state (queued messages, stored objects) should survive reloads, because persistent resource lifecycles are independent of handlers ([application model](application-model.md#resource-lifecycles)).
-- Where safe invalidation cannot be guaranteed, a full restart is the correct fallback.
+| Change | Classification | What happens |
+| --- | --- | --- |
+| First build | `initial` | The application is analyzed and the first generation starts. |
+| Handler code, or code it imports, with an unchanged manifest | `implementation` | The generation restarts; the resource graph and contracts are unchanged. |
+| Only `.env` files in the application root | `environment` | The generation restarts without re-analysis, so it reads the new values. |
+| Handlers added, removed, or with new triggers or contracts | `handlers` | The generation restarts; the change is reported per handler. |
+| Resources or configuration entries | `resources` | The generation restarts; added, removed and changed resources are reported. The state of removed resources is kept. |
+
+- A reload starts the new generation in two phases. In the first, the new process loads every module, creates its runtime and checks configuration and capabilities while the previous generation keeps serving. A failure there reports `HOLQA_RELOAD_FAILED` with its causes, and the previous generation keeps running. Only then is the previous generation stopped gracefully, and the new one starts consuming and serving.
+- Exactly one generation consumes queues, object events and schedules at a time, so restarts never duplicate consumers. Each generation is a fresh process, so module state, listeners and timers of the old code cannot leak. Subscriptions of object event handlers that no longer exist are removed when a generation starts.
+- Requests that arrive during a swap wait for the new generation instead of failing.
+- Local state (queued messages, stored objects, events, schedule history) lives in the state directory and survives every reload.
+- When a contract changes (a queue message, a request or a response schema), the compatibility checker's diagnostics are reported, for example `HOLQA_SCHEMA_CHANGE_BREAKING`. Contract errors that the compiler rejects fail the reload.
+- Module-level hot-swapping, through Bun's reload capabilities or a Vite module runner, is **Planned** and will be explored once restarts are dependable. Such a design must preserve module lifecycles, dispose of the old module's resources (timers, connections, consumers) and fall back to a restart when safe invalidation cannot be guaranteed.
 
 ## Simulating failure
 
-Code that only runs on the happy path locally will fail in production. The local environment is designed to make failure behavior testable; the [document-processing example](../../examples/document-processing/README.md) exercises retries and dead-lettering end to end:
+Code that only runs on the happy path locally will fail in production. The local environment makes failure behavior testable; the [order pipeline example](../../examples/order-pipeline/README.md) and the [document-processing example](../../examples/document-processing/README.md) exercise retries and dead-lettering end to end:
 
-| Scenario | Purpose |
-| --- | --- |
-| Duplicate delivery | Verify that queue consumers are idempotent. |
-| Forced handler failure and retry | Verify retry and backoff configuration. |
-| Exhausted retries | Verify dead-letter behavior. |
-| Out-of-order storage events | Verify handlers do not assume ordering. |
-| Overlapping schedule runs | Verify the overlap policy. |
-| Invalid message payloads | Verify runtime validation at the boundary. |
+| Scenario | Purpose | How |
+| --- | --- | --- |
+| Duplicate delivery | Verify that queue consumers and event handlers are idempotent. | `TestApp.duplicate`, `duplicateEvent`; `queues.duplicate` |
+| Forced handler failure and retry | Verify retry and backoff configuration. | `TestApp.failNext`, then `advance` or `drain` |
+| Exhausted retries | Verify dead-letter behavior. | `failNext({ times })`, `deadLetters`, `redrive` |
+| Out-of-order storage events | Verify handlers do not assume ordering. | Events have no guaranteed order |
+| Overlapping schedule runs | Verify the overlap policy. | `ManualClock.jump`, `trigger` |
+| Invalid message payloads | Verify runtime validation at the boundary. | `holqa queue send` and `TestApp.send` validate like producers |
 
-Tests should be deterministic: a test controls when messages are delivered and when schedules fire, rather than waiting on wall-clock time. With `@holqa/local`, a `ManualClock` controls delays, leases, signed URL expiry and schedules, and `settle()` waits until no due work remains.
+Tests are deterministic: a test controls when messages are delivered and when schedules fire, rather than waiting on wall-clock time. `createTestApp` moves a virtual clock to each due retry or schedule and runs the work that becomes due, so a workflow test never sleeps for a real retry interval.
 
 ## Semantics: no over-promising
 
 The local environment must **not** falsely guarantee stronger delivery or concurrency semantics than production drivers provide. If the local queue delivered every message exactly once and in order, applications would pass locally and fail in production.
 
-Design rules:
-
 - Local drivers declare their capabilities honestly ([capability negotiation](infrastructure-providers.md#capability-negotiation)).
-- At-least-once delivery means duplicates are possible locally, and the environment should make them easy to trigger.
+- At-least-once delivery means duplicates are possible locally, and the environment makes them easy to trigger.
 - Concurrency limits are enforced locally as declared, so race conditions surface during development.
-- Where local behavior is necessarily different (for example, no network partitions), the difference is documented.
+- Where local behavior is necessarily different (for example, no network partitions), the difference is documented in the [local environment reference](../reference/local.md).
 
 ## Related
 
+- [Local development guide](../guides/local-development.md)
+- [CLI reference](../reference/cli.md)
+- [Local environment reference](../reference/local.md)
 - [Triggers and execution](triggers-and-execution.md)
 - [Infrastructure providers](infrastructure-providers.md)
 - [Vite](../integrations/vite.md)

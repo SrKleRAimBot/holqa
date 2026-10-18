@@ -3,14 +3,19 @@ import type {
   ConfigDescriptor,
   Described,
   HandlerDescriptor,
+  HttpMethod,
+  InvocationContext,
   ResourceDescriptor,
   ResourceId,
   StandardSchemaV1
+
 } from "@holqa/core";
 
 import {
   createBindingSlot,
-  parseResourceId
+  getAppDescriptor,
+  parseResourceId,
+  resolveDriver
 } from "@holqa/core";
 
 // Descriptors written as plain objects, the way any SDK would write them.
@@ -48,10 +53,11 @@ export const text: StandardSchemaV1<string> = {
  * Declares a queue.
  *
  * @param queueId - The queue identifier.
+ * @param message - The message schema.
  * @returns The queue descriptor.
  */
-export function queue(queueId: string): ResourceDescriptor {
-  return { protocol: 1, type: "resource", kind: "queue", id: id(queueId), config: { schemaVersion: 1 }, requirements: { delivery: "at-least-once", deadLetter: false }, schemas: { message: text } };
+export function queue(queueId: string, message: StandardSchemaV1 = text): ResourceDescriptor {
+  return { protocol: 1, type: "resource", kind: "queue", id: id(queueId), config: { schemaVersion: 1 }, requirements: { delivery: "at-least-once", deadLetter: false }, schemas: { message } };
 }
 
 /**
@@ -93,4 +99,121 @@ export function consumer(handlerId: string, queueId: string): Described<HandlerD
       invoke: async () => undefined
     }
   };
+}
+
+/**
+ * A schema of vendor `fixture` that accepts any value and describes itself
+ * as the given JSON Schema type, so a test can change a contract.
+ *
+ * @param type - The JSON Schema type it reports.
+ * @returns The schema.
+ */
+export function described(type: string): StandardSchemaV1 {
+  return {
+    "~standard": {
+      version: 1,
+      vendor: "fixture",
+      validate: value => ({ value }),
+      jsonSchema: { input: () => ({ type }), output: () => ({ type }) }
+    } as StandardSchemaV1["~standard"]
+  };
+}
+
+/**
+ * Declares an HTTP API.
+ *
+ * @param apiId - The API identifier.
+ * @param basePath - Its base path.
+ * @returns The API descriptor.
+ */
+export function api(apiId: string, basePath = "/api"): ResourceDescriptor {
+  return { protocol: 1, type: "resource", kind: "http.api", id: id(apiId), config: { basePath }, requirements: {}, schemas: {} };
+}
+
+/**
+ * Declares a schedule.
+ *
+ * @param scheduleId - The schedule identifier.
+ * @param cron - Its cron expression.
+ * @returns The schedule descriptor.
+ */
+export function schedule(scheduleId: string, cron = "0 * * * *"): ResourceDescriptor {
+  return { protocol: 1, type: "resource", kind: "schedule", id: id(scheduleId), config: { cron, timezone: "UTC" }, requirements: { overlap: "skip" }, schemas: {} };
+}
+
+/**
+ * Registers an HTTP route whose handler builds the response itself.
+ *
+ * @param handlerId - The handler identifier.
+ * @param apiId - The serving API.
+ * @param method - The HTTP method it serves.
+ * @param path - The path relative to the API's base path.
+ * @param respond - Builds the response.
+ * @returns A value carrying a handler descriptor.
+ */
+export function route(handlerId: string, apiId: string, method: HttpMethod, path: string, respond: () => Response | Promise<Response>): Described<HandlerDescriptor> {
+  return {
+    "~holqa": {
+      protocol: 1,
+      type: "handler",
+      definition: { id: id(handlerId), trigger: { kind: "http.route", resource: { kind: "http.api", id: id(apiId) }, options: { method, path } } },
+      schemas: { responses: {} },
+      invoke: async () => respond()
+    } as HandlerDescriptor
+  };
+}
+
+/**
+ * Registers a queue consumer that runs a function for every message.
+ *
+ * @param handlerId - The handler identifier.
+ * @param queueId - The consumed queue.
+ * @param handle - Runs for every message; throwing fails the attempt.
+ * @param message - The message schema; it must be the queue's.
+ * @returns A value carrying a handler descriptor.
+ */
+export function worker(handlerId: string, queueId: string, handle: (message: unknown, context: InvocationContext<{ readonly attempt: number }>) => unknown, message: StandardSchemaV1 = text): Described<HandlerDescriptor> {
+  return {
+    "~holqa": {
+      protocol: 1,
+      type: "handler",
+      definition: { id: id(handlerId), trigger: { kind: "queue.message", resource: { kind: "queue", id: id(queueId) }, options: {} } },
+      schemas: { message },
+      invoke: async (input: unknown, context: InvocationContext<{ readonly attempt: number }>) => handle(input, context)
+    } as HandlerDescriptor
+  };
+}
+
+/**
+ * Registers a schedule handler.
+ *
+ * @param handlerId - The handler identifier.
+ * @param scheduleId - The schedule whose runs it handles.
+ * @param handle - Runs for every run.
+ * @returns A value carrying a handler descriptor.
+ */
+export function tick(handlerId: string, scheduleId: string, handle: () => unknown): Described<HandlerDescriptor> {
+  return {
+    "~holqa": {
+      protocol: 1,
+      type: "handler",
+      definition: { id: id(handlerId), trigger: { kind: "schedule.tick", resource: { kind: "schedule", id: id(scheduleId) }, options: {} } },
+      schemas: {},
+      invoke: async () => handle()
+    } as HandlerDescriptor
+  };
+}
+
+/**
+ * Sends a text message to a queue of an application, as the SDK's `send` would.
+ *
+ * @param app - The application value.
+ * @param queueId - The queue to send to.
+ * @param message - The text.
+ * @returns The message identifier.
+ */
+export async function send(app: unknown, queueId: string, message: string): Promise<string> {
+  const descriptor = getAppDescriptor(app)!;
+  const resource = descriptor.resources.find(candidate => candidate.id === queueId)! as ResourceDescriptor & { readonly kind: "queue" };
+  return (await resolveDriver(descriptor, resource, "send").send({ format: "holqa.message/1", schemaVersion: 1, payload: message }, {})).messageId;
 }

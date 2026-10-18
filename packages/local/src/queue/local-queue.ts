@@ -1,4 +1,5 @@
 import type {
+  DeliveryTrace,
   JsonValue,
   MessageEnvelope,
   QueueDriver,
@@ -33,6 +34,8 @@ export interface LocalQueueMessage {
   readonly visibleAt: string;
   /** The failure of the last attempt, for retried and dead-lettered messages. */
   readonly lastError?: { readonly code: string; readonly message: string; readonly invocationId?: string };
+  /** The trace of the invocation that sent the message: its `correlationId` and, as `causationId`, its `invocationId`. */
+  readonly trace?: DeliveryTrace;
 }
 
 /**
@@ -108,18 +111,19 @@ export function createLocalQueues(settings: LocalQueueSettings): {
       payload: envelope.payload,
       sentAt: new Date(delivery.createdAt).toISOString(),
       visibleAt: new Date(delivery.visibleAt).toISOString(),
-      ...delivery.lastError === undefined ? {} : { lastError: delivery.lastError }
+      ...delivery.lastError === undefined ? {} : { lastError: delivery.lastError },
+      ...delivery.trace === undefined ? {} : { trace: delivery.trace }
     });
   };
   /** Which stored states can hold messages in each inspection state. */
   const storedStates: Readonly<Record<LocalMessageState, DeliveryState>> = { "ready": "ready", "delayed": "ready", "in-flight": "leased", "acknowledged": "acknowledged", "dead-lettered": "dead" };
   return {
     driver: resource => Object.freeze<QueueDriver>({
-      send: async (envelope: MessageEnvelope, options) => {
+      send: async (envelope: MessageEnvelope, options, context) => {
         const messageId = createId();
         const channel = queueChannel(resource.id);
         store.prune();
-        store.add(channel, messageId, JSON.stringify({ format: envelope.format, schemaVersion: envelope.schemaVersion, ...envelope.fingerprint === undefined ? {} : { fingerprint: envelope.fingerprint }, payload: envelope.payload }), (options.delaySeconds ?? 0) * 1000);
+        store.add(channel, messageId, JSON.stringify({ format: envelope.format, schemaVersion: envelope.schemaVersion, ...envelope.fingerprint === undefined ? {} : { fingerprint: envelope.fingerprint }, payload: envelope.payload }), (options.delaySeconds ?? 0) * 1000, context?.trace);
         store.notify(channel);
         return Object.freeze({ messageId });
       }

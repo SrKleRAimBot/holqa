@@ -1,6 +1,6 @@
 # Agent-native development
 
-> **Status:** Planned, with **Implemented** foundations. The CLI's `--json` output, the structured diagnostic model with stable `HOLQA_*` codes, and graph inspection (`holqa inspect --json`) are **Implemented**. Repository agent instructions and skills are **Implemented**. Local invocation and an MCP server are **Planned**.
+> **Status:** Planned, with **Implemented** foundations. The CLI's `--json` output, the structured diagnostic model with stable `HOLQA_*` codes, and graph inspection (`holqa inspect --json`) are **Implemented**. Repository agent instructions and skills are **Implemented**. Local invocation and simulated events (`holqa invoke`, `queue send`, `storage put`, `cron run`), local state inspection (`holqa state`) and trace-correlated logs are **Implemented**. An MCP server is **Planned**.
 
 Holqa is designed for both human developers and autonomous coding agents. Tooling that is predictable for an agent (structured output, stable error codes, deterministic behavior, safe defaults) is also better for humans and CI.
 
@@ -13,11 +13,11 @@ Holqa is designed for both human developers and autonomous coding agents. Toolin
 | Add a resource or handler | Public skills (`define-resources`, `add-queue-consumer`, …) | Skills drafted; framework planned |
 | Infer correct types | Source-based inference ([type safety](type-safety-and-schemas.md)) | **Implemented** |
 | Generate clients | Compiler client generation | Planned |
-| Run local tests and simulated events | `holqa invoke`, `holqa queue send`, `@holqa/testing` | Planned |
+| Run local tests and simulated events | `holqa invoke`, `holqa queue send`, `holqa storage put`, `holqa cron run`, `createTestApp` in `@holqa/testing` | **Implemented** |
 | Diagnose compiler and runtime failures | Structured diagnostics with stable codes | **Implemented** (model, compiler and `@holqa/runtime-bun`, which logs invocation failures with their codes) |
 | Inspect infrastructure requirements | Manifest capability requirements | **Implemented** |
 | Generate deployment plans | Provisioning provider plans | Planned |
-| Verify behavior through logs and traces | Structured logs; OpenTelemetry integration | Planned |
+| Verify behavior through logs and traces | Structured JSON logs with `correlationId`, `causationId` and emitted events; `holqa state --json`; OpenTelemetry integration | **Implemented** (logs, traces and local state); OpenTelemetry Planned |
 
 ## Principles
 
@@ -50,15 +50,21 @@ interface Diagnostic {
 The `holqa` CLI accepts `--json`. With it, errors are written to standard error as a JSON document and the exit code distinguishes failure kinds:
 
 ```bash
-$ holqa dev --json
-{"diagnostics":[{"code":"HOLQA_CLI_NOT_IMPLEMENTED","severity":"error","message":"\"holqa dev\" is a proposed command and is not implemented yet.","hint":"See docs/roadmap.md for implementation status."}]}
+$ holqa openapi generate --json
+{"diagnostics":[{"code":"HOLQA_CLI_NOT_IMPLEMENTED","severity":"error","message":"\"holqa openapi generate\" is a proposed command and is not implemented yet.","hint":"See docs/roadmap.md for implementation status."}]}
 $ echo $?
 1
 ```
 
+Successful operation commands print one JSON document on standard output; `holqa dev --json` prints one JSON event per line (`build`, `generation.ready`, `log`, `build.failed`, ...). An operation that ran but whose handler or scheduled run failed exits with `1`, prints its result on standard output and its diagnostics on standard error.
+
 `holqa --version --json` prints `{"version":"…"}`. Exit codes are `0` (success), `1` (failure, including not implemented), and `2` (usage error, such as an unknown command). See the [CLI reference](../reference/cli.md).
 
 An agent can therefore check whether a command exists by looking for `HOLQA_CLI_NOT_IMPLEMENTED` rather than guessing from help text.
+
+### Inspection and simulation
+
+`holqa invoke`, `holqa queue send`, `holqa storage put` and `holqa cron run` (**Implemented**) give agents a closed loop: change code, simulate an event, and read structured results, including the trace (`correlationId`) and the log entries of the invocation. `holqa state --json` reports queue messages with their attempts and last errors, stored objects, event deliveries and schedule runs. When `holqa dev` runs, these commands use it; otherwise each starts the application for one operation.
 
 ### Graph inspection
 
@@ -87,10 +93,6 @@ The top-level [`skills/`](../../skills/README.md) directory holds skills intende
 ### Local MCP server
 
 Future Holqa tooling may expose a local Model Context Protocol (MCP) server so agents can query the resource graph, read diagnostics, and trigger local invocations through tool calls rather than shell commands. It is not part of the initial implementation and has no design yet. Any such server must apply the safety rules below.
-
-### Inspection and simulation
-
-`holqa invoke`, `holqa queue send`, `holqa storage put`, and `holqa cron run` are proposed commands intended to give agents a closed loop: change code, simulate an event, read structured results. Together with the implemented `holqa inspect`, they would let an agent see the graph and then exercise it.
 
 ## Safety
 

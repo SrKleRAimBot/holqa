@@ -6,6 +6,7 @@ import type {
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   writeFileSync
 } from "node:fs";
 import {
@@ -21,6 +22,11 @@ import {
 } from "@holqa/core";
 
 import { readAnalysisReport } from "@/analysis/report";
+import {
+  operateLocally,
+  runDevSession,
+  runDoctor
+} from "@/local/local-host";
 
 /** Environment variables passed to the analysis process. Everything else, including every secret, is withheld. */
 export const forwardedEnvironment = ["PATH", "HOME", "TMPDIR", "TEMP", "TMP", "SYSTEMROOT"] as const;
@@ -70,32 +76,55 @@ const maxQuotedOutput = 4000;
  * (including credential files and, on some systems, other processes'
  * environments) and use the network. Only analyze applications you would also run.
  *
+ * `dev`, `operate` and `doctor` run the application itself (not only its
+ * analysis) in separate processes with the CLI's full environment, as any
+ * server the developer starts would; see `runDevSession` and `operateLocally`.
+ *
  * @param options - Working directory, timeout and overrides for tests.
- * @returns A host whose `analyze` spawns the analysis process and whose `writeFile` writes to disk.
+ * @returns A host whose `analyze` spawns the analysis process, whose `writeFile` writes to disk, and whose local commands run the application on the local environment.
  */
 export function createProcessHost(options: ProcessHostOptions = {}): CliHost {
   const cwd = options.cwd ?? process.cwd();
+  /**
+   * Analyzes one application in the isolated analysis process.
+   *
+   * @param appPath - The application module.
+   * @returns The outcome.
+   */
+  const analyze = async (appPath: string): Promise<AnalysisOutcome> => {
+    if (!existsSync(appPath)) {
+      return {
+        ok: false,
+        output: "",
+        diagnostics: [createDiagnostic({
+          code: diagnosticCodes.appNotFound,
+          severity: "error",
+          message: `The application module "${relative(cwd, appPath) || basename(appPath)}" does not exist.`,
+          hint: "Run the command in the directory that contains infra.ts, or pass --app <path>."
+        })]
+      };
+    }
+    return runWorker(appPath, options);
+  };
+  /**
+   * Writes a file, creating its directory.
+   *
+   * @param path - The absolute path of the file to write.
+   * @param contents - Its contents.
+   */
+  const writeFile = async (path: string, contents: string): Promise<void> => {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, contents);
+  };
+  const local = { cwd, analyze, writeFile };
   return {
     cwd,
-    analyze: async (appPath) => {
-      if (!existsSync(appPath)) {
-        return {
-          ok: false,
-          output: "",
-          diagnostics: [createDiagnostic({
-            code: diagnosticCodes.appNotFound,
-            severity: "error",
-            message: `The application module "${relative(cwd, appPath) || basename(appPath)}" does not exist.`,
-            hint: "Run the command in the directory that contains infra.ts, or pass --app <path>."
-          })]
-        };
-      }
-      return runWorker(appPath, options);
-    },
-    writeFile: async (path, contents) => {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, contents);
-    }
+    analyze,
+    writeFile,
+    readFile: async path => new Uint8Array(readFileSync(path)),
+    dev: (request, onEvent) => runDevSession(local, request, onEvent),
+    operate: (location, operation) => operateLocally(local, location, operation),
+    doctor: request => runDoctor(local, request)
   };
 }
 

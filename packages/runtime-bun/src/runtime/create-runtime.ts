@@ -33,6 +33,7 @@ import {
 
 import { Transports } from "@/delivery/transports";
 import { Dispatcher } from "@/dispatch/dispatcher";
+import { InvocationTracker } from "@/dispatch/invocation-tracker";
 import { Semaphore } from "@/dispatch/semaphore";
 import { CorsPolicy } from "@/http/cors";
 import { createHttpHandler } from "@/http/http-handler";
@@ -43,6 +44,7 @@ import {
 } from "@/logging/log";
 import { RuntimeScope } from "@/runtime/application-scope";
 import { createEnvironmentBinding } from "@/runtime/environment-binding";
+import { traceBinding } from "@/runtime/traced-binding";
 
 /** Where a runtime is in its lifecycle. */
 export type RuntimeState = "idle" | "starting" | "running" | "stopping" | "stopped";
@@ -76,6 +78,12 @@ export interface RuntimeOptions {
   readonly app: unknown;
   /** Handler registrations, as exported by handler modules. */
   readonly handlers: readonly unknown[];
+  /**
+   * Where each handler is implemented, by handler identifier, as
+   * `<module>#<export>` relative to the application root. Logged with failed
+   * invocations as `source`. `loadCompiledApplication` provides it.
+   */
+  readonly handlerSources?: Readonly<Record<string, string>>;
   /**
    * The data-plane binding for the application's resources and
    * configuration. Defaults to a binding that serves HTTP APIs and reads
@@ -201,6 +209,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
 
   const logger = new StructuredLogger(options.log ?? jsonLineSink(), { application: app.name }, options.clock);
   const scope = new RuntimeScope(logger);
+  const tracker = new InvocationTracker();
   let state: RuntimeState = "idle";
   let unbind: (() => void) | undefined;
   let stopping: Promise<void> | undefined;
@@ -213,7 +222,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     createId: options.createId ?? (() => crypto.randomUUID()),
     now: options.now ?? (() => performance.now()),
     scope: scope.scope,
-    accepting: () => state === "running"
+    accepting: () => state === "running",
+    tracker,
+    sources: readSources(options.handlerSources)
   });
   const transports = new Transports({
     app,
@@ -236,7 +247,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       throw new HolqaError(createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: `The runtime for "${app.name}" cannot start from the ${state} state; create a new runtime instead.` }));
     state = "starting";
     try {
-      const binding = options.binding ?? await createEnvironmentBinding(app, options.env ?? process.env);
+      // Handler code's sends and writes carry the invocation's trace and are recorded as emitted.
+      const binding = traceBinding(options.binding ?? await createEnvironmentBinding(app, options.env ?? process.env), tracker);
       if (state !== "starting")
         throw new HolqaError(createDiagnostic({ code: diagnosticCodes.runtimeNotRunning, severity: "error", message: `The runtime for "${app.name}" was stopped while it was starting.` }));
       if (options.manualTriggers !== true) {
@@ -387,6 +399,18 @@ function registerHandlers(app: AppDescriptor, registrations: readonly unknown[],
     });
   }
   return handlers;
+}
+
+/**
+ * Reads the optional handler source locations.
+ *
+ * @param sources - `<module>#<export>` by handler identifier, unvalidated.
+ * @returns The string entries; anything else is ignored, because the locations only decorate logs.
+ */
+function readSources(sources: Readonly<Record<string, string>> | undefined): ReadonlyMap<string, string> {
+  if (typeof sources !== "object" || sources === null)
+    return new Map();
+  return new Map(Object.entries(sources).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
 }
 
 /**

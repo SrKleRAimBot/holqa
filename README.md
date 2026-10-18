@@ -7,8 +7,9 @@ behavior through one strongly typed programming model, without coupling business
 > **Holqa is in early development.** This repository currently contains the monorepo foundation, architecture
 > documentation, the application and resource model (`@holqa/sdk`), a compiler that turns an application into a
 > deterministic manifest (`holqa inspect`, `holqa build --manifest`), a Bun runtime for HTTP, RPC, queues, storage
-> events and schedules, and local drivers (`@holqa/local`). `holqa dev`, providers for external infrastructure and
-> generated clients are **design, not shipped software**. Nothing is published. See the
+> events and schedules, local drivers (`@holqa/local`), a local development supervisor with reloads (`holqa dev`),
+> CLI commands to invoke handlers and send events, and `createTestApp` for deterministic integration tests. Providers
+> for external infrastructure and generated clients are **design, not shipped software**. Nothing is published. See the
 > [roadmap](docs/roadmap.md) for what exists today.
 
 ## The problem
@@ -92,8 +93,8 @@ runtime. These integrations are planned; see [integrations](docs/integrations/in
 | `@holqa/core` | [packages/core](packages/core) | Implemented contracts: `Result`, structured diagnostics with stable `HOLQA_*` codes, resource identity, schema validation, the descriptor protocol and the runtime binding contract |
 | `@holqa/sdk` | [packages/sdk](packages/sdk) | Implemented application and resource model: `defineApp`, queues, buckets, schedules, HTTP APIs with routes, RPC procedures and typed middleware, configuration, typed handles |
 | `@holqa/compiler` | [packages/compiler](packages/compiler) | Implemented: handler discovery, graph validation, deterministic manifest version 1, schema contracts and compatibility checks |
-| `@holqa/cli` | [packages/cli](packages/cli) | Implemented: `holqa --help`, `--version`, `--json`, `holqa inspect` and `holqa build --manifest`; other workflow commands are proposed |
-| `@holqa/testing` | [packages/testing](packages/testing) | Implemented: compile-time type assertions only |
+| `@holqa/cli` | [packages/cli](packages/cli) | Implemented: `holqa --help`, `--version`, `--json`, `inspect`, `build --manifest`, `dev`, `invoke`, `queue send`, `storage put`, `cron run`, `state` and `doctor`; `openapi generate` is proposed |
+| `@holqa/testing` | [packages/testing](packages/testing) | Implemented: `createTestApp` (virtual clock, event flushing, failure injection, duplicate delivery) and compile-time type assertions |
 | `@holqa/zod` | [packages/integrations/zod](packages/integrations/zod) | Implemented: Zod 4 schema adapter |
 | `@holqa/runtime-bun` | [packages/runtime-bun](packages/runtime-bun) | Implemented: invocation dispatcher, lifecycle, HTTP routes and RPC procedures served with `Bun.serve`, queue, object event and schedule delivery with retries and dead-lettering |
 | `@holqa/local` | [packages/local](packages/local) | Implemented: local drivers — SQLite-backed queues, filesystem object storage with events and development signed URLs, a clock-driven scheduler, inspection |

@@ -98,7 +98,7 @@ function failure(message: string): Diagnostic {
  * @param value - A candidate diagnostic from the parsed report.
  * @returns A frozen diagnostic, or `undefined` when the value is not a well-formed diagnostic with a registered code.
  */
-function readDiagnostic(value: unknown): Diagnostic | undefined {
+export function readDiagnostic(value: unknown): Diagnostic | undefined {
   if (typeof value !== "object" || value === null)
     return undefined;
   const { code, severity, message, location, hint, details } = value as Record<string, unknown>;

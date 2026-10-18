@@ -8,6 +8,7 @@ import type {
   RuntimeBinding
 } from "@holqa/core";
 
+import type { LogEntry } from "@/logging/log";
 import type { RuntimeOptions } from "@/runtime/create-runtime";
 import {
   createDiagnostic,
@@ -155,6 +156,20 @@ describe("queue delivery", () => {
     expect(source.settlements).toEqual([{ kind: "acknowledge", id: "m-1", attempt: 1 }]);
     expect(runtime.stats().delivery.queues).toMatchObject({ received: 1, acknowledged: 1 });
     await runtime.stop();
+  });
+
+  it("joins the sender's trace: the delivery's correlation and causation identifiers reach the consumer and its logs", async () => {
+    const source = new MemorySource<MessageEnvelope>();
+    const seen: unknown[] = [];
+    const entries: LogEntry[] = [];
+    const runtime = runtimeOf({ app: application([queue()]), handlers: [consumer((_message, context) => seen.push(context.correlationId))], binding: memoryBinding({ queue: source }), log: entry => entries.push(entry) });
+    await runtime.start();
+    source.add("m-1", envelope("traced"), 0, { correlationId: "req-7", causationId: "inv-sender" });
+    source.add("m-2", envelope("untraced"));
+    await source.drained();
+    await runtime.stop();
+    expect(seen.sort()).toEqual(["m-2", "req-7"]);
+    expect(entries.find(({ message, correlationId }) => message === "invocation completed" && correlationId === "req-7")).toMatchObject({ causationId: "inv-sender", triggerKind: "queue.message", resourceId: "jobs", deliveryId: "m-1", attempt: 1 });
   });
 
   it("retries failures after the declared backoff and dead-letters after the last attempt", async () => {

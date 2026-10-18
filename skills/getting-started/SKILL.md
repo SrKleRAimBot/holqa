@@ -8,7 +8,7 @@ metadata:
 
 # Getting started with a Holqa project
 
-> **Preview — not yet available.** Holqa packages are not published to npm. The SDK (`@holqa/sdk`) exists in the Holqa repository and can declare applications, resources and handlers; `@holqa/runtime-bun` (also unpublished) serves HTTP routes and RPC procedures and delivers queue messages, storage events and scheduled runs from the local binding in `@holqa/local` (also unpublished). Of the CLI commands in this skill, only `holqa inspect` and `holqa build --manifest` are implemented; the others are **proposed**. Treat every code sample as illustrative; names may change.
+> **Preview — not yet available.** Holqa packages are not published to npm. The SDK (`@holqa/sdk`) exists in the Holqa repository and can declare applications, resources and handlers; `@holqa/runtime-bun` (also unpublished) serves HTTP routes and RPC procedures and delivers queue messages, storage events and scheduled runs from the local binding in `@holqa/local` (also unpublished). The CLI commands in this skill (`holqa inspect`, `build --manifest`, `dev`, `queue send`, ...) are implemented in the repository; bundling (`holqa build` without `--manifest`) is **proposed**. Treat every code sample as illustrative; names may change.
 
 ## When to use
 
@@ -23,10 +23,10 @@ From a checkout of the Holqa repository (`pnpm install && pnpm build`):
 ```sh
 bun packages/cli/dist/bin.js --help        # lists options, implemented and proposed commands
 bun packages/cli/dist/bin.js --version --json
-bun packages/cli/dist/bin.js dev --json    # exits 1, HOLQA_CLI_NOT_IMPLEMENTED on stderr
+cd examples/order-pipeline && pnpm exec holqa dev --app app/infra.ts   # runs the example locally
 ```
 
-Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations such as the `infra.ts` below (without `staticSite`, which is proposed). `holqa inspect --app infra.ts` prints its resources and handlers, and `holqa build --manifest` writes its manifest; both run the application's modules. Inside the repository, `createRuntime(await loadCompiledApplication({ root }))` and `serve(runtime)` from `@holqa/runtime-bun` serve the compiled routes and procedures (see `examples/http-api`), and `createLocalEnvironment` from `@holqa/local` provides queues, buckets and schedules locally (see `examples/document-processing`). The other CLI commands in this skill do not run yet. Do not try to install `@holqa/sdk` from npm; it is not published.
+Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations such as the `infra.ts` below (without `staticSite`, which is proposed). `holqa inspect --app infra.ts` prints its resources and handlers, and `holqa build --manifest` writes its manifest; both run the application's modules. Inside the repository, `createRuntime(await loadCompiledApplication({ root }))` and `serve(runtime)` from `@holqa/runtime-bun` serve the compiled routes and procedures (see `examples/http-api`), and `createLocalEnvironment` from `@holqa/local` provides queues, buckets and schedules locally (see `examples/document-processing`). `holqa dev` composes both and reloads on changes (see `examples/order-pipeline` and the `local-development` skill). Do not try to install `@holqa/sdk` from npm; it is not published.
 
 ## Planned workflow
 
@@ -35,7 +35,7 @@ Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations
 3. **Point to handler modules.** Set `handlers` to a glob such as `./src/**/*.handler.ts`. Business logic lives there, never in `infra.ts`.
 4. **Export typed handles.** Export `resources` and `config` so handlers can import them and get inferred types.
 5. **Write one handler per file.** Each file default-exports a registration such as `resources.orders.consume({...})`.
-6. **Inspect the graph** with `holqa inspect --json` (implemented) and **run locally** with `holqa dev` (proposed).
+6. **Inspect the graph** with `holqa inspect --json` (implemented) and **run locally** with `holqa dev` (implemented in the repository).
 
 ```ts
 // infra.ts — illustrative, proposed API
@@ -85,4 +85,4 @@ web/                     # optional static frontend (Vite)
 - [ ] Every resource has an explicit `id` matching `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$` (at most 63 characters).
 - [ ] Handlers live in `*.handler.ts` files matched by the `handlers` glob.
 - [ ] No frontend file imports `infra.ts` or a handler module.
-- [ ] You have not claimed that `holqa dev` or the SDK works; status is stated as proposed.
+- [ ] You have not claimed that Holqa is published or installable; status is stated as preview.

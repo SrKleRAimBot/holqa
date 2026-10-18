@@ -8,7 +8,7 @@ metadata:
 
 # Creating a typed HTTP endpoint
 
-> **Preview.** Routes, `reply`, middleware and their execution by `@holqa/runtime-bun` are **implemented** in private, unpublished packages; the API may change. OpenAPI generation (`holqa openapi generate`) and `holqa dev` are **proposed** and not implemented. See the [runtime reference](../../docs/reference/runtime.md#http-routes).
+> **Preview.** Routes, `reply`, middleware and their execution by `@holqa/runtime-bun` are **implemented** in private, unpublished packages; the API may change. `holqa dev` serves them locally and reloads on changes (implemented in the repository); OpenAPI generation (`holqa openapi generate`) is **proposed** and not implemented. See the [runtime reference](../../docs/reference/runtime.md#http-routes).
 
 ## When to use
 

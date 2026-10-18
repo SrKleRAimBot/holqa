@@ -37,6 +37,8 @@ export interface CompiledApplication {
   readonly handlers: readonly unknown[];
   /** The `sha256:` fingerprint of the manifest the build was produced with. */
   readonly manifestFingerprint: string;
+  /** Where each handler is implemented, as `<module>#<export>` relative to the root, by handler identifier. */
+  readonly handlerSources: Readonly<Record<string, string>>;
 }
 
 /** The fields of the entry point map the loader needs. */
@@ -113,6 +115,7 @@ export async function loadCompiledApplication(options: LoadCompiledApplicationOp
 
   const modules = new Map<string, ModuleExports>();
   const handlers: unknown[] = [];
+  const handlerSources: Record<string, string> = {};
   const problems: Diagnostic[] = [];
   for (const entry of entries) {
     const exports = modules.get(entry.module) ?? await importModule(root, entry.module);
@@ -120,20 +123,22 @@ export async function loadCompiledApplication(options: LoadCompiledApplicationOp
     const registration = exports[entry.export];
     const descriptor = getHandlerDescriptor(registration);
     const expected = manifestHandlers.get(entry.id);
-    if (descriptor === undefined || descriptor.definition.id !== entry.id)
+    if (descriptor === undefined || descriptor.definition.id !== entry.id) {
       problems.push(staleDiagnostic(`${entry.module} no longer exports the handler "${entry.id}" as "${entry.export}".`));
-    else if (expected === undefined)
+    } else if (expected === undefined) {
       problems.push(staleDiagnostic(`The handler "${entry.id}" is not in the manifest.`));
-    else if (!sameJson(normalizedTrigger(descriptor.definition), expected.trigger))
+    } else if (!sameJson(normalizedTrigger(descriptor.definition), expected.trigger)) {
       problems.push(staleDiagnostic(`The trigger of handler "${entry.id}" changed since the build.`));
-    else
+    } else {
       handlers.push(registration);
+      handlerSources[entry.id] = `${entry.module}#${entry.export}`;
+    }
   }
   if (entries.length !== manifestHandlers.size)
     problems.push(staleDiagnostic(`The manifest lists ${manifestHandlers.size} handlers, but the entry point map names ${entries.length}.`));
   if (problems.length > 0)
     throw new HolqaError(problems);
-  return Object.freeze({ app: appExports.default, handlers: Object.freeze(handlers), manifestFingerprint: fingerprint });
+  return Object.freeze({ app: appExports.default, handlers: Object.freeze(handlers), manifestFingerprint: fingerprint, handlerSources: Object.freeze(handlerSources) });
 }
 
 /**

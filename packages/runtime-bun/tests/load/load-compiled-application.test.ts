@@ -118,6 +118,7 @@ describe("loadCompiledApplication", () => {
     const compiled = await loadCompiledApplication({ root: await writeApp() });
     expect(compiled.handlers).toHaveLength(1);
     expect(compiled.manifestFingerprint).toStartWith("sha256:");
+    expect(compiled.handlerSources).toEqual({ hello: "src/hello.handler.ts#hello" });
     const runtime = createRuntime({ ...compiled, env: {}, log: silentSink });
     await runtime.start();
     expect(await (await runtime.fetch(new Request("http://localhost/api/hello"))).text()).toBe("hello from a compiled app");

@@ -62,6 +62,7 @@ export default antfu({
     "**/.tanstack/**",
     "**/.vite/**",
     "**/.turbo/**",
+    "**/.tmp/**",
     "**/*.css",
     "**/*.html",
     "**/*.md",

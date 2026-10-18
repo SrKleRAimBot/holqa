@@ -13,15 +13,15 @@ What exists today:
 - A pnpm + Turborepo monorepo with strict TypeScript, ESLint, Bun tests, and enforced package boundaries.
 - `@holqa/core`: `Result`, structured `Diagnostic` values, a diagnostic code registry, validated `ResourceId`s, and the descriptor protocol and runtime binding contract behind the resource model.
 - `@holqa/sdk`: `defineApp`, resource declarations (`queue`, `bucket`, `schedule`, `http.api`), configuration (`secret`, `variable`), typed resource handles inferred from source, handlers for queues, buckets (object created and deleted) and schedules, queue sends with delays, object operations with bounded listings and signed URLs, and HTTP routes, RPC procedures and typed middleware.
-- `@holqa/testing`: compile-time type assertions.
+- `@holqa/testing`: compile-time type assertions and `createTestApp` for deterministic integration tests (virtual clock, event flushing, failure injection, duplicate delivery).
 - `@holqa/compiler`: deterministic canonical JSON, schema contracts, and compilation of an application into a validated resource graph and a deterministic manifest (version 1) with an entry point map. See the [compiler specification](reference/compiler-specification.md).
 - `@holqa/runtime-bun`: an invocation dispatcher with lifecycle, limits, cancellation and structured logs that executes compiled applications' HTTP routes and RPC procedures on Bun, and delivers queue messages, object events and scheduled runs with retries, backoff, dead-lettering and graceful shutdown. See the [runtime reference](reference/runtime.md).
 - `@holqa/local`: a local binding with SQLite-backed queues, filesystem object storage with events and development signed URLs, and a clock-driven scheduler, plus inspection. See the [local environment reference](reference/local.md).
-- `@holqa/cli`: a `holqa` binary that prints help and version information, inspects an application (`holqa inspect`), writes its manifest (`holqa build --manifest`), and reports structured diagnostics (with `--json`) for commands that are not implemented.
+- `@holqa/cli`: a `holqa` binary that prints help and version information, inspects an application (`holqa inspect`), writes its manifest (`holqa build --manifest`), runs it locally with reloads (`holqa dev`), invokes handlers and sends events (`holqa invoke`, `queue send`, `storage put`, `cron run`), prints local state (`holqa state`), checks the project (`holqa doctor`), and reports structured diagnostics (with `--json`). See the [local development guide](guides/local-development.md).
 
 Disposable prototypes from the [M0 milestone](milestones/m0/index.md) live in [`experiments/`](../experiments/README.md); they are not part of the framework.
 
-Everything else (`holqa dev` and the other workflow commands, bundling, client generation, clients, integrations, and providers for external services) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
+Everything else (`holqa openapi generate`, module hot-swapping, worker isolation, bundling, client generation, clients, integrations, and providers for external services) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
 
 ## Where to start
 
@@ -30,6 +30,7 @@ Everything else (`holqa dev` and the other workflow commands, bundling, client g
 | Understand what Holqa is for | [Vision](concepts/vision.md) |
 | See what is built and what comes next | [Roadmap](roadmap.md) |
 | Try the repository or contribute | [Getting started](getting-started/index.md), [Development setup](contributing/development.md) |
+| Run, debug and test an application locally | [Local development guide](guides/local-development.md) |
 | Understand the architecture | [Architecture overview](architecture/overview.md) |
 | Look up a package, CLI flag, or diagnostic code | [Reference](#reference) |
 
@@ -45,7 +46,7 @@ Everything else (`holqa dev` and the other workflow commands, bundling, client g
 | [Type safety and schemas](concepts/type-safety-and-schemas.md) | Source-based inference, Standard Schema, runtime validation, compatibility. |
 | [Triggers and execution](concepts/triggers-and-execution.md) | HTTP, RPC, queues, storage events, schedules, and the Bun execution model. |
 | [Infrastructure providers](concepts/infrastructure-providers.md) | Contracts, runtime drivers, provisioning providers, capability negotiation. |
-| [Local development](concepts/local-development.md) | The local environment: `@holqa/local` drivers (**Implemented**) and the planned `holqa dev` workflow. |
+| [Local development](concepts/local-development.md) | The local environment: `@holqa/local` drivers, `holqa dev`, reloads and `createTestApp` (**Implemented**). |
 | [Agent-native development](concepts/agent-native-development.md) | Structured output, stable diagnostics, skills, and safe automation. |
 | [Security](concepts/security.md) | Trust boundaries, secrets, safe infrastructure changes, build-time execution. |
 

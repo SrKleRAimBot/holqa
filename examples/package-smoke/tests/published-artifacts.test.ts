@@ -50,10 +50,14 @@ describe("holqa bin", () => {
     expect(help.exitCode).toBe(0);
     expect(help.stdout.toString()).toContain("Usage: holqa");
 
-    const proposed = Bun.spawnSync(["bun", bin, "dev", "--json"]);
+    const proposed = Bun.spawnSync(["bun", bin, "openapi", "generate", "--json"]);
     expect(proposed.exitCode).toBe(1);
     const output = JSON.parse(proposed.stderr.toString()) as { diagnostics: Array<{ code: string }> };
     expect(output.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_CLI_NOT_IMPLEMENTED"]);
+
+    const usage = Bun.spawnSync(["bun", bin, "queue", "send", "--json"]);
+    expect(usage.exitCode).toBe(2);
+    expect((JSON.parse(usage.stderr.toString()) as { diagnostics: Array<{ code: string }> }).diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_CLI_ARGUMENT_INVALID"]);
   });
 });
 
@@ -64,7 +68,7 @@ describe("compiler artifacts", () => {
     expect([manifestSchema.$id, entrypointsSchema.$id]).toEqual(["urn:holqa:schema:manifest:1", "urn:holqa:schema:entrypoints:1"]);
   });
 
-  it("ships the CLI's analysis entry point next to its binary", () => {
-    expect(readdirSync(distDirectory("@holqa/cli"))).toEqual(expect.arrayContaining(["analyze.js", "bin.js", "index.js"]));
+  it("ships the CLI's analysis and generation entry points next to its binary", () => {
+    expect(readdirSync(distDirectory("@holqa/cli"))).toEqual(expect.arrayContaining(["analyze.js", "bin.js", "generation.js", "index.js"]));
   });
 });

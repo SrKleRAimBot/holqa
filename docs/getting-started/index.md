@@ -41,10 +41,21 @@ After `pnpm build`, run the built binary with Bun:
 ```bash
 bun packages/cli/dist/bin.js --help
 bun packages/cli/dist/bin.js --version
-bun packages/cli/dist/bin.js dev --json
 ```
 
-The last command exits with code `1` and prints a `HOLQA_CLI_NOT_IMPLEMENTED` diagnostic as JSON, because `holqa dev` is a proposed command. See the [CLI reference](../reference/cli.md).
+### Running an example locally
+
+The [order pipeline example](../../examples/order-pipeline/README.md) runs with `holqa dev`, without infrastructure credentials:
+
+```bash
+pnpm --filter @holqa/example-order-pipeline start
+# in another terminal, inside examples/order-pipeline:
+curl -X POST 127.0.0.1:3000/api/orders -H 'content-type: application/json' -d '{"orderId":"123"}'
+pnpm exec holqa queue send orders --app app/infra.ts --data '{"orderId":"124"}'
+pnpm exec holqa state --app app/infra.ts
+```
+
+`holqa dev` rebuilds and restarts the application when a file changes. See the [local development guide](../guides/local-development.md) and the [CLI reference](../reference/cli.md).
 
 ### Using the core primitives
 
@@ -64,7 +75,7 @@ This only works inside the monorepo workspace (for example in a new package or e
 
 ## Preview: a future Holqa application
 
-> **Illustrative only.** This section describes the intended developer experience. `defineApp`, the resource factories and typed handles exist in the private `@holqa/sdk` package, and so do HTTP routes, handler execution and local drivers in the repository, but an installable release, `holqa dev` and the other workflow commands do not, and the code below is not type-checked against the SDK. Names and shapes may change.
+> **Illustrative only.** This section describes the intended developer experience. `defineApp`, the resource factories and typed handles exist in the private `@holqa/sdk` package, and so do HTTP routes, handler execution and local drivers in the repository, but an installable release does not, and the code below is not type-checked against the SDK. Names and shapes may change.
 
 ### Intended layout
 
@@ -149,13 +160,14 @@ await resources.orders.send({ orderId: "order_123", priority: "urgent" });
 holqa inspect --json      # print the resources, handlers, graph and manifest
 holqa build --manifest    # write manifest.json and entrypoints.json
 
-# Proposed commands. None of these are implemented.
 holqa dev                 # run locally with emulated queue, storage, and scheduler
-holqa queue send ...      # send a test message to the local queue
+holqa queue send orders --data '{"orderId":"order_123"}'   # send a test message to the local queue
+
+# Proposed. Not implemented.
 holqa build               # bundle runtime artifacts
 ```
 
-`holqa inspect` and `holqa build --manifest` run the application's code; see the [CLI reference](../reference/cli.md).
+`holqa inspect`, `holqa build --manifest`, `holqa dev` and the operation commands run the application's code; see the [CLI reference](../reference/cli.md).
 
 ## Next steps
 

@@ -1,3 +1,4 @@
+import type { DeliveryTrace } from "@/binding/trace";
 import type { StandardSchemaV1 } from "@/schema/standard-schema";
 import type { MessageEnvelope } from "@/wire/message-envelope";
 
@@ -104,6 +105,17 @@ export interface QueueSendOptions {
   readonly delaySeconds?: number;
 }
 
+/**
+ * What a runtime tells a driver about the invocation that performs an
+ * operation. Drivers may ignore it; a driver that stores deliveries should keep
+ * `trace` with them and return it from its source (see `LeasedDelivery.trace`).
+ * It is never part of the application's resource contract.
+ */
+export interface DriverOperationContext {
+  /** The trace of the invocation performing the operation. */
+  readonly trace?: DeliveryTrace;
+}
+
 /** What a queue returns for an accepted message. */
 export interface QueueSendReceipt {
   /** The identifier the queue assigned. Every delivery of the message, including duplicates, carries it. */
@@ -116,7 +128,7 @@ export interface QueueSendReceipt {
  * assigns the message identifier.
  */
 export interface QueueDriver {
-  readonly send: (envelope: MessageEnvelope, options: QueueSendOptions) => Promise<QueueSendReceipt>;
+  readonly send: (envelope: MessageEnvelope, options: QueueSendOptions, context?: DriverOperationContext) => Promise<QueueSendReceipt>;
 }
 
 /** Who may read objects in a bucket. */
@@ -211,11 +223,12 @@ export interface SignedUrl {
 
 /** Data-plane bucket operations. Keys are validated before a driver sees them (see `checkObjectKey`). */
 export interface BucketDriver {
-  readonly put: (key: string, body: Uint8Array, options: PutObjectOptions) => Promise<ObjectMetadata>;
+  /** Stores an object. `context` carries the trace an object event should record. */
+  readonly put: (key: string, body: Uint8Array, options: PutObjectOptions, context?: DriverOperationContext) => Promise<ObjectMetadata>;
   readonly get: (key: string) => Promise<Uint8Array | undefined>;
   readonly head: (key: string) => Promise<ObjectMetadata | undefined>;
   /** Removes an object; resolves to `false` when it did not exist. */
-  readonly delete: (key: string) => Promise<boolean>;
+  readonly delete: (key: string, context?: DriverOperationContext) => Promise<boolean>;
   readonly list: (options: ListObjectsOptions) => Promise<ObjectList>;
   readonly signUrl: (key: string, options: SignedUrlOptions) => Promise<SignedUrl>;
 }

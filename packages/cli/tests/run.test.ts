@@ -57,10 +57,10 @@ describe("runCli", () => {
   });
 
   it("reports proposed commands as not implemented", async () => {
-    const result = await run(["queue", "send", "orders"]);
+    const result = await run(["openapi", "generate"]);
     expect(result.code).toBe(exitCodes.failure);
     expect(result.stderr).toContain("HOLQA_CLI_NOT_IMPLEMENTED");
-    expect(result.stderr).toContain("holqa queue send");
+    expect(result.stderr).toContain("holqa openapi generate");
   });
 
   it("reports unknown commands as usage errors", async () => {
@@ -70,7 +70,7 @@ describe("runCli", () => {
   });
 
   it("emits machine-readable diagnostics with --json", async () => {
-    const result = await run(["dev", "--json"]);
+    const result = await run(["openapi", "generate", "--json"]);
     const parsed = JSON.parse(result.stderr) as { diagnostics: Array<{ code: string; severity: string }> };
     expect(parsed.diagnostics).toHaveLength(1);
     expect(parsed.diagnostics[0]).toMatchObject({ code: "HOLQA_CLI_NOT_IMPLEMENTED", severity: "error" });

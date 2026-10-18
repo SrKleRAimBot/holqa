@@ -35,6 +35,7 @@ export type {
   SkippedScheduleRun,
   SucceededScheduleRun
 } from "@/binding/sources";
+export type { DeliveryTrace } from "@/binding/trace";
 export type { ConfigDescriptor } from "@/config/config-descriptor";
 export { diagnosticCodes } from "@/diagnostics/codes";
 export type { DiagnosticCode } from "@/diagnostics/codes";
@@ -143,6 +144,7 @@ export type {
   BucketRequirements,
   BucketSchemas,
   DrivenResourceKind,
+  DriverOperationContext,
   ExponentialQueueBackoff,
   FixedQueueBackoff,
   HttpApiCapabilities,
