@@ -1,0 +1,56 @@
+{
+  "application": {
+    "handlers": {
+      "exclude": [],
+      "include": [
+        "src/**/*.handler.ts"
+      ]
+    },
+    "module": "infra.ts"
+  },
+  "format": "holqa.entrypoints/1",
+  "handlers": [
+    {
+      "export": "getOrder",
+      "exports": [
+        "getOrder"
+      ],
+      "id": "orders.get",
+      "module": "src/api/orders.handler.ts"
+    },
+    {
+      "export": "listOrders",
+      "exports": [
+        "listOrders"
+      ],
+      "id": "orders.list",
+      "module": "src/api/orders.handler.ts"
+    },
+    {
+      "export": "default",
+      "exports": [
+        "consumer",
+        "default"
+      ],
+      "id": "orders.process",
+      "module": "src/orders/process.handler.ts"
+    },
+    {
+      "export": "default",
+      "exports": [
+        "default"
+      ],
+      "id": "receipts.stored",
+      "module": "src/receipts/stored.handler.ts"
+    },
+    {
+      "export": "default",
+      "exports": [
+        "default"
+      ],
+      "id": "reports.nightly",
+      "module": "src/reports/nightly.handler.ts"
+    }
+  ],
+  "manifest": "sha256:6c7b0d10057130cb1e3b6fbee413060594e31787ef84e272f4e59e5a4f28d256"
+}

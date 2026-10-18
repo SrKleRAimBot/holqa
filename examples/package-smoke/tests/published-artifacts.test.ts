@@ -56,3 +56,15 @@ describe("holqa bin", () => {
     expect(output.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_CLI_NOT_IMPLEMENTED"]);
   });
 });
+
+describe("compiler artifacts", () => {
+  it("ships the manifest JSON Schemas through the package exports", () => {
+    const manifestSchema = JSON.parse(readFileSync(require.resolve("@holqa/compiler/manifest-v1.schema.json"), "utf8")) as { $id: string };
+    const entrypointsSchema = JSON.parse(readFileSync(require.resolve("@holqa/compiler/entrypoints-v1.schema.json"), "utf8")) as { $id: string };
+    expect([manifestSchema.$id, entrypointsSchema.$id]).toEqual(["urn:holqa:schema:manifest:1", "urn:holqa:schema:entrypoints:1"]);
+  });
+
+  it("ships the CLI's analysis entry point next to its binary", () => {
+    expect(readdirSync(distDirectory("@holqa/cli"))).toEqual(expect.arrayContaining(["analyze.js", "bin.js", "index.js"]));
+  });
+});

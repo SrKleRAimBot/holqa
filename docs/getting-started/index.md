@@ -4,13 +4,13 @@
 
 ## What you can do today
 
-Holqa is at the bootstrap stage. You cannot yet build or run a Holqa application. The `@holqa/*` packages are marked `"private": true` and are not published to npm.
+Holqa is at the bootstrap stage. Inside this repository you can declare an application with `@holqa/sdk` and compile it into a manifest, but you cannot yet run its handlers locally, bundle it, or deploy it. The `@holqa/*` packages are marked `"private": true` and are not published to npm.
 
 You can:
 
 1. **Read the design.** Start with the [vision](../concepts/vision.md), then the [application model](../concepts/application-model.md) and [resource graph](../concepts/resource-graph.md).
 2. **Build and test the repository.** The foundational packages build, typecheck, lint, and test.
-3. **Run the CLI.** The `holqa` binary prints help and version information and reports structured diagnostics for commands that do not exist yet.
+3. **Run the CLI.** The `holqa` binary prints help and version information, inspects an application and writes its manifest (`holqa inspect`, `holqa build --manifest`), and reports structured diagnostics for commands that do not exist yet. [`examples/manifest`](../../examples/manifest/README.md) compiles real applications this way.
 4. **Contribute.** See [development setup](../contributing/development.md) and [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
 
 ## Exploring the repository
@@ -64,7 +64,7 @@ This only works inside the monorepo workspace (for example in a new package or e
 
 ## Preview: a future Holqa application
 
-> **Illustrative only.** Everything in this section describes the intended developer experience. None of these APIs (`@holqa/sdk`, `defineApp`, `queue`, `resources.orders.send`, and so on) exist yet, and the names and shapes may change.
+> **Illustrative only.** This section describes the intended developer experience. `defineApp`, the resource factories and typed handles exist in the private `@holqa/sdk` package, but HTTP routes, running handlers, local emulation and an installable release do not, and the code below is not type-checked against the SDK. Names and shapes may change.
 
 ### Intended layout
 
@@ -145,12 +145,17 @@ await resources.orders.send({ orderId: "order_123", priority: "urgent" });
 ### Intended workflow
 
 ```bash
+# Implemented.
+holqa inspect --json      # print the resources, handlers, graph and manifest
+holqa build --manifest    # write manifest.json and entrypoints.json
+
 # Proposed commands. None of these are implemented.
 holqa dev                 # run locally with emulated queue, storage, and scheduler
 holqa queue send ...      # send a test message to the local queue
-holqa inspect --json      # print the resource graph
-holqa build               # compile the manifest and runtime artifacts
+holqa build               # bundle runtime artifacts
 ```
+
+`holqa inspect` and `holqa build --manifest` run the application's code; see the [CLI reference](../reference/cli.md).
 
 ## Next steps
 

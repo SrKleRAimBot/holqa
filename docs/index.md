@@ -14,12 +14,12 @@ What exists today:
 - `@holqa/core`: `Result`, structured `Diagnostic` values, a diagnostic code registry, validated `ResourceId`s, and the descriptor protocol and runtime binding contract behind the resource model.
 - `@holqa/sdk`: `defineApp`, resource declarations (`queue`, `bucket`, `schedule`, `http.api`), configuration (`secret`, `variable`), typed resource handles inferred from source, and handler registration for queues, buckets and schedules. Nothing executes handlers yet.
 - `@holqa/testing`: compile-time type assertions.
-- `@holqa/compiler`: deterministic canonical JSON serialization, the foundation for the future manifest.
-- `@holqa/cli`: a `holqa` binary that prints help and version information and reports structured diagnostics (with `--json`) for commands that are not implemented.
+- `@holqa/compiler`: deterministic canonical JSON, schema contracts, and compilation of an application into a validated resource graph and a deterministic manifest (version 1) with an entry point map. See the [compiler specification](reference/compiler-specification.md).
+- `@holqa/cli`: a `holqa` binary that prints help and version information, inspects an application (`holqa inspect`), writes its manifest (`holqa build --manifest`), and reports structured diagnostics (with `--json`) for commands that are not implemented.
 
 Disposable prototypes from the [M0 milestone](milestones/m0/index.md) live in [`experiments/`](../experiments/README.md); they are not part of the framework.
 
-Everything else (HTTP routes, the compiler pipeline, runtime, local development environment, clients, integrations, and providers) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
+Everything else (HTTP routes, bundling, client generation, runtime, local development environment, clients, integrations, and providers) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
 
 ## Where to start
 

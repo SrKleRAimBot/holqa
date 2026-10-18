@@ -8,7 +8,7 @@ metadata:
 
 # Evolving schemas safely
 
-> **Preview.** Schema fingerprints, the compatibility checker and versioned message codecs exist as library functions in `@holqa/compiler`, `@holqa/core` and `@holqa/zod` (private, unpublished packages). Nothing runs them automatically yet: there is no manifest or CLI command that compares a deployment with the previous one. Call them from a test, as shown below.
+> **Preview.** Schema fingerprints, the compatibility checker and versioned message codecs exist as library functions in `@holqa/compiler`, `@holqa/core` and `@holqa/zod` (private, unpublished packages). The compiler records each contract's fingerprint in the manifest (`holqa build --manifest`), but nothing compares a deployment with the previous one yet. Call them from a test, as shown below.
 
 ## When to use
 
@@ -57,7 +57,7 @@ Keep fixtures of every previous message shape as well, and assert the new schema
 3. **Deploy consumers before producers.** Consumers must understand the new shape before anything sends it.
 4. **Remove the old shape** only after confirming no old messages remain.
 5. **For HTTP/RPC, keep deployed clients working**: additive outputs, optional inputs, or a new route/procedure `id` for incompatible behavior.
-6. **Run the compatibility check** in a test (above) until the compiler runs it against the previous deployment (planned).
+6. **Run the compatibility check** in a test (above). The manifest records fingerprints, so a changed fingerprint in `manifest.json` signals a contract change to review; comparing against the previous deployment automatically is planned.
 
 ```ts
 // infra.ts: version 2 adds a required currency

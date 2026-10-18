@@ -5,7 +5,7 @@
 - **Deciders:** Holqa maintainers
 - **Resolves:** the open question in [ADR 0007](0007-separate-compiler-and-runtime.md) decision 7 (how `infra.ts` is analyzed)
 
-> **Implementation status:** Accepted design, validated by the disposable [compilation experiment](../../../experiments/compiler/README.md). The manifest schema and compiler pipeline are not implemented in `@holqa/compiler`.
+> **Implementation status:** Decisions 1, 2, 3, 5 and 6 are implemented in `@holqa/compiler` and `@holqa/cli` (`holqa inspect`, `holqa build --manifest`), first validated by the disposable [compilation experiment](../../../experiments/compiler/README.md). Decision 4 is implemented as refined by the proposed [ADR 0022](0022-manifest-v1-and-entry-point-map.md): module paths live in a separate entry point map, not in the manifest. If ADR 0022 is accepted, it supersedes that part of decision 4. See the [compiler specification](../../reference/compiler-specification.md).
 
 ## Context
 

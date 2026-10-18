@@ -1,6 +1,6 @@
 # Architecture overview
 
-> **Status:** Accepted design. The package boundaries and their enforcement are **Implemented**; `@holqa/core` (contracts and the descriptor protocol), `@holqa/sdk` (the application and resource model), `@holqa/testing` (type assertions), `@holqa/compiler` (canonical JSON) and `@holqa/cli` (help and version) contain implemented parts. All other layers are planned.
+> **Status:** Accepted design. The package boundaries and their enforcement are **Implemented**; `@holqa/core` (contracts and the descriptor protocol), `@holqa/sdk` (the application and resource model), `@holqa/testing` (type assertions), `@holqa/compiler` (canonical JSON, application compilation, graph validation and manifest version 1) and `@holqa/cli` (help, version, `inspect` and `build --manifest`) contain implemented parts. All other layers are planned.
 
 This document describes Holqa's layers, how packages map to them, and how data flows from source code to a running application. For the reasoning behind individual decisions, see the [ADRs](decisions/README.md).
 
@@ -73,7 +73,7 @@ Cross-cutting concerns:
 | Concern | Packages |
 | --- | --- |
 | Diagnostics | `@holqa/core` defines `Diagnostic` and the code registry; every other package emits them. |
-| Serialization | `@holqa/compiler` owns canonical JSON and, later, the manifest schema. |
+| Serialization | `@holqa/compiler` owns canonical JSON, the manifest schema and the entry point map format. |
 | Schemas | `@holqa/core` (validation, wire payloads, the adapter contract), `@holqa/compiler` (normalized contracts, fingerprints, compatibility), `packages/integrations/*` (library adapters such as `@holqa/zod`). |
 
 ## Data flow
@@ -93,8 +93,8 @@ flowchart LR
   bundle --> providers
 ```
 
-1. Developers write `infra.ts` and handler modules using `@holqa/sdk`.
-2. The compiler analyzes them, builds the resource graph, normalizes schemas, validates the graph, and emits a deterministic manifest (serialized with the **Implemented** canonical JSON serializer), diagnostics (the **Implemented** `Diagnostic` model), and generated clients.
+1. Developers write `infra.ts` and handler modules using `@holqa/sdk` (**Implemented** for queues, buckets and schedules).
+2. The compiler analyzes them, builds the resource graph, normalizes schemas, validates the graph, and emits a deterministic manifest and diagnostics (**Implemented**: `holqa inspect` and `holqa build --manifest`, see the [compiler specification](../reference/compiler-specification.md)), and generated clients (**Planned**).
 3. Bundling produces executable artifacts for Bun as a separate step ([ADR 0007](decisions/0007-separate-compiler-and-runtime.md)).
 4. The local environment or a production binding reads the manifest, validates capabilities, and runs the artifacts.
 

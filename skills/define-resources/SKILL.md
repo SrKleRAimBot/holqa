@@ -86,7 +86,7 @@ resources: { ...coreResources, ...billingResources }
 
 ## Pitfalls
 
-- Using the same `id` twice (the planned compiler reports duplicates).
+- Using the same `id` twice. `defineApp` reports duplicate resource IDs (`HOLQA_RESOURCE_ID_DUPLICATE`); the compiler (`holqa inspect`, `holqa build --manifest`) reports duplicate handler IDs (`HOLQA_HANDLER_ID_DUPLICATE`).
 - Generating IDs dynamically (`` `queue-${env}` ``); environments are a binding concern, not part of the ID.
 - Declaring a queue without a `message` schema, so consumers cannot validate input.
 - Putting secrets' values in `infra.ts`; declare the schema only.

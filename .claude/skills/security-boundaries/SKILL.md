@@ -23,7 +23,7 @@ Holqa will eventually read user configuration, validate messages, generate brows
 | --- | --- | --- |
 | HTTP/RPC input (planned) | Request params, headers, bodies | Validate with the declared schema before handler code runs |
 | Queue messages, storage events (planned) | Payloads, possibly from older deployments | Validate on consume; treat schema mismatch as a diagnostic, not a crash |
-| User configuration (`infra.ts`, planned) | Arbitrary project code | Do not claim evaluation is sandboxed or safe unless it is. The compiler evaluates modules (ADR 0014), so document that compiling runs application code |
+| User configuration (`infra.ts` and handler modules) | Arbitrary project code | Do not claim evaluation is sandboxed or safe unless it is. `holqa inspect` and `holqa build` evaluate modules (ADR 0014) in a separate Bun process with an allowlisted environment, a timeout and a validated IPC report; that is **not** a sandbox (file system and network stay reachable), so document that compiling runs application code |
 | CLI arguments and files | User input | Parse explicitly; never pass to a shell; report diagnostics |
 | Generated clients (planned) | Shipped to browsers | Contain only public contracts; never handlers, internal functions, secrets, or env values |
 | Dependencies | Third-party code | Minimal, reviewed, no casual build-script approvals |

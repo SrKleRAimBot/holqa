@@ -1,6 +1,6 @@
 # Security
 
-> **Status:** Accepted design — not implemented. These are the security principles that Holqa's future SDK, compiler, runtime, providers, and tooling must follow. To report a vulnerability, see [`SECURITY.md`](../../SECURITY.md).
+> **Status:** Accepted design, with **Implemented** parts: runtime validation at trust boundaries (`validateInput`), secret handling in manifests, and the analysis process used by `holqa inspect` and `holqa build --manifest` ([untrusted build-time execution](#untrusted-build-time-execution)). These are the security principles that Holqa's SDK, compiler, runtime, providers, and tooling must follow. To report a vulnerability, see [`SECURITY.md`](../../SECURITY.md).
 
 Holqa sits between application code and infrastructure, so its design choices affect what data is trusted, who can change infrastructure, and where secrets can leak. This page records the principles that apply across all packages.
 
@@ -58,7 +58,9 @@ Holqa's position:
 
 - **The compiler must not execute user configuration code unsandboxed while claiming that evaluation is secure.** If declarations are evaluated, documentation and tooling must state that building an application runs its code with the privileges of the build process, exactly like running its tests.
 - Declarations are designed to be pure and deterministic ([ADR 0003](../architecture/decisions/0003-explicit-resource-declarations.md)) so that evaluation *can* be constrained. Static analysis is limited to a partial index for editors and agents ([ADR 0014](../architecture/decisions/0014-evaluation-based-manifest-extraction.md)).
-- **Accepted design** ([ADR 0014](../architecture/decisions/0014-evaluation-based-manifest-extraction.md)): the compiler's host evaluates `infra.ts` and handler modules, so compiling an application runs its code. M0 validated evaluation-based extraction, and that secret values never reach the manifest, in a disposable prototype. Running analysis in a separate process with an allowlisted environment (no secrets) is accepted design and was **not** prototyped. It reduces exposure; it is not a sandbox.
+- **Implemented** ([ADR 0014](../architecture/decisions/0014-evaluation-based-manifest-extraction.md), [ADR 0022](../architecture/decisions/0022-manifest-v1-and-entry-point-map.md)): `holqa inspect` and `holqa build --manifest` evaluate `infra.ts` and the handler modules, so compiling an application runs its code. The CLI does this in a separate Bun process that receives only an allowlisted environment (`PATH`, `HOME`, temporary directory variables, `TZ=UTC`, `LC_ALL=C`; never the application's secrets or deployment credentials), runs with `--no-env-file` and `--no-install`, has standard input closed, is killed after 60 seconds, and returns its report over IPC. The CLI validates the report (diagnostic codes, manifest, entry point map) before using it.
+- That process runs as the same user: it can still read and write files (including `.env` and credential files), on some systems read other processes' environments, and use the network. **It reduces exposure; it is not a sandbox.** See the [security model](../reference/compiler-specification.md#security-model).
+- Secret values never reach the manifest: the compiler records a secret's name and schema only, never reads configuration values, and rejects a secret that declares a default.
 - Building an untrusted repository is equivalent to running untrusted code unless and until a real sandbox is implemented and documented.
 
 The implemented canonical JSON serializer contributes a narrow guarantee: it rejects functions, symbols, class instances, `undefined`, non-finite numbers, and cycles, so executable values cannot be smuggled into a manifest as data.

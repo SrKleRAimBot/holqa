@@ -3,7 +3,8 @@
   "extends": "../../tooling/tsconfig.package.json",
   "compilerOptions": {
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@test/*": ["./tests/*"]
     }
   },
   "include": ["src", "tests", "tsdown.config.ts"]

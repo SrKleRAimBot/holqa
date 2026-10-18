@@ -201,7 +201,7 @@ Infrastructure bindings (which driver backs which logical resource in an environ
 
 ## Diagnostic codes proposed by M0
 
-These codes are used by the experiments. `HOLQA_RESOURCE_ID_DUPLICATE`, `HOLQA_INPUT_INVALID`, `HOLQA_RUNTIME_NOT_BOUND` and `HOLQA_DECLARATION_INVALID` are now registered in `@holqa/core` (see [diagnostic codes](diagnostic-codes.md)); the others are registered when the compiler and runtime that emit them are implemented.
+These codes are used by the experiments. The SDK and compiler codes in this table are now registered in `@holqa/core` (see [diagnostic codes](diagnostic-codes.md)), with `HOLQA_ROUTE_CONFLICT` in place of the proposed `HOLQA_ROUTE_AMBIGUOUS`; the runtime codes are registered when the runtime that emits them is implemented.
 
 | Code | Meaning |
 | --- | --- |

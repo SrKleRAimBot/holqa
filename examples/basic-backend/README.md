@@ -39,7 +39,6 @@ Handler-registration method names (`route`, `consume`, `onObjectCreated`, `handl
 holqa dev                          # run HTTP, queue, storage and scheduler emulation locally
 holqa queue send order-processing '{"orderId":"…","priority":"urgent"}'
 holqa cron run daily-cleanup
-holqa inspect --json               # print the resource graph
 ```
 
-Today the `holqa` CLI only supports `--help`, `--version` and `--json`; these commands report `HOLQA_CLI_NOT_IMPLEMENTED`.
+These commands report `HOLQA_CLI_NOT_IMPLEMENTED` today. `holqa inspect` and `holqa build --manifest` are implemented, but this example is not a workspace package and uses proposed APIs (HTTP route registration), so it is not expected to compile with them; see [`examples/manifest`](../manifest/README.md) for applications that do.

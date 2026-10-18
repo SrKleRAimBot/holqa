@@ -8,7 +8,7 @@ metadata:
 
 # Running local development
 
-> **Preview — not yet available.** `holqa dev`, `invoke`, `queue send`, `storage put`, `cron run` and `inspect` are **proposed** commands. Today each one exits with code 1 and reports `HOLQA_CLI_NOT_IMPLEMENTED`. The local runtime (`@holqa/local`) is planned.
+> **Preview — not yet available.** `holqa dev`, `invoke`, `queue send`, `storage put` and `cron run` are **proposed** commands. Today each one exits with code 1 and reports `HOLQA_CLI_NOT_IMPLEMENTED`. The local runtime (`@holqa/local`) is planned. `holqa inspect` is implemented.
 
 ## When to use
 
@@ -33,7 +33,7 @@ Use the exit code and the `code` field, not the message text, when scripting aga
 
 1. **Start everything:** `holqa dev`. It is planned to discover `infra.ts`, start Bun-based handler execution, emulate queues, storage (filesystem-backed) and schedules, and mount the Vite dev server so the frontend and API share one origin.
 2. **Configure local values** for `secret` and `variable` entries through local environment files that are never committed.
-3. **Inspect the graph:** `holqa inspect --json` lists resources, handlers and routes.
+3. **Inspect the graph:** `holqa inspect --json` (implemented) lists resources, handlers, configuration and required capabilities. Routes will appear once route registration exists (proposed).
 4. **Trigger events manually:**
 
    ```sh

@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Status:** Phase 0 is in progress. All later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
+> **Status:** Phase 0, phase 1 and phase 2 are in progress. Later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
 
 This roadmap distinguishes the current bootstrap state from future implementation work. Status terms follow the [status model](architecture/status-model.md). Each phase lists its goals and the exit criteria that must hold before the phase is considered complete. Later phases may start before earlier ones finish when the dependency allows it.
 
@@ -11,7 +11,7 @@ This roadmap distinguishes the current bootstrap state from future implementatio
 | 0 | Bootstrap | In progress |
 | M0 | Foundation and architecture validation | Complete (see [M0](milestones/m0/index.md)) |
 | 1 | Core resource model and SDK | In progress |
-| 2 | Compiler | Planned |
+| 2 | Compiler | In progress (manifest, discovery, validation, `inspect` and `build --manifest` **Implemented**) |
 | 3 | Bun runtime and local development | Planned |
 | 4 | Clients and integrations | Planned |
 | 5 | Providers and bindings | Planned |
@@ -97,21 +97,31 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 
 **Goal:** Turn an application's declarations and handlers into a deterministic, versioned, infrastructure-neutral manifest with structured diagnostics. See [compiler architecture](architecture/compiler.md).
 
-### Goals
+### Done
 
-- Define the versioned manifest schema (the IR), serialized with the existing canonical JSON serializer.
-- Configuration discovery (`infra.ts`) and handler discovery (glob patterns declared in `defineApp`).
-- Resource graph construction and static validation: duplicate identifiers, invalid references, ambiguous routes, incompatible requirements, invalid schemas.
-- Record schema contract records (contract, fingerprint, `schemaVersion`) in the manifest, and compare them with a previously deployed manifest using the **Implemented** compatibility checker.
-- A documented, honest analysis strategy for user configuration code that does not claim unsandboxed evaluation is secure.
-- Expose `holqa build` and `holqa inspect` (currently proposed commands).
+| Item | Status |
+| --- | --- |
+| Versioned manifest (version 1) and entry point map with published JSON Schemas, TypeScript types and validating readers ([compiler specification](reference/compiler-specification.md), [ADR 0022](architecture/decisions/0022-manifest-v1-and-entry-point-map.md)) | **Implemented** |
+| Application loading (`infra.ts`) and handler discovery with the glob patterns declared in `defineApp`, evaluated in a separate process with an allowlisted environment | **Implemented** |
+| Static validation: duplicate resource and handler identifiers, references to undeclared resources, trigger kind mismatches, one consumer per queue, conflicting routes, unknown settings, invalid schemas | **Implemented** |
+| Schema contracts (fingerprint, source, `schemaVersion`) recorded in the manifest's schema table | **Implemented** |
+| Resource graph builder (`buildResourceGraph`) and required capabilities | **Implemented** |
+| `holqa inspect` (text and `--json`) and `holqa build --manifest` | **Implemented** |
+| Byte-identical manifests across processes, working directories and application locations, verified by [`examples/manifest`](../examples/manifest/README.md) | **Implemented** |
+
+### Remaining goals
+
+- Compare the manifest with a previously deployed manifest using the **Implemented** compatibility checker.
+- Bundle executable artifacts from the entry point map (`holqa build` without `--manifest`).
+- Check required capabilities against a selected binding at build time.
+- Harden analysis with a real sandbox (restricted file system and network) when one is practical on Bun.
 
 ### Exit criteria
 
-- The same inputs produce byte-identical manifests across runs and machines.
-- Every compiler failure is a `Diagnostic` with a registered `HOLQA_*` code and, where possible, a source location.
-- `holqa inspect --json` returns the resource graph as stable JSON.
-- Compilation and bundling are separate steps with separate outputs ([ADR 0007](architecture/decisions/0007-separate-compiler-and-runtime.md)).
+- The same inputs produce byte-identical manifests across runs and machines. **Met** for runs, working directories and application locations on one machine; cross-machine runs are covered by the same guarantees but not yet by CI on several platforms.
+- Every compiler failure is a `Diagnostic` with a registered `HOLQA_*` code and, where possible, a source location. **Met.**
+- `holqa inspect --json` returns the resource graph as stable JSON. **Met.**
+- Compilation and bundling are separate steps with separate outputs ([ADR 0007](architecture/decisions/0007-separate-compiler-and-runtime.md)). **Met** for the manifest; bundling is not implemented.
 
 ## Phase 3: Bun runtime and local development
 

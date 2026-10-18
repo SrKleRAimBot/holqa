@@ -8,7 +8,7 @@ metadata:
 
 # Getting started with a Holqa project
 
-> **Preview — not yet available.** Holqa packages are not published to npm. The SDK (`@holqa/sdk`) exists in the Holqa repository and can declare applications, resources and handlers, but nothing executes them yet; the CLI commands in this skill are **proposed** and not implemented. Treat every code sample as illustrative; names may change.
+> **Preview — not yet available.** Holqa packages are not published to npm. The SDK (`@holqa/sdk`) exists in the Holqa repository and can declare applications, resources and handlers, but nothing executes them yet. Of the CLI commands in this skill, only `holqa inspect` and `holqa build --manifest` are implemented; the others are **proposed**. Treat every code sample as illustrative; names may change.
 
 ## When to use
 
@@ -21,12 +21,12 @@ metadata:
 From a checkout of the Holqa repository (`pnpm install && pnpm build`):
 
 ```sh
-bun packages/cli/dist/bin.js --help        # lists options and the proposed commands
+bun packages/cli/dist/bin.js --help        # lists options, implemented and proposed commands
 bun packages/cli/dist/bin.js --version --json
 bun packages/cli/dist/bin.js dev --json    # exits 1, HOLQA_CLI_NOT_IMPLEMENTED on stderr
 ```
 
-Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations such as the `infra.ts` below (without `staticSite`, HTTP routes or RPC, which are proposed). Nothing else in this skill runs yet. Do not try to install `@holqa/sdk` from npm; it is not published.
+Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations such as the `infra.ts` below (without `staticSite`, HTTP routes or RPC, which are proposed). `holqa inspect --app infra.ts` prints its resources and handlers, and `holqa build --manifest` writes its manifest; both run the application's modules. Nothing else in this skill runs yet. Do not try to install `@holqa/sdk` from npm; it is not published.
 
 ## Planned workflow
 
@@ -35,7 +35,7 @@ Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations
 3. **Point to handler modules.** Set `handlers` to a glob such as `./src/**/*.handler.ts`. Business logic lives there, never in `infra.ts`.
 4. **Export typed handles.** Export `resources` and `config` so handlers can import them and get inferred types.
 5. **Write one handler per file.** Each file default-exports a registration such as `resources.orders.consume({...})`.
-6. **Run locally** with `holqa dev` (proposed) and inspect the graph with `holqa inspect --json` (proposed).
+6. **Inspect the graph** with `holqa inspect --json` (implemented) and **run locally** with `holqa dev` (proposed).
 
 ```ts
 // infra.ts — illustrative, proposed API

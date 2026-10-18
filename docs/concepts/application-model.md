@@ -1,6 +1,6 @@
 # Application model
 
-> **Status:** Implemented in part. `defineApp`, `defineResources`, `composeResources`, the `queue`, `bucket`, `schedule` and `http.api` factories, `secret` and `variable`, typed handles, and handler registration for queues, buckets and schedules exist in `@holqa/sdk`. HTTP routes and RPC procedures, `staticSite`, handler discovery, and anything that executes handlers are **Proposed** or **Planned**.
+> **Status:** Implemented in part. `defineApp`, `defineResources`, `composeResources`, the `queue`, `bucket`, `schedule` and `http.api` factories, `secret` and `variable`, typed handles, and handler registration for queues, buckets and schedules exist in `@holqa/sdk`. Handler discovery and compilation into a manifest are **Implemented** in `@holqa/compiler` and the CLI. HTTP routes and RPC procedures, `staticSite`, and anything that executes handlers are **Proposed** or **Planned**.
 
 A Holqa application is a set of **logical resources** declared in a registry module, plus **handler modules** that contain business logic. This document describes the registry (`infra.ts` and `defineApp`), how resources are identified, how typed handles work, and how resource lifecycles relate to code. The internal representation is described in [resource model](../architecture/resource-model.md).
 
@@ -58,7 +58,7 @@ Any [Standard Schema](https://standardschema.dev) implementation works; Zod is u
 | --- | --- | --- |
 | `name` | Yes | The application's name, in [identifier grammar](resource-identity.md). |
 | `description` | No | A short human-readable description. |
-| `handlers` | No | Glob patterns for handler modules, relative to `infra.ts`: a list, or `{ include, exclude }`. Absolute paths and `..` are rejected. Discovery itself is done by the planned compiler, not by `defineApp`. |
+| `handlers` | No | Glob patterns for handler modules, relative to `infra.ts`: a list, or `{ include, exclude }`. Absolute paths and `..` are rejected. Discovery itself is done by the compiler (`holqa inspect`, `holqa build --manifest`), not by `defineApp`. |
 | `resources` | Yes | A record of resource handles. Property names are local aliases; each resource's `id` is its identity. |
 | `env` | No | Typed configuration: `secret(schema)` for sensitive values, `variable(schema, { default })` for non-sensitive ones. Names must be valid environment variable names. |
 

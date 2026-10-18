@@ -78,7 +78,7 @@ Negotiation outcomes:
 
 Provider independence does not imply that every provider offers identical functionality or guarantees. An unsupported capability **fails explicitly**; it is never silently ignored or emulated with weaker semantics. For example, if a queue declares `deadLetter: true` and the bound driver cannot dead-letter, Holqa must refuse the binding rather than drop messages after the final attempt.
 
-When this check runs (at `holqa build`, `holqa doctor`, deployment time, or all three) is **Proposed**.
+When this check runs (at `holqa build`, `holqa doctor`, deployment time, or all three) is **Proposed**. The compiler already records the capabilities an application requires in the manifest (`requiredCapabilities`, **Implemented**, with the vocabulary in the [compiler specification](../reference/compiler-specification.md#required-capabilities)); comparing them with a binding at build time is **Planned**.
 
 ## Possible future adapters
 

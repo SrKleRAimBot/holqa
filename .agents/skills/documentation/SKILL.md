@@ -56,11 +56,11 @@ Mixed docs summarize in the status line and label individual rows or sections.
 ## Honesty rules
 
 - Write unimplemented behavior as intent: "Holqa is designed to retry failed deliveries", not "Holqa retries".
-- Put this sentence immediately before code that uses APIs that do not exist (`defineApp`, `queue`, `bucket`, `resources.orders.send`, ...):
+- Put this sentence immediately before code that uses APIs that do not exist (HTTP routes, RPC procedures, `staticSite`, bindings, ...):
 
   > The following code is illustrative. The API is proposed, not implemented, and may change.
 
-- CLI: only `holqa --help`, `--version`, and `--json` work. `dev`, `build`, `inspect`, `doctor`, `invoke`, `queue send`, `storage put`, `cron run`, and `openapi generate` exit 1 with `HOLQA_CLI_NOT_IMPLEMENTED`; unknown commands exit 2 with `HOLQA_CLI_UNKNOWN_COMMAND`.
+- CLI: only `holqa --help`, `--version`, `--json`, `holqa inspect` and `holqa build --manifest` work. `build` without `--manifest`, `dev`, `doctor`, `invoke`, `queue send`, `storage put`, `cron run`, and `openapi generate` exit 1 with `HOLQA_CLI_NOT_IMPLEMENTED`; unknown commands exit 2 with `HOLQA_CLI_UNKNOWN_COMMAND`.
 - Never paste output you did not produce by running the command. Prefer describing output over fabricating it.
 - Never upgrade a status without the evidence the status model requires. When unsure, use the weaker label.
 - Present Holqa as independent and infrastructure-agnostic. Do not name or imply a proprietary or first-party hosting product, and do not center one cloud vendor; use neutral terms ("an S3-compatible object store") or several examples.

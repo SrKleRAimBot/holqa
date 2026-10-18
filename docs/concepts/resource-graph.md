@@ -1,6 +1,6 @@
 # Resource graph
 
-> **Status:** Accepted design — not implemented. The graph model, its construction by the compiler, and its manifest representation are all future work.
+> **Status:** Implemented in part. The compiler builds the graph from declarations, enforces the graph invariants below and serializes it into manifest version 1 (`holqa inspect`, `holqa build --manifest`); see the [compiler specification](../reference/compiler-specification.md). `uses` and `reads` edges (declared dependencies) are **Proposed**, and checking requirements against a selected binding at build time is **Planned**.
 
 The **application resource graph** is Holqa's central abstraction. It is a single model that connects an application's resources, the triggers they produce, the handlers that respond, and the dependencies between them. Type inference, validation, local emulation, client generation, manifests, and provider bindings are all derived from this graph.
 
@@ -72,27 +72,29 @@ Consequences:
 
 ## Graph invariants
 
-The compiler (planned, see [compiler](../architecture/compiler.md)) is responsible for constructing the graph and enforcing these invariants with structured diagnostics:
+The compiler (see [compiler](../architecture/compiler.md)) constructs the graph and enforces these invariants with structured diagnostics:
 
-| Invariant | Example violation | Planned diagnostic area |
-| --- | --- | --- |
-| Identifiers are valid. | `id: "Orders"` | `HOLQA_RESOURCE_ID_INVALID` (**Implemented** in `parseResourceId`) |
-| Identifiers are unique across resources and handlers. | Two resources with `id: "web"` | `HOLQA_RESOURCE_*` (planned) |
-| References resolve. | A handler for a resource that was removed. | `HOLQA_RESOURCE_NOT_FOUND` (planned) |
-| A queue has at most one consumer. | Two `consume` calls on `order-processing`. | Planned |
-| Routes are unambiguous. | Two handlers for `GET /api/orders/:id`. | Planned |
-| Schemas can be normalized. | A schema transformation with no portable form. | `HOLQA_SCHEMA_UNSUPPORTED` (emitted by `normalizeSchema`; graph validation is planned) |
-| Requirements are satisfiable by the selected binding. | `deadLetter: true` on a driver without dead-letter support. | Planned |
+| Invariant | Example violation | Diagnostic | Status |
+| --- | --- | --- | --- |
+| Identifiers are valid. | `id: "Orders"` | `HOLQA_RESOURCE_ID_INVALID` | **Implemented** |
+| Resource identifiers are unique. | Two resources with `id: "web"` | `HOLQA_RESOURCE_ID_DUPLICATE` | **Implemented** |
+| Handler identifiers are unique. | Two handlers with `id: "orders.process"` | `HOLQA_HANDLER_ID_DUPLICATE` | **Implemented** |
+| References resolve. | A handler for a resource that was removed. | `HOLQA_RESOURCE_NOT_FOUND` | **Implemented** |
+| Triggers match their resource. | A queue consumer registered on a bucket, or a consumer whose message contract differs from its queue's. | `HOLQA_TRIGGER_INVALID` | **Implemented** |
+| A queue has at most one consumer. | Two `consume` calls on `order-processing`. | `HOLQA_QUEUE_CONSUMER_DUPLICATE` | **Implemented** |
+| Routes are unambiguous. | Two handlers for `GET /api/orders/:id`. | `HOLQA_ROUTE_CONFLICT` | **Implemented** in the compiler; route registration in the SDK is **Proposed** |
+| Schemas can be normalized. | A schema transformation with no portable form. | `HOLQA_SCHEMA_UNSUPPORTED` | **Implemented** |
+| Requirements are satisfiable by the selected binding. | `deadLetter: true` on a driver without dead-letter support. | Not assigned | **Planned** at build time |
 
 See [diagnostic codes](../reference/diagnostic-codes.md) for the naming convention and current registry.
 
 ## Graph and manifest
 
-The compiler will serialize the graph into a deterministic, versioned, infrastructure-neutral **manifest** using the implemented canonical JSON serializer. The manifest is the hand-off point between the compiler and everything downstream: runtimes, local development, providers, and inspection tools. Because it is canonical JSON, two compilations of the same source produce byte-identical output, and diffs between manifests reflect real changes.
+The compiler serializes the graph into a deterministic, versioned, infrastructure-neutral **manifest** (manifest version 1) using canonical JSON. This is **Implemented**; the format is specified in the [compiler specification](../reference/compiler-specification.md#manifest-version-1). The manifest is the hand-off point between the compiler and everything downstream: runtimes, local development, providers, and inspection tools. Because it is canonical JSON, two compilations of the same source produce byte-identical output, and diffs between manifests reflect real changes.
 
 ## Dependencies and least privilege
 
-Because every `uses` edge is explicit in the graph, required runtime permissions can be derived per handler rather than granted application-wide. A provider can use this to issue narrowly scoped credentials. This is **Proposed**; whether handles must be declared up front or can be detected statically is an open design question tied to handler discovery in the compiler.
+Because every `uses` edge is explicit in the graph, required runtime permissions can be derived per handler rather than granted application-wide. A provider can use this to issue narrowly scoped credentials. This is **Proposed**. Today the graph records only relationships that declarations state (`declares`, `registers`, `requires`, `triggers`, `schema`); it has no `uses` or `reads` edges. Whether handles must be declared up front or can be detected statically is an open design question tied to handler discovery in the compiler.
 
 ## Extensibility
 

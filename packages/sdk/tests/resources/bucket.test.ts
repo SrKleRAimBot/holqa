@@ -4,7 +4,8 @@ import {
   bindApp,
   getAppDescriptor,
   getHandlerDescriptor,
-  getResourceDescriptor
+  getResourceDescriptor,
+  hasStandardJsonSchema
 } from "@holqa/core";
 import {
   createContext,
@@ -69,5 +70,19 @@ describe("bucket", () => {
     await handler["~holqa"].invoke({ key: "raw/a.png", size: 3 }, createContext({}));
     expect(seen).toEqual(["raw/a.png:3"]);
     expect(await handler["~holqa"].invoke({ key: "", size: -1 }, createContext({})).catch((error: unknown) => (error as { code: string }).code)).toBe("HOLQA_INPUT_INVALID");
+  });
+
+  it("describes the portable event with Standard JSON Schema, so compilers can record it", () => {
+    const handler = bucket({ id: "images", access: "private" }).onObjectCreated({ id: "images.thumbnail", handler: () => {} });
+    const schema = handler["~holqa"].schemas.object;
+    if (!hasStandardJsonSchema(schema))
+      throw new Error("Expected the object event schema to implement Standard JSON Schema.");
+    expect(schema["~standard"].vendor).toBe("holqa");
+    expect(schema["~standard"].jsonSchema.input({ target: "draft-2020-12" })).toEqual({
+      type: "object",
+      properties: { key: { type: "string", minLength: 1 }, size: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER }, contentType: { type: "string" } },
+      required: ["key", "size"]
+    });
+    expect(schema["~standard"].jsonSchema.output({ target: "draft-2020-12" })).toMatchObject({ additionalProperties: false });
   });
 });

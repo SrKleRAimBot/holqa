@@ -8,7 +8,7 @@ metadata:
 
 # Debugging events
 
-> **Preview — mostly not available.** Event inspection, replay and the `holqa inspect`/`invoke` commands are **proposed**. What works today is reading structured diagnostics from the CLI.
+> **Preview — mostly not available.** Event inspection, replay and `holqa invoke` are **proposed**. What works today is reading structured diagnostics from the CLI, and `holqa inspect --json` (in the Holqa repository) to see which handlers are bound to which resources.
 
 ## When to use
 

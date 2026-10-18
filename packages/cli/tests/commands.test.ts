@@ -6,6 +6,7 @@ import {
 
 import {
   findProposedCommand,
+  implementedCommands,
   proposedCommands
 } from "@/commands";
 
@@ -27,5 +28,11 @@ describe("findProposedCommand", () => {
   it("has unique command names", () => {
     const names = proposedCommands.map(command => command.name);
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it("no longer lists implemented commands as proposed", () => {
+    expect(implementedCommands.map(command => command.name)).toEqual(["inspect", "build --manifest"]);
+    expect(findProposedCommand(["inspect"])).toBeUndefined();
+    expect(findProposedCommand(["build"])).toBeUndefined();
   });
 });
