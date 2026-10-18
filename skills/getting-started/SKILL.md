@@ -8,7 +8,7 @@ metadata:
 
 # Getting started with a Holqa project
 
-> **Preview — not yet available.** Holqa packages are not published to npm. The SDK (`@holqa/sdk`) exists in the Holqa repository and can declare applications, resources and handlers; `@holqa/runtime-bun` (also unpublished) serves HTTP routes and RPC procedures, while queue, storage and schedule delivery are not implemented. Of the CLI commands in this skill, only `holqa inspect` and `holqa build --manifest` are implemented; the others are **proposed**. Treat every code sample as illustrative; names may change.
+> **Preview — not yet available.** Holqa packages are not published to npm. The SDK (`@holqa/sdk`) exists in the Holqa repository and can declare applications, resources and handlers; `@holqa/runtime-bun` (also unpublished) serves HTTP routes and RPC procedures and delivers queue messages, storage events and scheduled runs from the local binding in `@holqa/local` (also unpublished). Of the CLI commands in this skill, only `holqa inspect` and `holqa build --manifest` are implemented; the others are **proposed**. Treat every code sample as illustrative; names may change.
 
 ## When to use
 
@@ -26,7 +26,7 @@ bun packages/cli/dist/bin.js --version --json
 bun packages/cli/dist/bin.js dev --json    # exits 1, HOLQA_CLI_NOT_IMPLEMENTED on stderr
 ```
 
-Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations such as the `infra.ts` below (without `staticSite`, which is proposed). `holqa inspect --app infra.ts` prints its resources and handlers, and `holqa build --manifest` writes its manifest; both run the application's modules. Inside the repository, `createRuntime(await loadCompiledApplication({ root }))` and `serve(runtime)` from `@holqa/runtime-bun` serve the compiled routes and procedures (see `examples/http-api`). Nothing else in this skill runs yet. Do not try to install `@holqa/sdk` from npm; it is not published.
+Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations such as the `infra.ts` below (without `staticSite`, which is proposed). `holqa inspect --app infra.ts` prints its resources and handlers, and `holqa build --manifest` writes its manifest; both run the application's modules. Inside the repository, `createRuntime(await loadCompiledApplication({ root }))` and `serve(runtime)` from `@holqa/runtime-bun` serve the compiled routes and procedures (see `examples/http-api`), and `createLocalEnvironment` from `@holqa/local` provides queues, buckets and schedules locally (see `examples/document-processing`). The other CLI commands in this skill do not run yet. Do not try to install `@holqa/sdk` from npm; it is not published.
 
 ## Planned workflow
 

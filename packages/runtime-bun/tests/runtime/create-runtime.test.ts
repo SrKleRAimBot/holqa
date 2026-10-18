@@ -96,11 +96,17 @@ describe("createRuntime", () => {
     ]);
   });
 
-  it("rejects handlers whose trigger it cannot deliver, unless they are only invoked manually", () => {
-    const app = application([apiResource("api"), scheduleResource("nightly")]);
+  it("refuses to start when the binding cannot deliver a handler's trigger, unless it is only invoked manually", async () => {
+    const app = application([scheduleResource("nightly")]);
     const handler = scheduleHandler("nightly.run", "nightly", () => undefined);
-    expect(thrownCodes(() => runtimeOf({ app, handlers: [handler] }))).toEqual(["HOLQA_RUNTIME_START_FAILED"]);
-    expect(runtimeOf({ app, handlers: [handler], manualTriggers: true }).handlers).toHaveLength(1);
+    const runtime = runtimeOf({ app, handlers: [handler], binding: scheduleBinding });
+    const error = await runtime.start().catch((caught: unknown) => caught);
+    expect(diagnosticsOf(error).map(diagnostic => diagnostic.code)).toEqual(["HOLQA_RUNTIME_START_FAILED", "HOLQA_BINDING_CAPABILITY_UNSUPPORTED"]);
+    expect(runtime.state).toBe("stopped");
+    const manual = runtimeOf({ app, handlers: [handler], manualTriggers: true, binding: scheduleBinding });
+    await manual.start();
+    expect(manual.state).toBe("running");
+    await manual.stop();
   });
 
   it("rejects values that are not applications", () => {
@@ -415,7 +421,7 @@ describe("invocations", () => {
         return undefined;
       }
     } as HandlerDescriptor);
-    const binding: RuntimeBinding = { name: "test", capabilities: { "queue": { delivery: ["at-least-once"], maxAttempts: 10, deadLetter: true }, "http.api": {} }, drivers: { queue: () => ({ send: async () => undefined }) }, config: () => undefined };
+    const binding: RuntimeBinding = { name: "test", capabilities: { "queue": { delivery: ["at-least-once"], maxAttempts: 10, deadLetter: true }, "http.api": {} }, drivers: { queue: () => ({ send: async () => ({ messageId: "m-1" }) }) }, config: () => undefined };
     const app = application([apiResource("api"), queue]);
     const runtime = runtimeOf({ app, manualTriggers: true, binding, limits: { concurrency: 2 }, handlers: [consumer, routeHandler("ping", "api", "GET", "/ping")] });
     await runtime.start();

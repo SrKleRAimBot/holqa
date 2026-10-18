@@ -1,6 +1,6 @@
 # Triggers and execution
 
-> **Status:** Partly implemented. Handler registration for every trigger is **Implemented** in `@holqa/sdk`; execution of HTTP routes and RPC procedures, the common dispatcher and manual invocation (`runtime.invoke`) are **Implemented** in `@holqa/runtime-bun` ([runtime reference](../reference/runtime.md)). Queue, storage and schedule delivery are **Accepted design** — not implemented.
+> **Status:** Partly implemented. Handler registration for every trigger is **Implemented** in `@holqa/sdk`; execution of HTTP routes, RPC procedures, queue messages, object events and scheduled runs, the common dispatcher and manual invocation (`runtime.invoke`) are **Implemented** in `@holqa/runtime-bun` ([runtime reference](../reference/runtime.md)), with local drivers in `@holqa/local` ([local environment](../reference/local.md)). Drivers for external services, topics and the CLI workflow commands are not implemented.
 
 A **trigger** is an event source that invokes a handler. Every handler in Holqa responds to exactly one trigger, receives a typed, validated input, and runs in a Bun-based execution environment. This page describes each trigger type, its intended semantics, and the execution model.
 
@@ -10,9 +10,9 @@ A **trigger** is an event source that invokes a handler. Every handler in Holqa 
 | --- | --- | --- | --- |
 | HTTP request | `http.api` | Initial core | **Implemented** |
 | RPC query / mutation | `http.api` (RPC mount) | Initial core | **Implemented** |
-| Queue message | `queue` | Initial core | Accepted design (registration **Implemented**; delivery not implemented) |
-| Object storage event | `bucket` | Initial core | Accepted design (registration **Implemented**; delivery not implemented) |
-| Cron schedule | `schedule` | Initial core | Accepted design (registration **Implemented**; scheduling not implemented) |
+| Queue message | `queue` | Initial core | **Implemented** |
+| Object storage event | `bucket` | Initial core | **Implemented** (object created and object deleted) |
+| Cron schedule | `schedule` | Initial core | **Implemented** |
 | Manual / internal invocation | Any handler | Initial core | **Implemented** as `runtime.invoke`; CLI commands Proposed |
 | Event topics and fan-out | `topic` (future) | Future | Planned |
 | WebSocket | Future | Future | Planned |
@@ -66,13 +66,13 @@ Queues are explicit, durable logical resources. A queue declaration describes:
 | Property | Purpose |
 | --- | --- |
 | Message schema and `schemaVersion` | Validation and evolution. |
-| Retries (`maxAttempts`) and backoff | Redelivery policy after failures. |
+| Retries (`maxAttempts`) and `backoff` (`fixed` or `exponential`) | Redelivery policy after failures. Without a declared backoff the runtime waits 1 s, doubling up to 300 s. |
 | Dead-letter handling | Where messages go after exhausting retries. |
 | Delivery requirements | Guarantees a binding must satisfy (see [infrastructure providers](infrastructure-providers.md)). |
 
 ### Single competing consumer
 
-The initial design allows **one registered consumer handler per queue**, with configurable concurrency. Multiple concurrent invocations of that handler compete for messages. Registering two consumers for the same queue is a compiler error (planned).
+The initial design allows **one registered consumer handler per queue**, with configurable concurrency. Multiple concurrent invocations of that handler compete for messages. Registering two consumers for the same queue is rejected by the compiler and by `createRuntime` with `HOLQA_QUEUE_CONSUMER_DUPLICATE`.
 
 Queue consumption is not event fan-out. If several independent subsystems need to react to the same event, the intended solution is a future **topic** resource with independent subscriptions, not multiple queue consumers.
 
@@ -81,23 +81,24 @@ Queue consumption is not event fan-out. If several independent subsystems need t
 Handlers should assume **at-least-once** delivery: a message may be delivered more than once (after a timeout, a crash, or a redelivery by the underlying service). Consequences:
 
 - Handlers should be idempotent, for example by keying side effects on `message.orderId`.
-- The delivery context exposes the attempt number (`delivery.attempt`) so handlers can observe redelivery.
-- The local environment and test utilities are designed to simulate duplicate delivery, so idempotency can be tested ([local development](local-development.md)).
+- The delivery context exposes the attempt number (`delivery.attempt`), the queue-assigned `delivery.messageId` (the same for every delivery of one sent message) and the producer's `delivery.schemaVersion`.
+- The local environment can deliver a message again on demand (`queues.duplicate`), so idempotency can be tested ([local environment](../reference/local.md)).
+- Publishing a message and writing to a database are separate operations; Holqa does not make them atomic. Use a transactional outbox and idempotent consumers ([publishing and database writes](../reference/runtime.md#publishing-and-database-writes)).
 
 Exactly-once delivery is not promised. A binding that offers stronger guarantees is welcome, but application code must not depend on them unless the requirement is declared and verified.
 
 ### Dead-letter queues
 
-When `deadLetter: true` is declared, messages that exhaust `maxAttempts` move to a dead-letter destination rather than being dropped. A binding that cannot provide dead-lettering must fail capability validation rather than silently discard messages.
+When `deadLetter: true` is declared, messages that exhaust `maxAttempts` move to a dead-letter destination rather than being dropped; without it they are discarded after the last attempt. Messages that can never succeed (a payload that fails the schema, another `schemaVersion`, or no `holqa.message/1` envelope) are dead-lettered or discarded at once, without retries. A binding that cannot provide dead-lettering fails capability validation rather than silently discarding messages.
 
-The following code uses the implemented registration API; queue delivery that would invoke it is not implemented.
+The runtime delivers messages to a consumer like this one, at most `concurrency` at a time:
 
 ```ts
 export default resources.orders.consume({
   id: "orders.process",
   concurrency: 10,
   handler: async ({ message, delivery }) => {
-    if (await alreadyProcessed(message.orderId))
+    if (await alreadyProcessed(delivery.messageId))
       return;
     await processOrder(message);
   }
@@ -106,9 +107,10 @@ export default resources.orders.consume({
 
 ## Storage events
 
-Object storage resources (`bucket`) are designed to support basic object operations, signed URLs, access policies, and **object-created** and **object-deleted** event handlers.
+Object storage resources (`bucket`) support basic object operations (`put`, `get`, `head`, `delete`, bounded `list`), signed URLs, access policies, and **object-created** and **object-deleted** event handlers with an optional key prefix (**Implemented**).
 
-- Event payloads are portable (bucket identifier, object key, size, content type, event time), not provider-specific event shapes.
+- Events use the portable `holqa.object-event/1` envelope (event identifier, type, bucket identifier, object key, size, content type, etag, event time), not provider-specific event shapes. Each event has a stable identity: a redelivery carries the same `event.id` with a higher `event.attempt`.
+- What a signed URL protects against is a property of the binding that issues it; the local binding's development implementation is described in the [local environment reference](../reference/local.md).
 - Provider-specific storage interfaces must not leak into the portable SDK.
 - Event ordering and delivery guarantees vary between providers; handlers should tolerate duplicates and out-of-order events.
 
@@ -119,11 +121,11 @@ Schedules describe:
 | Property | Purpose |
 | --- | --- |
 | `cron` | A cron expression. |
-| `timezone` | An explicit IANA timezone (for example `UTC`). Daylight-saving transitions can skip or repeat local times; the documented behavior must be explicit. |
-| `overlap` | What happens if a run is still in progress when the next is due, for example `skip` (do not start) or `allow` (run concurrently). The full policy set is **Proposed**. |
+| `timezone` | An explicit IANA timezone (for example `UTC`). A matching local time inside a daylight-saving gap runs once at the end of the gap; a repeated local time runs once, at its first occurrence. |
+| `overlap` | What happens if a run is still in progress when the next is due: `skip` (do not start; the run reports `HOLQA_SCHEDULE_RUN_SKIPPED`) or `allow` (run concurrently). Further policies are **Proposed**. |
 | Handler association | One handler per schedule. |
 
-Missed runs (for example while the application is down) are not automatically backfilled unless a future policy requests it.
+Missed runs while no runtime receives the schedule (for example while the application is down) are not backfilled. When a scheduler wakes up late, only the most recent due run starts; the local scheduler records the earlier ones as `missed`. See [scheduled runs](../reference/runtime.md#scheduled-runs).
 
 ## Manual and internal invocations
 
@@ -144,13 +146,13 @@ The resource model is designed so that new trigger types can be added as new res
 
 ## Execution model
 
-Bun is the primary runtime ([ADR 0002](../architecture/decisions/0002-bun-as-primary-runtime.md)). The execution model below is **Implemented** for HTTP routes and RPC procedures by one dispatcher shared by every trigger ([ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md), [runtime reference](../reference/runtime.md#invocations)):
+Bun is the primary runtime ([ADR 0002](../architecture/decisions/0002-bun-as-primary-runtime.md)). The execution model below is **Implemented** for every trigger by one shared dispatcher ([ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md), [runtime reference](../reference/runtime.md#invocations)):
 
 - An **application execution environment** is a runtime (`createRuntime`) in a Bun process that hosts one application instance, its binding and its application-scoped values. Running several isolated environments per application (workers, processes) is **Planned**.
 - It supports **multiple concurrent invocations**, subject to explicit limits: per-handler concurrency (for example a queue consumer's `concurrency`), and environment-wide resource limits.
 - Each invocation receives a typed context: the validated input, trigger metadata (such as `delivery.attempt`), typed resource handles, and configuration.
 - Handlers must not rely on in-memory state surviving between invocations, because environments may scale, restart, or reload.
-- Inputs are validated before the handler runs ([type safety and schemas](type-safety-and-schemas.md#runtime-validation-at-trust-boundaries)). Unhandled errors are normalized into structured diagnostics (`HOLQA_HANDLER_FAILED`, with details only in logs) and, for queues, are designed to lead to redelivery according to the retry policy (not implemented).
+- Inputs are validated before the handler runs ([type safety and schemas](type-safety-and-schemas.md#runtime-validation-at-trust-boundaries)). Unhandled errors are normalized into structured diagnostics (`HOLQA_HANDLER_FAILED`, with details only in logs) and, for queue messages and object events, lead to redelivery according to the retry policy.
 
 Bun as the framework runtime is separate from dependency management: this repository uses pnpm, and applications built with Holqa may use any package manager.
 

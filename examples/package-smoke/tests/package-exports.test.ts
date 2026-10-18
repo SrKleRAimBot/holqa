@@ -10,6 +10,12 @@ import type {
 } from "@holqa/testing";
 
 import {
+  mkdtempSync,
+  rmSync
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
   canonicalJsonStringify,
   checkSchemaCompatibility,
   compileApplication,
@@ -21,6 +27,10 @@ import {
   getAppDescriptor,
   parseResourceId
 } from "@holqa/core";
+import {
+  createLocalEnvironment,
+  ManualClock
+} from "@holqa/local";
 import {
   createRuntime,
   silentSink
@@ -96,6 +106,30 @@ describe("@holqa/runtime-bun public exports", () => {
     expect(await (await runtime.fetch(new Request("http://localhost/api/rpc/ping"))).json()).toEqual({ format: "holqa.rpc/1", ok: true, output: "pong" });
     expect((await runtime.fetch(new Request("http://localhost/api/hello"))).status).toBe(404);
     await runtime.stop();
+  });
+});
+
+describe("@holqa/local public exports", () => {
+  it("delivers an SDK queue message through the built local binding", async () => {
+    const jobs = queue({ id: "smoke-jobs", message: z.object({ n: z.number() }), schemaVersion: 1 });
+    const app = defineApp({ name: "local-smoke", resources: { jobs } });
+    const seen: number[] = [];
+    const consumer = app.resources.jobs.consume({ id: "smoke-jobs.run", handler: ({ message }) => {
+      seen.push(message.n);
+    } });
+    const directory = mkdtempSync(join(tmpdir(), "holqa-smoke-local-"));
+    const env = await createLocalEnvironment({ app, directory, clock: new ManualClock(), env: {} });
+    const runtime = createRuntime({ app, handlers: [consumer], binding: env.binding, log: silentSink });
+    try {
+      await runtime.start();
+      expect(await app.resources.jobs.send({ n: 7 })).toEqual({ messageId: expect.any(String) });
+      await env.settle();
+      expect(seen).toEqual([7]);
+    } finally {
+      await runtime.stop();
+      env.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 });
 

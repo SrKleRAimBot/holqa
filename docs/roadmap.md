@@ -12,7 +12,7 @@ This roadmap distinguishes the current bootstrap state from future implementatio
 | M0 | Foundation and architecture validation | Complete (see [M0](milestones/m0/index.md)) |
 | 1 | Core resource model and SDK | In progress |
 | 2 | Compiler | In progress (manifest, discovery, validation, `inspect` and `build --manifest` **Implemented**) |
-| 3 | Bun runtime and local development | In progress (dispatcher, lifecycle, HTTP routes and RPC procedures **Implemented**) |
+| 3 | Bun runtime and local development | In progress (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, storage and schedule delivery and `@holqa/local` drivers **Implemented**) |
 | 4 | Clients and integrations | Planned |
 | 5 | Providers and bindings | Planned |
 | Future | Extended triggers and tooling | Planned |
@@ -136,20 +136,22 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | HTTP routing on the Fetch API, request validation, typed responses, CORS and streaming; RPC procedures (`holqa.rpc/1`) on the same HTTP runtime | **Implemented** |
 | Typed middleware at application, API and route scope | **Implemented** |
 | Loading `holqa build --manifest` output and serving it with `Bun.serve`, verified by [`examples/http-api`](../examples/http-api/README.md) | **Implemented** |
+| Queue, object event and schedule transports on the dispatcher: leased at-least-once delivery, retries with declared backoff, dead-lettering, bounded consumer concurrency, overlap policies, graceful shutdown ([runtime reference](reference/runtime.md), [ADR 0024](architecture/decisions/0024-event-delivery-sources-and-local-drivers.md)) | **Implemented** |
+| `@holqa/local`: SQLite-backed queues and event state, filesystem object storage with events and development signed URLs, a scheduler driven by an injectable clock, inspection and failure simulation ([local environment](reference/local.md)) | **Implemented** |
+| An event-driven application running end to end locally (HTTP upload, object event, queue consumer with retries and dead-lettering, scheduled cleanup), verified by [`examples/document-processing`](../examples/document-processing/README.md) | **Implemented** |
 
 ### Goals
 
-- `@holqa/runtime-bun`: queue, storage and schedule transports on the dispatcher; worker or process isolation.
-- `@holqa/local`: local queue emulation, filesystem-backed object storage, a local scheduler, event inspection.
+- `@holqa/runtime-bun`: worker or process isolation.
 - `holqa dev` with fast backend reloads and structured logs.
 - `holqa invoke`, `holqa queue send`, `holqa storage put`, `holqa cron run` for manual triggering.
-- `@holqa/testing`: deterministic integration testing, including simulated duplicate delivery, retries, and failures.
+- `@holqa/testing`: deterministic integration testing helpers on top of `@holqa/local` (the local environment already simulates duplicate delivery, retries and failures).
 
 ### Exit criteria
 
-- An example application runs end to end locally with HTTP, a queue consumer, and a schedule.
-- Local emulators document their delivery and concurrency semantics and do not promise stronger guarantees than production drivers are expected to offer.
-- Runtime validation runs at every trust boundary (incoming HTTP, queue messages, storage events). **Met** for incoming HTTP and RPC.
+- An example application runs end to end locally with HTTP, a queue consumer, and a schedule. **Met** by `examples/document-processing`.
+- Local emulators document their delivery and concurrency semantics and do not promise stronger guarantees than production drivers are expected to offer. **Met** for `@holqa/local` ([local environment](reference/local.md)).
+- Runtime validation runs at every trust boundary (incoming HTTP, queue messages, storage events). **Met**.
 
 ## Phase 4: Clients and integrations
 
@@ -176,7 +178,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 
 ### Goals
 
-- Define the runtime driver and provisioning provider contracts.
+- Define the provisioning provider contract. The runtime driver and delivery source contracts exist in `@holqa/core` (**Implemented**, implemented locally by `@holqa/local`); drivers for external services are Planned.
 - Capability negotiation: bindings declare capabilities; the compiler rejects unsupported semantics explicitly.
 - Environment-specific bindings.
 - One or two initial runtime drivers (for example an S3-compatible storage driver and a self-hostable queue) chosen to validate the abstraction, not to favor a vendor.

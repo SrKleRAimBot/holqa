@@ -8,7 +8,7 @@ metadata:
 
 # Debugging events
 
-> **Preview — mostly not available.** Event inspection, replay and `holqa invoke` are **proposed**. What works today is reading structured diagnostics from the CLI, and `holqa inspect --json` (in the Holqa repository) to see which handlers are bound to which resources.
+> **Preview — partly available.** CLI event inspection, replay and `holqa invoke` are **proposed**. What works today, in the Holqa repository (unpublished), is reading structured diagnostics from the CLI, `holqa inspect --json` to see which handlers are bound to which resources, structured runtime logs, and the inspection API of `@holqa/local` (messages, dead letters, redrive, storage events, schedule runs).
 
 ## When to use
 
@@ -37,6 +37,8 @@ bun packages/cli/dist/bin.js queue send --json; echo "exit=$?"
 | `HOLQA_MANIFEST_NOT_SERIALIZABLE` | A value cannot be written to deterministic JSON; the diagnostic includes a JSON path such as `$.resources[0].id`. |
 
 Human-readable form (without `--json`): `file:line:col severity CODE: message`, followed by an indented `hint:` line. The location prefix is omitted when there is no location.
+
+With the local binding (`@holqa/local`), inspect delivery state directly: `env.queues.deadLetters(queueId)` lists dead-lettered messages with their payload, `schemaVersion`, attempts and last error (`code`, `message`, `invocationId`, which matches the runtime's `invocation failed` log entry); `env.queues.redrive(queueId, messageId)` makes one due again; `env.storage.events(bucketId)` shows each event's delivery state per handler; `env.scheduler.runs(scheduleId)` lists runs as `succeeded`, `failed`, `skipped` or `missed`. See the [local environment reference](../../docs/reference/local.md).
 
 ## Planned workflow
 

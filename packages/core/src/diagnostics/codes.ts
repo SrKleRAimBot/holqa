@@ -105,7 +105,23 @@ export const diagnosticCodes = {
   /** An RPC request asks for a protocol version this runtime does not implement. */
   rpcVersionUnsupported: "HOLQA_RPC_VERSION_UNSUPPORTED",
   /** Build output no longer matches the application it was compiled from; rebuild it. */
-  buildStale: "HOLQA_BUILD_STALE"
+  buildStale: "HOLQA_BUILD_STALE",
+  /** A resource operation received invalid options, for example a negative delay or an out-of-range page size. */
+  operationInvalid: "HOLQA_OPERATION_INVALID",
+  /** An object key breaks the portable key rules. */
+  objectKeyInvalid: "HOLQA_OBJECT_KEY_INVALID",
+  /** A requested object does not exist. */
+  objectNotFound: "HOLQA_OBJECT_NOT_FOUND",
+  /** A signed URL is malformed, expired, or its signature does not match. */
+  signedUrlInvalid: "HOLQA_SIGNED_URL_INVALID",
+  /** A schedule's cron expression or time zone cannot be evaluated, or the schedule never fires. */
+  scheduleInvalid: "HOLQA_SCHEDULE_INVALID",
+  /** Local resource state was written by an incompatible version of the local drivers. */
+  localStateUnsupported: "HOLQA_LOCAL_STATE_UNSUPPORTED",
+  /** A delivery was received more often than its attempts allow without being settled, for example because its leases kept expiring. */
+  deliveryAttemptsExhausted: "HOLQA_DELIVERY_ATTEMPTS_EXHAUSTED",
+  /** A scheduled run was skipped because the previous run was still in progress and the schedule's overlap policy is `skip`. */
+  scheduleRunSkipped: "HOLQA_SCHEDULE_RUN_SKIPPED"
 } as const;
 
 /**

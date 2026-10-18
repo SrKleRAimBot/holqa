@@ -42,6 +42,7 @@ Once an ADR is accepted, it is not rewritten. To change a decision, write a new 
 | [0021](0021-schema-contracts-wire-payloads-and-compatibility.md) | Schema contracts, wire payloads and compatibility | Proposed (implemented) | 2026-10-18 |
 | [0022](0022-manifest-v1-and-entry-point-map.md) | Manifest version 1 and a separate entry point map | Proposed (implemented; decision 4 refined by proposed 0023) | 2026-10-18 |
 | [0023](0023-common-invocation-engine-and-http-rpc-execution.md) | A common invocation engine, with HTTP and RPC as its first transports | Proposed (implemented for HTTP and RPC) | 2026-10-18 |
+| [0024](0024-event-delivery-sources-and-local-drivers.md) | Event delivery through binding sources, with local drivers as the first binding | Proposed (implemented) | 2026-10-18 |
 
 ## Adding an ADR
 

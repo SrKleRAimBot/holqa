@@ -38,7 +38,7 @@ What the manifest deliberately does not contain: module paths, export names, Typ
 
 | Kind | `config` | `requirements` | Schema roles |
 | --- | --- | --- | --- |
-| `queue` | `schemaVersion` | `delivery` (`at-least-once`), `deadLetter`, optional `maxAttempts` | `message` (required) |
+| `queue` | `schemaVersion` | `delivery` (`at-least-once`), `deadLetter`, optional `maxAttempts`, optional `backoff` (`{ strategy: "fixed", delaySeconds }` or `{ strategy: "exponential", initialDelaySeconds, maxDelaySeconds, multiplier? }`) | `message` (required) |
 | `bucket` | `{}` | `access` (`private` or `public-read`) | none |
 | `schedule` | `cron` (five fields, single spaces), `timezone` | `overlap` (`skip` or `allow`) | none |
 | `http.api` | `basePath`, optional `docs: { title, version }` | `{}` | none |
@@ -51,13 +51,14 @@ Unknown settings are rejected with `HOLQA_DECLARATION_INVALID`; nothing is dropp
 | --- | --- | --- | --- |
 | `queue.message` | `queue` | optional `concurrency` | `message` |
 | `bucket.object-created` | `bucket` | optional `prefix` | `object` |
+| `bucket.object-deleted` | `bucket` | optional `prefix` | `object` |
 | `schedule.tick` | `schedule` | `{}` | none |
 | `http.route` | `http.api` | `method`, `path` (`/orders/:orderId`) | optional `params`, `query`, `headers`, `body`; `response.<status>` |
 | `http.procedure` | `http.api` | `operation` (`query` or `mutation`) | `output` (required), optional `input` |
 
 Routes and procedures are registered with the SDK's `route(...)` and `procedure(...)` and executed by `@holqa/runtime-bun` ([runtime reference](runtime.md)). A procedure has no path option: it is served at `<basePath>/rpc/<id>`.
 
-The `http.procedure` trigger and the `headers`, `input` and `output` roles were added to the manifest version 1 JSON Schema without a new version ([ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md), decision 9). Manifests that use none of them are unchanged byte for byte; readers built before the addition reject manifests that use them.
+The `http.procedure` trigger and the `headers`, `input` and `output` roles were added to the manifest version 1 JSON Schema without a new version ([ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md), decision 9), and so were the `bucket.object-deleted` trigger and a queue's `backoff` requirement ([ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md), decision 8). Manifests that use none of them are unchanged byte for byte; readers built before an addition reject manifests that use it.
 
 ### Schema references and the schema table
 
@@ -71,19 +72,19 @@ Table entries are `holqa.schema-contract/1` contracts without `source`. Two uses
 
 The wire side of every role (including a procedure's `input`) is the schema's input, except `response.<status>` and a procedure's `output`, which are sent after validation and therefore use the output. A wire side without a portable description fails with `HOLQA_SCHEMA_UNSUPPORTED`; an unrepresentable non-wire side (for example a transform's output on a queue message) is recorded as `representable: false`.
 
-Schemas whose vendor is `holqa` (written by Holqa, such as the SDK's object-created event) are described by a built-in adapter from their Standard JSON Schema and recorded as `verified` with library `holqa`.
+Schemas whose vendor is `holqa` (written by Holqa, such as the SDK's object-created and object-deleted events) are described by a built-in adapter from their Standard JSON Schema and recorded as `verified` with library `holqa`.
 
 ### Required capabilities
 
 | Source | Capabilities |
 | --- | --- |
-| Queue | `queue`, `queue.delivery.at-least-once`; `queue.dead-letter` when `deadLetter` is `true`; `queue.max-attempts` when `maxAttempts` is declared |
+| Queue | `queue`, `queue.delivery.at-least-once`; `queue.dead-letter` when `deadLetter` is `true`; `queue.max-attempts` when `maxAttempts` is declared; `queue.backoff.<strategy>` when `backoff` is declared |
 | Bucket | `bucket`, `bucket.access.<access>` |
 | Schedule | `schedule`, `schedule.overlap.<overlap>` |
 | HTTP API | `http.api` |
 | Trigger | `trigger.<trigger kind>`, for example `trigger.queue.message` |
 
-The numeric value of `maxAttempts` is in the queue's `requirements`. Checking capabilities against a binding at build time is **Planned**; `checkCapabilities` in `@holqa/core` does it when a binding is installed.
+The numeric values of `maxAttempts` and `backoff` are in the queue's `requirements`. Checking capabilities against a binding at build time is **Planned**; `checkCapabilities` in `@holqa/core` does it when a binding is installed.
 
 ## Entry point map
 

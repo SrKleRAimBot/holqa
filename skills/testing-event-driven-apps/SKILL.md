@@ -8,7 +8,7 @@ metadata:
 
 # Testing event-driven applications
 
-> **Preview — not yet available.** `@holqa/testing` exists in the Holqa repository (unpublished) but contains only compile-time type assertions (`Equal`, `Expect`, `Accepts`, `assertType`). The test harness below is **planned** and not implemented; code using it is illustrative. Today you can unit-test plain functions that your handlers call and assert on the types of resource handles.
+> **Preview — not yet available.** `@holqa/testing` exists in the Holqa repository (unpublished) but contains only compile-time type assertions (`Equal`, `Expect`, `Accepts`, `assertType`). The test harness below is **planned** and not implemented; code using it is illustrative. Today you can drive a whole application deterministically with `@holqa/local` (also unpublished): a `ManualClock`, real delivery through `@holqa/runtime-bun`, and inspection of messages, events and schedule runs.
 
 ## When to use
 
@@ -20,6 +20,7 @@ metadata:
 
 - Extract business logic into plain functions and test them with your normal test runner (for example `bun test`). This remains good practice once the harness exists.
 - Test your own validation schemas directly (`schema.safeParse(...)`) with valid, invalid and historical payloads.
+- Run the application on `createLocalEnvironment({ app, directory, clock: new ManualClock() })` with `createRuntime({ ..., binding: env.binding })`: send messages or write objects, `await env.settle()`, move time with `clock.advance(ms)` (or `clock.jump(ms)` to simulate a late scheduler), and assert on `env.queues.messages(...)`, `env.queues.deadLetters(...)`, `env.storage.events(...)` and `env.scheduler.runs(...)`. Simulate duplicates with `env.queues.duplicate(...)` and `env.storage.duplicateEvent(...)`. [`examples/document-processing`](../../examples/document-processing/README.md) shows retries and dead-lettering this way.
 
 ## Planned workflow
 

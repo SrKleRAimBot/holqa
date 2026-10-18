@@ -1,6 +1,7 @@
 import type {
   ApplicationScope,
   HandlerDefinition,
+  HandlerDescriptor,
   InvocationContext,
   JsonObject
 } from "@holqa/core";
@@ -27,6 +28,8 @@ const maxTimerDelay = 2_147_483_647;
 /** A handler the dispatcher can run: its metadata and its executable `invoke`. */
 export interface RegisteredHandler {
   readonly definition: HandlerDefinition;
+  /** The schemas the handler validates its input with, by role. */
+  readonly schemas: HandlerDescriptor["schemas"];
   readonly invoke: (input: unknown, context: InvocationContext<never>) => Promise<unknown>;
   /** The handler's own concurrency limit, for triggers that declare one (queue consumers). */
   readonly concurrency?: Semaphore;
@@ -112,8 +115,8 @@ export interface DispatcherOptions {
 }
 
 /**
- * The common invocation engine. Every trigger (HTTP routes, RPC procedures
- * and, later, queue deliveries and scheduled runs) goes through `dispatch`, so
+ * The common invocation engine. Every trigger (HTTP routes, RPC procedures,
+ * queue deliveries, object events and scheduled runs) goes through `dispatch`, so
  * invocation identity, cancellation, time limits, concurrency limits, error
  * normalization and logging behave the same for all of them. Transports only
  * differ in how they build the request and present the outcome.
@@ -399,10 +402,14 @@ export class Dispatcher {
  */
 function checkMetadata(definition: HandlerDefinition, metadata: object | undefined): string | undefined {
   const fields = (metadata ?? {}) as Readonly<Record<string, unknown>>;
-  const { attempt, messageId, scheduledTime } = fields;
-  if (definition.trigger.kind === "queue.message" && (typeof attempt !== "number" || !Number.isSafeInteger(attempt) || attempt < 1 || typeof messageId !== "string"))
-    return `Invoking the queue consumer "${definition.id}" requires metadata { attempt: positive integer, messageId: string }.`;
-  if (definition.trigger.kind === "schedule.tick" && typeof scheduledTime !== "string")
-    return `Invoking the schedule handler "${definition.id}" requires metadata { scheduledTime: ISO 8601 string }.`;
+  const { attempt, messageId, schemaVersion, scheduledTime, runId, trigger, eventId, eventTime } = fields;
+  const isAttempt = typeof attempt === "number" && Number.isSafeInteger(attempt) && attempt >= 1;
+  const { kind } = definition.trigger;
+  if (kind === "queue.message" && (!isAttempt || typeof messageId !== "string" || (schemaVersion !== undefined && (typeof schemaVersion !== "number" || !Number.isSafeInteger(schemaVersion) || schemaVersion < 1))))
+    return `Invoking the queue consumer "${definition.id}" requires metadata { attempt: positive integer, messageId: string, schemaVersion?: positive integer }.`;
+  if ((kind === "bucket.object-created" || kind === "bucket.object-deleted") && (!isAttempt || typeof eventId !== "string" || typeof eventTime !== "string"))
+    return `Invoking the object event handler "${definition.id}" requires metadata { eventId: string, eventTime: ISO 8601 string, attempt: positive integer }.`;
+  if (kind === "schedule.tick" && (typeof scheduledTime !== "string" || (runId !== undefined && typeof runId !== "string") || (trigger !== undefined && trigger !== "cron" && trigger !== "manual")))
+    return `Invoking the schedule handler "${definition.id}" requires metadata { scheduledTime: ISO 8601 string, runId?: string, trigger?: "cron" | "manual" }.`;
   return undefined;
 }

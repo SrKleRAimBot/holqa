@@ -68,7 +68,17 @@ function resourceDefinition(kind: ResourceKind, config: JsonObject, requirements
  * makes a kind added to the core registry a compile error until it has one.
  */
 const resourceDefinitionsByKind: { readonly [Kind in ResourceKind]: JsonObject } = {
-  "queue": resourceDefinition("queue", closedObject({ schemaVersion: ref("positiveInteger") }), closedObject({ delivery: { enum: ["at-least-once"] }, deadLetter: { type: "boolean" }, maxAttempts: ref("positiveInteger") }, ["delivery", "deadLetter"])),
+  "queue": resourceDefinition("queue", closedObject({ schemaVersion: ref("positiveInteger") }), closedObject({
+    delivery: { enum: ["at-least-once"] },
+    deadLetter: { type: "boolean" },
+    maxAttempts: ref("positiveInteger"),
+    backoff: {
+      oneOf: [
+        closedObject({ strategy: { const: "fixed" }, delaySeconds: { type: "number", minimum: 0 } }),
+        closedObject({ strategy: { const: "exponential" }, initialDelaySeconds: { type: "number", minimum: 0 }, maxDelaySeconds: { type: "number", minimum: 0 }, multiplier: { type: "number", minimum: 1 } }, ["strategy", "initialDelaySeconds", "maxDelaySeconds"])
+      ]
+    }
+  }, ["delivery", "deadLetter"])),
   "bucket": resourceDefinition("bucket", closedObject({}), closedObject({ access: { enum: ["private", "public-read"] } })),
   "schedule": resourceDefinition("schedule", closedObject({ cron: { type: "string", pattern: "^[\\w*?,/-]+(?: [\\w*?,/-]+){4}$" }, timezone: { type: "string", minLength: 1 } }), closedObject({ overlap: { enum: ["skip", "allow"] } })),
   "http.api": resourceDefinition("http.api", closedObject({
@@ -92,6 +102,7 @@ function triggerDefinition(kind: TriggerKind, options: JsonObject): JsonObject {
 const triggerDefinitionsByKind: { readonly [Trigger in TriggerKind]: JsonObject } = {
   "queue.message": triggerDefinition("queue.message", closedObject({ concurrency: ref("positiveInteger") }, [])),
   "bucket.object-created": triggerDefinition("bucket.object-created", closedObject({ prefix: { type: "string" } }, [])),
+  "bucket.object-deleted": triggerDefinition("bucket.object-deleted", closedObject({ prefix: { type: "string" } }, [])),
   "schedule.tick": triggerDefinition("schedule.tick", closedObject({})),
   "http.route": triggerDefinition("http.route", closedObject({
     method: { enum: ["GET", "POST", "PUT", "PATCH", "DELETE"] },

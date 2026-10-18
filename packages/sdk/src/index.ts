@@ -59,9 +59,14 @@ export { bucket } from "@/resources/bucket";
 export type {
   BucketHandle,
   BucketOptions,
+  DeletedObjectInfo,
   ObjectCreatedContext,
   ObjectCreatedHandler,
   ObjectCreatedOptions,
+  ObjectDeletedContext,
+  ObjectDeletedHandler,
+  ObjectDeletedOptions,
+  ObjectEventInfo,
   ObjectInfo
 } from "@/resources/bucket";
 export type {

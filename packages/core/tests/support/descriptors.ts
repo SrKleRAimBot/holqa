@@ -1,6 +1,8 @@
 import type {
   AppDescriptor,
   BindingCapabilities,
+  JsonValue,
+  MessageEnvelope,
   ResourceDescriptor,
   ResourceDescriptorOf,
   ResourceId,
@@ -94,7 +96,7 @@ export function appDescriptor(resources: readonly ResourceDescriptor[]): AppDesc
  * Creates a binding that records sent messages and supports every requirement.
  *
  * @param capabilities - Overrides for the advertised capabilities.
- * @returns The binding and the list it records sends into.
+ * @returns The binding and the list it records sent payloads into.
  */
 export function recordingBinding(capabilities: BindingCapabilities = {}): RuntimeBinding & { readonly sent: unknown[] } {
   const sent: unknown[] = [];
@@ -110,11 +112,22 @@ export function recordingBinding(capabilities: BindingCapabilities = {}): Runtim
     },
     drivers: {
       queue: () => ({
-        send: async (message) => {
-          sent.push(message);
+        send: async (envelope) => {
+          sent.push(envelope.payload);
+          return { messageId: `m-${sent.length}` };
         }
       })
     },
     config: entry => `value of ${entry.name}`
   };
+}
+
+/**
+ * Wraps a payload in a version 1 message envelope.
+ *
+ * @param payload - The wire payload.
+ * @returns The envelope, with schema version 1.
+ */
+export function envelope(payload: JsonValue): MessageEnvelope {
+  return { format: "holqa.message/1", schemaVersion: 1, payload };
 }

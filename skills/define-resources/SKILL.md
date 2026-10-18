@@ -24,7 +24,7 @@ Resource IDs are validated by `parseResourceId` in `@holqa/core` (repository-int
 - Valid: `order-processing`, `orders.process`, `daily-cleanup`. Invalid: `Orders`, `order_processing`, `-orders`, `orders.`.
 - Failures report `HOLQA_RESOURCE_ID_INVALID`.
 
-In the repository's `@holqa/sdk`, factories validate their declarations when called, literal IDs are checked at compile time, and `defineApp` rejects duplicate IDs (`HOLQA_RESOURCE_ID_DUPLICATE`) at compile time and run time, reporting every problem at once.
+In the repository's `@holqa/sdk`, factories validate their declarations when called, literal IDs are checked at compile time, and `defineApp` rejects duplicate IDs (`HOLQA_RESOURCE_ID_DUPLICATE`) at compile time and run time, reporting every problem at once. `schedule` checks its cron expression at declaration time (five fields; `L`, `W` and `#` are rejected); the time zone is checked by the binding that runs it.
 
 ## Planned workflow
 
@@ -49,7 +49,7 @@ const app = defineApp({
       id: "order-processing",
       message: z.object({ orderId: z.string(), priority: z.enum(["normal", "urgent"]) }),
       schemaVersion: 1,
-      delivery: { maxAttempts: 5, deadLetter: true }
+      delivery: { maxAttempts: 5, deadLetter: true, backoff: { strategy: "exponential", initialDelaySeconds: 2, maxDelaySeconds: 60 } }
     }),
     uploads: bucket({ id: "customer-uploads", access: "private" }),
     cleanup: schedule({ id: "daily-cleanup", cron: "0 2 * * *", timezone: "UTC", overlap: "skip" }),

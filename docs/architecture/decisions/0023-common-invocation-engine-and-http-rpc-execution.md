@@ -5,7 +5,7 @@
 - **Deciders:** Holqa maintainers
 - **Refines:** [ADR 0007](0007-separate-compiler-and-runtime.md), [ADR 0012](0012-source-inferred-types-and-reply-helpers.md), [ADR 0015](0015-runtime-generations-and-reload.md), [ADR 0020](0020-runtime-binding-resolution.md), [ADR 0022](0022-manifest-v1-and-entry-point-map.md) decision 4. It supersedes none of them; see [relation to accepted ADRs](#relation-to-accepted-adrs).
 
-> **Implementation status:** Implemented in `@holqa/runtime-bun`, `@holqa/sdk` and `@holqa/core` for HTTP routes and RPC procedures. Queue, storage and schedule transports, and worker or process isolation, are planned. See the [runtime reference](../../reference/runtime.md).
+> **Implementation status:** Implemented in `@holqa/runtime-bun`, `@holqa/sdk` and `@holqa/core` for HTTP routes and RPC procedures. Queue, object event and schedule transports are implemented as decided in [ADR 0024](0024-event-delivery-sources-and-local-drivers.md), which also moves the check for undeliverable handlers (decision 3) from `createRuntime` to `start`. Worker or process isolation is planned. See the [runtime reference](../../reference/runtime.md).
 
 ## Context
 

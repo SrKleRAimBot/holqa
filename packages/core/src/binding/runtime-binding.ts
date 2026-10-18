@@ -1,3 +1,4 @@
+import type { ResourceSources } from "@/binding/sources";
 import type { ConfigDescriptor } from "@/config/config-descriptor";
 import type {
   DrivenResourceKind,
@@ -37,6 +38,12 @@ export interface RuntimeBinding {
   readonly name: string;
   readonly capabilities: BindingCapabilities;
   readonly drivers: ResourceDrivers;
+  /**
+   * Event sources a runtime consumes to deliver queue messages, object events
+   * and scheduled runs to handlers. Absent means the binding delivers nothing;
+   * its drivers can still be used, for example to send messages from an HTTP service.
+   */
+  readonly sources?: ResourceSources;
   /**
    * Returns the value of a configuration entry. The binding is responsible for
    * supplying it, applying the declared default and validating it against the

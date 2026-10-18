@@ -107,7 +107,7 @@ describe("defineApp", () => {
     expect(app.env.TOKEN).toBe("t");
     expect(app.env.MODE).toBe("a");
     await app.resources.jobs.send({ n: 2 });
-    expect(binding.sent).toEqual([{ queue: "jobs", message: { n: 2 } }]);
+    expect(binding.sent.map(({ queue, message }) => ({ queue, message }))).toEqual([{ queue: "jobs", message: { n: 2 } }]);
     unbind();
     expect(thrownCodes(() => app.env.MODE)).toEqual(["HOLQA_RUNTIME_NOT_BOUND"]);
   });

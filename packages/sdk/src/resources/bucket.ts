@@ -1,9 +1,18 @@
 import type {
   BucketAccess,
+  BucketDriver,
   HandlerInvoke,
+  InvocationContext,
   InvocationLogger,
+  ListObjectsOptions,
+  ObjectEventMetadata,
+  ObjectList,
+  ObjectMetadata,
   PutObjectOptions,
   ResourceDescriptorOf,
+  ResourceId,
+  SignedUrl,
+  SignedUrlOptions,
   StandardJsonSchemaV1
 } from "@holqa/core";
 
@@ -14,8 +23,13 @@ import type {
 import type { CheckResourceId } from "@/types/checks";
 
 import {
+  checkObjectKey,
   descriptorKey,
   descriptorProtocol,
+  diagnosticCodes,
+  failWith,
+  HolqaError,
+  requireBinding,
   resolveDriver,
   validateInput
 } from "@holqa/core";
@@ -31,6 +45,9 @@ import { ownerOf } from "@/internal/ownership";
 /** The access policies a bucket may require. */
 const bucketAccessPolicies: readonly BucketAccess[] = ["private", "public-read"];
 
+/** The largest page a listing may request. */
+const maxListLimit = 1000;
+
 /**
  * Options accepted by {@link bucket}.
  *
@@ -43,16 +60,44 @@ export interface BucketOptions<Id extends string> {
   readonly access: BucketAccess;
 }
 
-/** Portable metadata of a stored object, independent of any storage service's event format. */
+/** Portable metadata of a created object, independent of any storage service's event format. */
 export interface ObjectInfo {
   readonly key: string;
   readonly size: number;
   readonly contentType?: string;
 }
 
+/** What remains known about a deleted object. */
+export interface DeletedObjectInfo {
+  readonly key: string;
+}
+
+/**
+ * The identity of one object event delivery. Events are delivered at least
+ * once and in no guaranteed order; a redelivery has the same `id` and a
+ * higher `attempt`, so handlers can discard duplicates by `id`.
+ */
+export interface ObjectEventInfo {
+  /** Stable across redeliveries of the same change. */
+  readonly id: string;
+  /** When the change happened (ISO 8601, UTC). */
+  readonly time: string;
+  /** 1 for the first delivery; higher values mean redelivery. */
+  readonly attempt: number;
+}
+
 /** What an object-created handler receives. */
 export interface ObjectCreatedContext {
   readonly object: ObjectInfo;
+  readonly event: ObjectEventInfo;
+  readonly signal: AbortSignal;
+  readonly log: InvocationLogger;
+}
+
+/** What an object-deleted handler receives. */
+export interface ObjectDeletedContext {
+  readonly object: DeletedObjectInfo;
+  readonly event: ObjectEventInfo;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
 }
@@ -67,7 +112,22 @@ export interface ObjectCreatedOptions<HandlerId extends string> {
   readonly id: HandlerId;
   /** Only objects whose key starts with this prefix trigger the handler. */
   readonly prefix?: string;
+  /** Runs once per delivery. Throwing requests a redelivery. */
   readonly handler: (context: ObjectCreatedContext) => Promise<void> | void;
+}
+
+/**
+ * Options accepted by {@link BucketHandle.onObjectDeleted}.
+ *
+ * @typeParam HandlerId - The handler's literal identifier.
+ */
+export interface ObjectDeletedOptions<HandlerId extends string> {
+  /** The handler's persistent identity. */
+  readonly id: HandlerId;
+  /** Only objects whose key starts with this prefix trigger the handler. */
+  readonly prefix?: string;
+  /** Runs once per delivery. Throwing requests a redelivery. */
+  readonly handler: (context: ObjectDeletedContext) => Promise<void> | void;
 }
 
 /**
@@ -79,20 +139,50 @@ export interface ObjectCreatedOptions<HandlerId extends string> {
 export interface ObjectCreatedHandler<BucketId extends string, HandlerId extends string> extends HandlerRegistration<"bucket.object-created", HandlerId, BucketId> {}
 
 /**
- * A typed handle to a declared object storage bucket.
+ * A registered object-deleted handler.
+ *
+ * @typeParam BucketId - The bucket's identifier.
+ * @typeParam HandlerId - The handler's identifier.
+ */
+export interface ObjectDeletedHandler<BucketId extends string, HandlerId extends string> extends HandlerRegistration<"bucket.object-deleted", HandlerId, BucketId> {}
+
+/**
+ * A typed handle to a declared object storage bucket. Every operation
+ * validates the key against the portable key rules (`HOLQA_OBJECT_KEY_INVALID`)
+ * and runs through the bound runtime (`HOLQA_RUNTIME_NOT_BOUND` without one).
  *
  * @typeParam Id - The literal identifier.
  */
 export interface BucketHandle<Id extends string> extends ResourceHandle<"bucket", Id> {
-  /** Stores an object through the bound runtime. */
-  readonly put: (key: string, body: string | Uint8Array, options?: PutObjectOptions) => Promise<void>;
-  /** Reads an object through the bound runtime; resolves to `undefined` when it does not exist. */
+  /** Stores an object, replacing any object with the same key, and resolves to its metadata. Strings are stored as UTF-8. */
+  readonly put: (key: string, body: string | Uint8Array, options?: PutObjectOptions) => Promise<ObjectMetadata>;
+  /** Reads an object's bytes; resolves to `undefined` when it does not exist. */
   readonly get: (key: string) => Promise<Uint8Array | undefined>;
-  /** Registers a handler for newly created objects. Registration is declarative. */
+  /** Reads an object's metadata without its content; resolves to `undefined` when it does not exist. */
+  readonly head: (key: string) => Promise<ObjectMetadata | undefined>;
+  /** Removes an object; resolves to `false` when it did not exist. */
+  readonly delete: (key: string) => Promise<boolean>;
+  /**
+   * Lists objects in key order, one bounded page at a time.
+   *
+   * @throws {HolqaError} `HOLQA_OPERATION_INVALID` for a `limit` outside 1 to 1000 or a malformed `prefix` or `cursor`.
+   */
+  readonly list: (options?: ListObjectsOptions) => Promise<ObjectList>;
+  /**
+   * Issues a time-limited URL that lets a client read (`GET`) or write
+   * (`PUT`) one object without credentials. What the signature protects
+   * against depends on the binding; see its documentation.
+   *
+   * @throws {HolqaError} `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` when the binding issues no signed URLs or not for that long, or `HOLQA_OPERATION_INVALID` for malformed options.
+   */
+  readonly signedUrl: (key: string, options: SignedUrlOptions) => Promise<SignedUrl>;
+  /** Registers a handler for created (or replaced) objects. Registration is declarative. */
   readonly onObjectCreated: <const HandlerId extends string>(options: ObjectCreatedOptions<HandlerId> & CheckResourceId<HandlerId>) => ObjectCreatedHandler<Id, HandlerId>;
+  /** Registers a handler for deleted objects. Registration is declarative. */
+  readonly onObjectDeleted: <const HandlerId extends string>(options: ObjectDeletedOptions<HandlerId> & CheckResourceId<HandlerId>) => ObjectDeletedHandler<Id, HandlerId>;
 }
 
-/** The portable JSON Schema of the object event's fields, shared by both sides. */
+/** The portable JSON Schema of the object-created event's fields, shared by both sides. */
 const objectInfoProperties = {
   key: { type: "string", minLength: 1 },
   size: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
@@ -100,9 +190,9 @@ const objectInfoProperties = {
 };
 
 /**
- * A dependency-free Standard Schema for the portable object event, so the SDK
- * can validate its own trigger payloads without a schema library. It also
- * implements Standard JSON Schema, so the compiler can record the event
+ * A dependency-free Standard Schema for the portable object-created event, so
+ * the SDK can validate its own trigger payloads without a schema library. It
+ * also implements Standard JSON Schema, so the compiler can record the event
  * contract: unknown properties are accepted on input and removed on output.
  */
 const objectInfoSchema: StandardJsonSchemaV1<ObjectInfo> = {
@@ -124,6 +214,29 @@ const objectInfoSchema: StandardJsonSchemaV1<ObjectInfo> = {
       if (contentType !== undefined && typeof contentType !== "string")
         return { issues: [{ message: "Expected a string.", path: ["contentType"] }] };
       return { value: { key, size, ...(contentType === undefined ? {} : { contentType }) } };
+    }
+  }
+};
+
+/** The portable JSON Schema of the object-deleted event's fields. */
+const deletedObjectProperties = { key: { type: "string", minLength: 1 } };
+
+/** A dependency-free Standard Schema for the portable object-deleted event, described like {@link objectInfoSchema}. */
+const deletedObjectSchema: StandardJsonSchemaV1<DeletedObjectInfo> = {
+  "~standard": {
+    version: 1,
+    vendor: "holqa",
+    jsonSchema: {
+      input: () => ({ type: "object", properties: deletedObjectProperties, required: ["key"] }),
+      output: () => ({ type: "object", properties: deletedObjectProperties, required: ["key"], additionalProperties: false })
+    },
+    validate: (value) => {
+      if (typeof value !== "object" || value === null)
+        return { issues: [{ message: "Expected an object event." }] };
+      const { key } = value as { readonly key?: unknown };
+      if (typeof key !== "string" || key.length === 0)
+        return { issues: [{ message: "Expected a non-empty string.", path: ["key"] }] };
+      return { value: { key } };
     }
   }
 };
@@ -152,40 +265,58 @@ export function bucket<const Id extends string>(options: BucketOptions<Id> & Che
     schemas: Object.freeze({})
   });
 
+  /**
+   * Validates a key and resolves the bucket's driver for one operation.
+   *
+   * @param self - The bucket handle, which knows its application.
+   * @param name - The operation's name, for example `put`.
+   * @param key - The untrusted key.
+   * @returns The driver and the operation's description.
+   * @throws {HolqaError} `HOLQA_OBJECT_KEY_INVALID`, `HOLQA_DECLARATION_INVALID` or `HOLQA_RUNTIME_NOT_BOUND`.
+   */
+  const prepare = (self: object, name: string, key: unknown): { readonly driver: BucketDriver; readonly operation: string } => {
+    const operation = `bucket "${id}" ${name}`;
+    const problem = checkObjectKey(key, operation);
+    if (problem !== undefined)
+      throw new HolqaError(problem);
+    return { driver: resolveDriver(ownerOf(self, operation), descriptor, operation), operation };
+  };
+
   const handle: BucketHandle<Id> = Object.freeze({
     [descriptorKey]: descriptor,
     kind: "bucket" as const,
     id: options.id,
     put: async (key: string, body: string | Uint8Array, putOptions?: PutObjectOptions) => {
-      const operation = `bucket "${id}" put`;
-      await resolveDriver(ownerOf(handle, operation), descriptor, operation).put(key, body, putOptions);
+      const { driver, operation } = prepare(handle, "put", key);
+      const bytes = typeof body === "string" ? new TextEncoder().encode(body) : body;
+      if (!(bytes instanceof Uint8Array))
+        failWith(diagnosticCodes.operationInvalid, `${operation} needs a string or Uint8Array body.`);
+      const contentType = putOptions?.contentType;
+      if (contentType !== undefined && (typeof contentType !== "string" || contentType.trim() === ""))
+        failWith(diagnosticCodes.operationInvalid, `${operation} needs "contentType" to be a non-empty string.`);
+      return driver.put(key, bytes, contentType === undefined ? {} : { contentType });
     },
-    get: async (key: string) => {
-      const operation = `bucket "${id}" get`;
-      return resolveDriver(ownerOf(handle, operation), descriptor, operation).get(key);
+    get: async (key: string) => prepare(handle, "get", key).driver.get(key),
+    head: async (key: string) => prepare(handle, "head", key).driver.head(key),
+    delete: async (key: string) => prepare(handle, "delete", key).driver.delete(key),
+    list: async (listOptions: ListObjectsOptions = {}) => {
+      const operation = `bucket "${id}" list`;
+      return resolveDriver(ownerOf(handle, operation), descriptor, operation).list(readListOptions(listOptions, operation));
+    },
+    signedUrl: async (key: string, urlOptions: SignedUrlOptions) => {
+      const { driver, operation } = prepare(handle, "signedUrl", key);
+      const checked = readSignedUrlOptions(urlOptions, operation);
+      const binding = requireBinding(ownerOf(handle, operation), operation);
+      const supported = binding.capabilities.bucket?.signedUrls?.maxExpiresInSeconds;
+      if (supported === undefined)
+        failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${binding.name}" does not issue signed URLs, required by ${operation}.`);
+      if (checked.expiresInSeconds > supported)
+        failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${binding.name}" issues signed URLs for at most ${supported} seconds; ${operation} asked for ${checked.expiresInSeconds}.`);
+      return driver.signUrl(key, checked);
     },
     onObjectCreated: <const HandlerId extends string>(registration: ObjectCreatedOptions<HandlerId> & CheckResourceId<HandlerId>) => {
-      const rawRegistration = requireOptions(registration, `object-created handler of bucket "${id}"`);
-      const registrationProblems = new DeclarationProblems(`object-created handler "${String(rawRegistration.id)}" of bucket "${id}"`);
-      const handlerIdCandidate = registrationProblems.identifier(rawRegistration.id, "handler id");
-      if (rawRegistration.prefix !== undefined && typeof rawRegistration.prefix !== "string")
-        registrationProblems.invalid("\"prefix\" must be a string.");
-      if (typeof rawRegistration.handler !== "function")
-        registrationProblems.invalid("\"handler\" must be a function.");
-      const handlerId = registrationProblems.valid(handlerIdCandidate);
-
-      /**
-       * Validates the portable object event and runs the handler with it.
-       *
-       * @param input - The untrusted object event from the runtime.
-       * @param context - The invocation context.
-       * @returns `undefined` once the handler has finished.
-       */
-      const invoke: HandlerInvoke<"bucket.object-created"> = async (input, context) => {
-        const object = await validateInput(objectInfoSchema, input, `object event for bucket "${id}"`);
-        await registration.handler({ object, signal: context.signal, log: context.log });
-        return undefined;
-      };
+      const handlerId = readEventRegistration(registration, `object-created handler`, id);
+      const invoke: HandlerInvoke<"bucket.object-created"> = eventInvoke(objectInfoSchema, `object event for bucket "${id}"`, (object, event, context) => registration.handler({ object, event, signal: context.signal, log: context.log }));
       const handler: ObjectCreatedHandler<Id, HandlerId> = Object.freeze({
         [descriptorKey]: Object.freeze({
           protocol: descriptorProtocol,
@@ -202,7 +333,117 @@ export function bucket<const Id extends string>(options: BucketOptions<Id> & Che
         resourceId: options.id
       });
       return handler;
+    },
+    onObjectDeleted: <const HandlerId extends string>(registration: ObjectDeletedOptions<HandlerId> & CheckResourceId<HandlerId>) => {
+      const handlerId = readEventRegistration(registration, `object-deleted handler`, id);
+      const invoke: HandlerInvoke<"bucket.object-deleted"> = eventInvoke(deletedObjectSchema, `object event for bucket "${id}"`, (object, event, context) => registration.handler({ object, event, signal: context.signal, log: context.log }));
+      const handler: ObjectDeletedHandler<Id, HandlerId> = Object.freeze({
+        [descriptorKey]: Object.freeze({
+          protocol: descriptorProtocol,
+          type: "handler" as const,
+          definition: freezeJson({
+            id: handlerId,
+            trigger: { kind: "bucket.object-deleted" as const, resource: { kind: "bucket" as const, id }, options: definedEntries({ prefix: registration.prefix }) }
+          }),
+          schemas: Object.freeze({ object: deletedObjectSchema }),
+          invoke
+        }),
+        trigger: "bucket.object-deleted" as const,
+        id: registration.id,
+        resourceId: options.id
+      });
+      return handler;
     }
   });
   return handle;
+}
+
+/**
+ * Builds the `invoke` of an object event handler: it validates the portable
+ * object description with the event's schema, then runs the user's handler
+ * with it and the event's identity.
+ *
+ * @param schema - The schema of the event's object description.
+ * @param subject - What is validated, for messages.
+ * @param run - Calls the user's handler with the validated object and the event's identity.
+ * @returns The `invoke` function.
+ */
+function eventInvoke<Info>(schema: StandardJsonSchemaV1<Info>, subject: string, run: (object: Info, event: ObjectEventInfo, context: InvocationContext<ObjectEventMetadata>) => Promise<void> | void): (input: unknown, context: InvocationContext<ObjectEventMetadata>) => Promise<unknown> {
+  return async (input, context) => {
+    const object = await validateInput(schema, input, subject);
+    await run(object, eventInfo(context.metadata), context);
+    return undefined;
+  };
+}
+
+/**
+ * Validates the options shared by object event registrations.
+ *
+ * @param registration - The untrusted registration options.
+ * @param label - What is registered, for messages.
+ * @param bucketId - The bucket's identifier, for messages.
+ * @returns The handler's validated identifier.
+ * @throws {HolqaError} `HOLQA_RESOURCE_ID_INVALID` or `HOLQA_DECLARATION_INVALID`.
+ */
+function readEventRegistration(registration: object, label: string, bucketId: string): ResourceId {
+  const raw = requireOptions(registration as { readonly id?: unknown; readonly prefix?: unknown; readonly handler?: unknown }, `${label} of bucket "${bucketId}"`);
+  const problems = new DeclarationProblems(`${label} "${String(raw.id)}" of bucket "${bucketId}"`);
+  const handlerIdCandidate = problems.identifier(raw.id, "handler id");
+  if (raw.prefix !== undefined && typeof raw.prefix !== "string")
+    problems.invalid("\"prefix\" must be a string.");
+  if (typeof raw.handler !== "function")
+    problems.invalid("\"handler\" must be a function.");
+  return problems.valid(handlerIdCandidate);
+}
+
+/**
+ * Converts trusted event metadata into the handler's event description.
+ *
+ * @param metadata - The runtime's metadata for the delivery.
+ * @returns The event's identity, time and attempt.
+ */
+function eventInfo(metadata: ObjectEventMetadata): ObjectEventInfo {
+  return Object.freeze({ id: metadata.eventId, time: metadata.eventTime, attempt: metadata.attempt });
+}
+
+/**
+ * Validates listing options.
+ *
+ * @param options - The untrusted options.
+ * @param operation - The operation, for messages.
+ * @returns The options with `limit` filled in.
+ * @throws {HolqaError} `HOLQA_OPERATION_INVALID`.
+ */
+function readListOptions(options: ListObjectsOptions, operation: string): ListObjectsOptions {
+  if (typeof options !== "object" || options === null)
+    failWith(diagnosticCodes.operationInvalid, `${operation} options must be an object.`);
+  const { prefix, cursor, limit = 100 } = options;
+  if (prefix !== undefined && typeof prefix !== "string")
+    failWith(diagnosticCodes.operationInvalid, `${operation} needs "prefix" to be a string.`);
+  if (cursor !== undefined && (typeof cursor !== "string" || cursor === ""))
+    failWith(diagnosticCodes.operationInvalid, `${operation} needs "cursor" to be the cursor of a previous page.`);
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > maxListLimit)
+    failWith(diagnosticCodes.operationInvalid, `${operation} needs "limit" to be a whole number from 1 to ${maxListLimit}.`);
+  return Object.freeze({ limit, ...prefix === undefined ? {} : { prefix }, ...cursor === undefined ? {} : { cursor } });
+}
+
+/**
+ * Validates signed URL options.
+ *
+ * @param options - The untrusted options.
+ * @param operation - The operation, for messages.
+ * @returns A frozen copy of the options.
+ * @throws {HolqaError} `HOLQA_OPERATION_INVALID`.
+ */
+function readSignedUrlOptions(options: SignedUrlOptions, operation: string): SignedUrlOptions {
+  if (typeof options !== "object" || options === null)
+    failWith(diagnosticCodes.operationInvalid, `${operation} options must be an object.`);
+  const { method, expiresInSeconds, contentType } = options;
+  if (method !== "GET" && method !== "PUT")
+    failWith(diagnosticCodes.operationInvalid, `${operation} needs "method" to be "GET" or "PUT".`);
+  if (!Number.isSafeInteger(expiresInSeconds) || expiresInSeconds < 1)
+    failWith(diagnosticCodes.operationInvalid, `${operation} needs "expiresInSeconds" to be a whole number of at least 1.`);
+  if (contentType !== undefined && (method !== "PUT" || typeof contentType !== "string" || contentType.trim() === ""))
+    failWith(diagnosticCodes.operationInvalid, `${operation} accepts "contentType" only for PUT, as a non-empty string.`);
+  return Object.freeze({ method, expiresInSeconds, ...contentType === undefined ? {} : { contentType } });
 }

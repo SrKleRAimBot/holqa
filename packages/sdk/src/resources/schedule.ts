@@ -2,7 +2,8 @@ import type {
   HandlerInvoke,
   InvocationLogger,
   ResourceDescriptorOf,
-  ScheduleOverlap
+  ScheduleOverlap,
+  ScheduleRunTrigger
 } from "@holqa/core";
 
 import type {
@@ -13,7 +14,8 @@ import type { CheckResourceId } from "@/types/checks";
 
 import {
   descriptorKey,
-  descriptorProtocol
+  descriptorProtocol,
+  parseCronSchedule
 } from "@holqa/core";
 
 import {
@@ -24,9 +26,6 @@ import {
 
 /** The overlap policies a schedule may require. */
 const overlapPolicies: readonly ScheduleOverlap[] = ["skip", "allow"];
-
-/** One cron field: digits, names, `*`, `?`, ranges, lists and steps. */
-const cronField = /^[\w*?,/-]+$/;
 
 /**
  * Options accepted by {@link schedule}.
@@ -46,8 +45,12 @@ export interface ScheduleOptions<Id extends string> {
 
 /** What a schedule handler receives. */
 export interface ScheduleContext {
-  /** The time the run was scheduled for (ISO 8601), not the time it started. */
+  /** The time the run was scheduled for (ISO 8601), not the time it started. For a manual run, when it was requested. */
   readonly scheduledTime: string;
+  /** Whether the cron expression or a manual request started the run. */
+  readonly trigger: ScheduleRunTrigger;
+  /** Identifies the run in the scheduler's records, when the run came from a scheduler. */
+  readonly runId?: string;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
 }
@@ -94,8 +97,12 @@ export function schedule<const Id extends string>(options: ScheduleOptions<Id> &
   const raw = requireOptions(options, "schedule");
   const problems = new DeclarationProblems(`schedule "${String(raw.id)}"`);
   const idCandidate = problems.identifier(raw.id, "schedule id");
-  if (typeof raw.cron !== "string" || raw.cron.trim().split(/\s+/).length !== 5 || !raw.cron.trim().split(/\s+/).every(field => cronField.test(field)))
+  // The fields are checked here; the time zone is checked by the binding that runs the schedule.
+  const cron = typeof raw.cron === "string" ? parseCronSchedule(raw.cron, "UTC") : undefined;
+  if (cron === undefined)
     problems.invalid("\"cron\" must be a five-field cron expression, for example \"0 3 * * *\".");
+  else if (!cron.ok)
+    problems.invalid(cron.error.message, cron.error.hint);
   if (typeof raw.timezone !== "string" || raw.timezone.trim() === "")
     problems.invalid("\"timezone\" must be an IANA time zone name, for example \"UTC\".");
   problems.oneOf(raw.overlap, overlapPolicies, "overlap");
@@ -131,7 +138,8 @@ export function schedule<const Id extends string>(options: ScheduleOptions<Id> &
        * @returns `undefined` once the handler has finished.
        */
       const invoke: HandlerInvoke<"schedule.tick"> = async (_input, context) => {
-        await registration.handler({ scheduledTime: context.metadata.scheduledTime, signal: context.signal, log: context.log });
+        const { scheduledTime, runId, trigger = "cron" } = context.metadata;
+        await registration.handler({ scheduledTime, trigger, ...runId === undefined ? {} : { runId }, signal: context.signal, log: context.log });
         return undefined;
       };
       const handler: ScheduleHandler<Id, HandlerId> = Object.freeze({

@@ -2,6 +2,7 @@ import type { SecondCopy } from "@test/support/second-copy";
 
 import {
   appDescriptor,
+  envelope,
   queueDescriptor,
   recordingBinding
 } from "@test/support/descriptors";
@@ -44,7 +45,7 @@ describe("interoperability between two copies of @holqa/core", () => {
     const app = appDescriptor([orders]);
     const binding = recordingBinding();
     const unbind = second.core.bindApp(app, binding);
-    await core.resolveDriver(app, orders, "send").send("from the first copy");
+    await core.resolveDriver(app, orders, "send").send(envelope("from the first copy"), {});
     expect(binding.sent).toEqual(["from the first copy"]);
     unbind();
     expect(() => core.requireBinding(app, "send")).toThrow();

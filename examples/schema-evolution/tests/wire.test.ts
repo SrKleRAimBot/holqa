@@ -49,8 +49,11 @@ describe("one schema on publish and on receipt", () => {
     const unbind = bindApp(getAppDescriptor(app)!, {
       name: "in-memory",
       capabilities: { queue: { delivery: ["at-least-once"], maxAttempts: 10, deadLetter: true } },
-      drivers: { queue: () => ({ send: async (message) => {
-        sent.push(message);
+      drivers: { queue: () => ({ send: async (envelope) => {
+        // Drivers receive the versioned holqa.message/1 envelope and store it unchanged.
+        expect(envelope).toMatchObject({ format: "holqa.message/1", schemaVersion: 1 });
+        sent.push(envelope.payload);
+        return { messageId: `m-${sent.length}` };
       } }) },
       config: () => undefined
     });
@@ -61,7 +64,7 @@ describe("one schema on publish and on receipt", () => {
       placedAt.push(message.placedAt);
     } });
     try {
-      await orders.send({ orderId: "o_1", placedAt: "2026-10-18T09:00:00Z", lines: [{ sku: "SKU-1", quantity: 1 }] });
+      expect(await orders.send({ orderId: "o_1", placedAt: "2026-10-18T09:00:00Z", lines: [{ sku: "SKU-1", quantity: 1 }] })).toEqual({ messageId: "m-1" });
       expect(sent).toEqual([{ orderId: "o_1", placedAt: "2026-10-18T09:00:00Z", lines: [{ sku: "SKU-1", quantity: 1 }] }]);
       await consumer["~holqa"].invoke(sent[0], { invocationId: "i-1", signal: new AbortController().signal, log: { info: () => undefined, warn: () => undefined, error: () => undefined }, metadata: { attempt: 1, messageId: "m-1" } });
       expect(placedAt.map(date => date.toISOString())).toEqual(["2026-10-18T09:00:00.000Z"]);

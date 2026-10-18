@@ -23,8 +23,8 @@ import {
 
 describe("trigger kind registry", () => {
   it("lists every trigger kind and the resource kind it belongs to", () => {
-    expect(triggerKinds).toEqual(["queue.message", "bucket.object-created", "schedule.tick", "http.route", "http.procedure"]);
-    expect(triggerKinds.map(resourceKindOfTrigger)).toEqual(["queue", "bucket", "schedule", "http.api", "http.api"]);
+    expect(triggerKinds).toEqual(["queue.message", "bucket.object-created", "bucket.object-deleted", "schedule.tick", "http.route", "http.procedure"]);
+    expect(triggerKinds.map(resourceKindOfTrigger)).toEqual(["queue", "bucket", "bucket", "schedule", "http.api", "http.api"]);
     expectTypeOf(resourceKindOfTrigger("http.procedure")).toEqualTypeOf<"http.api">();
     expectTypeOf(resourceKindOfTrigger("queue.message")).toEqualTypeOf<"queue">();
   });
@@ -58,6 +58,8 @@ describe("trigger kind registry", () => {
 
   it("types the metadata a runtime passes to each trigger kind", () => {
     expectTypeOf<Parameters<HandlerDescriptorOf<"queue.message">["invoke"]>[1]>().toEqualTypeOf<InvocationContext<TriggerKindMap["queue.message"]["metadata"]>>();
-    expectTypeOf<TriggerKindMap["schedule.tick"]["metadata"]>().toEqualTypeOf<{ readonly scheduledTime: string }>();
+    expectTypeOf<TriggerKindMap["schedule.tick"]["metadata"]>().toEqualTypeOf<{ readonly scheduledTime: string; readonly runId?: string; readonly trigger?: "cron" | "manual" }>();
+    expectTypeOf<TriggerKindMap["bucket.object-deleted"]["metadata"]>().toEqualTypeOf<TriggerKindMap["bucket.object-created"]["metadata"]>();
+    expectTypeOf<TriggerKindMap["bucket.object-created"]["metadata"]>().toEqualTypeOf<{ readonly eventId: string; readonly eventTime: string; readonly attempt: number }>();
   });
 });

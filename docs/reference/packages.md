@@ -1,6 +1,6 @@
 # Packages
 
-> **Status:** Reference for the current repository state. Six framework packages, one integration package and five example packages (`package-smoke`, `schema-evolution`, `manifest` and `http-api` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
+> **Status:** Reference for the current repository state. Seven framework packages, one integration package and six example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api` and `document-processing` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
 
 All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single code entry point (`.`) through their `exports` map. `@holqa/compiler` additionally exports its JSON Schema files. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
 
@@ -15,9 +15,10 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | `@holqa/example-schema-evolution` | `examples/schema-evolution` | **Implemented** | End-to-end schema contract corpus with Zod. |
 | `@holqa/example-manifest` | `examples/manifest` | **Implemented** | End-to-end compilation of SDK applications through the built CLI. |
 | `@holqa/example-http-api` | `examples/http-api` | **Implemented** | An SDK application with routes, procedures and middleware, compiled by the built CLI and served by `@holqa/runtime-bun`. |
-| `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model, HTTP routes, RPC procedures, middleware) | Public developer-facing SDK. |
-| `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP and RPC transports. |
-| `@holqa/local` | `packages/local` | Planned | Local execution and resource emulation. |
+| `@holqa/example-document-processing` | `examples/document-processing` | **Implemented** | An event-driven SDK application (signed uploads, object events, a queue with retries and dead-lettering, a scheduled cleanup), compiled by the built CLI and run on `@holqa/local`. |
+| `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model, HTTP routes, RPC procedures, middleware, queue, bucket and schedule operations) | Public developer-facing SDK. |
+| `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP, RPC and background transports. |
+| `@holqa/local` | `packages/local` | **Implemented** (local binding) | Local runtime drivers: SQLite-backed queues, filesystem object storage with events and signed URLs, a clock-driven scheduler, inspection. |
 | `@holqa/testing` | `packages/testing` | **Implemented** (type assertions only) | Testing utilities; deterministic execution is planned. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
 | `@holqa/zod` | `packages/integrations/zod` | **Implemented** | Zod 4 schema adapter. |
@@ -71,12 +72,19 @@ Planned packages are directories containing only a README. They have no `package
 | `AppDescriptor`, `ResourceDescriptor`, `ResourceDescriptorOf<K>`, `HandlerDescriptor`, `HandlerDescriptorOf<T>`, `ConfigDescriptor`, `Described<D>` | Types | The descriptor protocol. |
 | `getDescriptor`, `getAppDescriptor`, `getResourceDescriptor`, `getHandlerDescriptor`, `getConfigDescriptor` | Functions | Structural descriptor readers; return `undefined` for other protocol versions, unknown kinds and malformed values. |
 | `ResourceKindMap`, `ResourceKind`, `DrivenResourceKind`, `resourceKinds`, `isResourceKind` | Types, constant, function | The resource kind registry (`queue`, `bucket`, `schedule`, `http.api`) and its per-kind `config`, `requirements`, `schemas`, `capabilities` and `driver` types. |
-| `TriggerKindMap`, `TriggerKind`, `triggerKinds`, `isTriggerKind`, `resourceKindOfTrigger` | Types, constant, functions | The trigger kind registry (`queue.message`, `bucket.object-created`, `schedule.tick`, `http.route`). |
+| `QueueBackoff`, `QueueBackoffStrategy`, `FixedQueueBackoff`, `ExponentialQueueBackoff`, `QueueSendOptions`, `QueueSendReceipt`, `backoffDelaySeconds(backoff, failedAttempt)`, `longestBackoffDelaySeconds(backoff)`, `queueBackoffProblem(value)`, `defaultQueueBackoff` | Types, functions, constant | Queue backoff requirements, send options (`delaySeconds`) and receipts (`messageId`), and the deterministic backoff computation. `QueueDriver.send(envelope, options)` receives the `holqa.message/1` envelope and returns a receipt. |
+| `ObjectMetadata`, `ListObjectsOptions`, `ObjectList`, `SignedUrl`, `SignedUrlMethod`, `SignedUrlOptions`, `ObjectEventType` | Types | Bucket operations: `BucketDriver` has `put`, `get`, `head`, `delete`, `list` and `signUrl`; `BucketCapabilities` gains `events` and `signedUrls`. |
+| `ObjectEvent`, `ObjectEventObject`, `objectEventFormat`, `objectEventTypes`, `readObjectEvent(value, subject)` | Types, constants, function | The portable `holqa.object-event/1` envelope and its structural reader (`HOLQA_PAYLOAD_MALFORMED`). |
+| `checkObjectKey(key, operation)`, `maxObjectKeyBytes` | Function, constant | Portable object key rules (`HOLQA_OBJECT_KEY_INVALID`). |
+| `parseCronSchedule(expression, timezone)`, `nextCronTime(schedule, after)`, `isTimeZone(value)`, `CronSchedule` | Functions, type | Cron evaluation in an IANA time zone with defined daylight-saving behaviour (`HOLQA_SCHEDULE_INVALID`). See [scheduled runs](runtime.md#scheduled-runs). |
+| `ResourceSources`, `DeliverySource`, `LeasedDelivery`, `ReceiveRequest`, `DeliveryFailure`, `QueueSource`, `ObjectEventSource`, `ObjectEventSubscription`, `ScheduleSource`, `ScheduleListener`, `ScheduleTick`, `ScheduleRunResult` (`SucceededScheduleRun`, `FailedScheduleRun`, `SkippedScheduleRun`), `ScheduleRunStatus`, `ScheduleSubscription` | Types | The consuming half of a binding: `RuntimeBinding.sources` ([ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md)). `DeliverySource.extend` (optional) renews a lease. |
+| `TriggerKindMap`, `TriggerKind`, `triggerKinds`, `isTriggerKind`, `resourceKindOfTrigger` | Types, constant, functions | The trigger kind registry (`queue.message`, `bucket.object-created`, `bucket.object-deleted`, `schedule.tick`, `http.route`, `http.procedure`). Metadata types: `QueueMessageMetadata` (`attempt`, `messageId`, `schemaVersion?`), `ObjectEventMetadata` (`eventId`, `eventTime`, `attempt`), `ScheduleTickMetadata` (`scheduledTime`, `runId?`, `trigger?`). |
 | `HandlerDefinition`, `Trigger`, `ResourceReference`, `InvocationContext`, `HandlerInvoke` | Types | Handler metadata (JSON) and the executable `invoke` contract. |
 | `RuntimeBinding`, `BindingCapabilities`, `ResourceDrivers`, `BindingSlot`, `createBindingSlot` | Types, function | The data-plane binding contract. |
 | `bindApp(app, binding)` | Function | Installs a binding after checking capabilities and drivers; returns an unbind function. Throws `HOLQA_RUNTIME_ALREADY_BOUND` or `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`. |
 | `requireBinding`, `resolveDriver`, `readConfig` | Functions | Resolve the current binding, a resource's driver or a configuration value; throw `HOLQA_RUNTIME_NOT_BOUND` without a binding. |
 | `checkCapabilities(resource, advertised, bindingName)` | Function | Compares a resource's requirements with the capabilities a binding advertises for its kind; one `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` diagnostic per shortfall. |
+| `checkTriggerDelivery(app, handlers, binding)` | Function | Reports handlers whose trigger a binding cannot deliver: no source for the kind, an object event type it does not advertise, or redelivery delays of the default backoff beyond its `maxDelaySeconds`. |
 | `HttpMethod`, `HttpRouteTriggerOptions`, `HttpRouteTriggerSchemas`, `HttpProcedureOperation`, `HttpProcedureTriggerOptions`, `HttpProcedureTriggerSchemas` | Types | The `http.route` trigger (with an optional `headers` schema) and the `http.procedure` trigger (`{ operation: "query" \| "mutation" }`, schemas `input?`, `output`). |
 | `HttpInvocationInput`, `isHttpInvocationInput(value)`, `isResponseLike(value)` | Type, functions | What runtimes pass to HTTP handlers' `invoke` (`{ request, params }`), and structural guards for requests and responses. |
 | `httpEndpoint(basePath, definition)`, `httpRouteKeys(basePath, definition)`, `joinRoutePath`, `routeShape`, `HttpEndpoint` | Functions, type | Where an HTTP handler is served and the `<METHOD> <shape>` keys the compiler and runtime use for `HOLQA_ROUTE_CONFLICT`. |
@@ -91,7 +99,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/sdk`
 
 - **Path:** `packages/sdk`
-- **Status:** Implemented (application and resource model, HTTP routes, RPC procedures, middleware, scoped values). Private. `staticSite` is proposed.
+- **Status:** Implemented (application and resource model, HTTP routes, RPC procedures, middleware, scoped values, queue, bucket and schedule operations). Private. `staticSite` is proposed.
 - **Purpose:** Declare applications, resources, configuration and handlers with types inferred from source. Runtime-neutral.
 - **Entry point:** `@holqa/sdk` → `dist/index.js`, `dist/index.d.ts`.
 - **Internal dependencies:** `@holqa/core`.
@@ -100,11 +108,12 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | --- | --- | --- |
 | `defineApp(definition)` | Function | Validates and defines an application; returns `{ name, resources, env, "~holqa" }`. See [application model](../concepts/application-model.md). |
 | `defineResources(group)`, `composeResources(...groups)` | Functions | Typed resource groups for registries split across modules; `composeResources` rejects duplicate aliases. |
-| `queue`, `bucket`, `schedule`, `http.api` | Functions | Resource factories returning typed handles. The object-created event schema of `bucket(...).onObjectCreated` implements Standard JSON Schema (vendor `holqa`), so compilers can record it. |
+| `queue`, `bucket`, `schedule`, `http.api` | Functions | Resource factories returning typed handles. Queues accept `delivery: { maxAttempts?, deadLetter?, backoff? }`; `send(message, { delaySeconds? })` resolves to `{ messageId }`. Buckets have `put`, `get`, `head`, `delete`, `list`, `signedUrl`, `onObjectCreated` and `onObjectDeleted`; the object event schemas implement Standard JSON Schema (vendor `holqa`), so compilers can record them. Schedules validate their cron expression at declaration. See the [runtime reference](runtime.md#queue-delivery). |
 | `secret(schema)`, `variable(schema, { default? })` | Functions | Configuration entries. |
 | `App`, `AppDefinition`, `ConfigValues`, `HandlerDiscoveryOptions` | Types | Application types. |
 | `QueueHandle`, `BucketHandle`, `ScheduleHandle`, `HttpApiHandle`, `ResourceHandle`, `AnyResource`, `ResourceRecord` | Types | Handle types. |
-| `QueueConsumer`, `ObjectCreatedHandler`, `ScheduleHandler`, `HandlerRegistration` | Types | Handler registrations. |
+| `QueueConsumer`, `ObjectCreatedHandler`, `ObjectDeletedHandler`, `ScheduleHandler`, `HandlerRegistration` | Types | Handler registrations. |
+| `ObjectCreatedContext`, `ObjectDeletedContext`, `ObjectCreatedOptions`, `ObjectDeletedOptions`, `ObjectInfo`, `DeletedObjectInfo`, `ObjectEventInfo`, `ScheduleContext` | Types | Handler contexts: object handlers receive `event: { id, time, attempt }`; schedule handlers receive `trigger` and `runId`. |
 | `QueueMessageInput`, `QueueMessageOutput`, `QueueConsumerFor`, `ResourceIdOf`, `ResourceIds`, `ResourceById`, `ResourceAliasesOfKind` | Types | Type helpers derived from handles. |
 | `HolqaTypeError`, `CheckResourceId`, `CheckUniqueResourceIds`, `DuplicateResourceIds`, `ResourceIdProblem`, `CheckDistinctAliases` | Types | Compile-time declaration checks. |
 | `HttpApiHandle.route(options)` | Method | Registers an HTTP route: `{ id, method, path, params?, query?, headers?, body?, responses, middleware?, handler }`. See the [runtime reference](runtime.md#http-routes). |
@@ -118,14 +127,14 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/runtime-bun`
 
 - **Path:** `packages/runtime-bun`
-- **Status:** Implemented (dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve` adapter). Private. Queue, storage and schedule delivery and worker isolation are planned. See the [runtime reference](runtime.md) and [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md).
+- **Status:** Implemented (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, `Bun.serve` adapter). Private. Worker isolation is planned. See the [runtime reference](runtime.md), [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) and [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md).
 - **Entry point:** `@holqa/runtime-bun` → `dist/index.js`, `dist/index.d.ts`. Requires Bun (`engines.bun >= 1.3.13`) for `serve` and `loadCompiledApplication`.
 - **Internal dependencies:** `@holqa/core`.
 
 | Export | Kind | Description |
 | --- | --- | --- |
-| `createRuntime(options)` | Function | Validates an application and its handlers and returns a `Runtime`: `start`, `stop`, `invoke`, `fetch`, `stats`, `state`, `name`, `handlers`. Handlers of other trigger kinds need `manualTriggers: true` and run only through `invoke`. |
-| `Runtime`, `RuntimeOptions`, `RuntimeLimits`, `RuntimeHttpOptions`, `RuntimeState`, `RuntimeStats`, `StopOptions` | Types | The runtime and its settings. |
+| `createRuntime(options)` | Function | Validates an application and its handlers and returns a `Runtime`: `start`, `stop`, `invoke`, `fetch`, `stats`, `state`, `name`, `handlers`. `start` consumes the binding's sources to deliver queue messages, object events and scheduled runs, and fails when the binding cannot deliver a handler's trigger unless `manualTriggers: true`. |
+| `Runtime`, `RuntimeOptions`, `RuntimeLimits`, `RuntimeHttpOptions`, `RuntimeDeliveryOptions`, `RuntimeState`, `RuntimeStats`, `StopOptions` | Types | The runtime and its settings. `RuntimeStats.delivery` (`TransportStats`, `DeliveryStats`) counts received, acknowledged, retried, dead-lettered, discarded and released deliveries and scheduled runs. |
 | `InvocationRequest`, `InvocationOutcome`, `InvocationSuccess`, `InvocationFailed`, `InvocationFailure`, `DispatchStats` | Types | Normalized invocations and their structured outcomes. |
 | `serve(runtime, options)`, `ServeOptions`, `RunningServer`, `stopOnSignals(server, options?, signals?)` | Functions, types | Serves a runtime with `Bun.serve` (default `127.0.0.1:3000`, 1 MiB bodies) and stops gracefully on signals. |
 | `loadCompiledApplication({ root, buildDir? })`, `LoadCompiledApplicationOptions`, `CompiledApplication` | Function, types | Loads `holqa build --manifest` output and checks it against the code (`HOLQA_BUILD_STALE`). |
@@ -133,6 +142,23 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `CorsOptions` | Type | The CORS policy. |
 | `correlationHeader` | Constant | `"x-correlation-id"`. |
 | `jsonLineSink(write?)`, `silentSink`, `LogSink`, `LogEntry`, `LogLevel` | Functions, types | Structured log sinks. |
+
+## `@holqa/local`
+
+- **Path:** `packages/local`
+- **Status:** Implemented (local binding). Private. See the [local environment reference](local.md).
+- **Purpose:** Fulfils queues, buckets and schedules on one machine with the same driver and source contracts as any binding.
+- **Entry point:** `@holqa/local` → `dist/index.js`, `dist/index.d.ts`. Requires Bun (`bun:sqlite`).
+- **Internal dependencies:** `@holqa/core`, `@holqa/runtime-bun`.
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `createLocalEnvironment(options)`, `LocalEnvironment`, `LocalEnvironmentOptions`, `SettleOptions` | Function, types | Creates `{ binding, clock, queues, storage, scheduler, settle, close }` over a state directory. |
+| `Clock`, `systemClock`, `ManualClock` | Type, constant, class | The injectable time source; `ManualClock` has `advance(ms)` and `jump(ms)`. |
+| `LocalQueues`, `LocalQueueMessage`, `LocalMessageState` | Types | Queue inspection: `messages`, `deadLetters`, `redrive`, `duplicate`, `purge`. |
+| `LocalStorage`, `LocalObjectEvent` | Types | Event inspection (`events`, `redriveEvents`, `duplicateEvent`) and signed URL serving (`fetch`, `handles`). |
+| `LocalScheduler`, `LocalScheduleRun`, `LocalRunStatus` | Types | Manual runs (`trigger`), run records (`runs`), `nextRun`, `idle`. |
+| `DeliveryState`, `DeliveryError`, `stateVersion`, `stateFileName` | Types, constants | The state format (version 1, `state.sqlite`). |
 
 ## `@holqa/testing`
 
@@ -239,19 +265,24 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 - **Status:** Implemented. Private; not published.
 - **Purpose:** The runtime acceptance test: an SDK application with routes, RPC procedures, application and route middleware and a scoped store, compiled by the built `holqa` binary, loaded with `loadCompiledApplication` and served with `serve` on a loopback port. See its [README](../../examples/http-api/README.md).
 
+## `@holqa/example-document-processing`
+
+- **Path:** `examples/document-processing`
+- **Status:** Implemented. Private; not published.
+- **Purpose:** The acceptance test of event-driven resources: an HTTP upload through a signed URL, an object-created event, a queued job, a background processor with retries and dead-lettering, and an hourly cleanup, compiled by the built `holqa` binary and run on `@holqa/local` with a manual clock. See its [README](../../examples/document-processing/README.md).
+
 ## `@holqa/example-package-smoke`
 
 - **Path:** `examples/package-smoke`
 - **Status:** Implemented. Private; not published.
-- **Purpose:** Consumes `@holqa/core`, `@holqa/compiler`, `@holqa/cli`, `@holqa/runtime-bun`, `@holqa/sdk`, `@holqa/testing`, and `@holqa/zod` through their public exports after they are built. It verifies that `dist/` contains JavaScript and declarations, that no unresolved `@/` aliases remain in emitted `.js` or `.d.ts` files, that the built `holqa` binary runs, that the built compiler compiles an SDK application, and that the manifest JSON Schemas and the CLI's analysis entry point are shipped.
+- **Purpose:** Consumes `@holqa/core`, `@holqa/compiler`, `@holqa/cli`, `@holqa/local`, `@holqa/runtime-bun`, `@holqa/sdk`, `@holqa/testing`, and `@holqa/zod` through their public exports after they are built. It verifies that `dist/` contains JavaScript and declarations, that no unresolved `@/` aliases remain in emitted `.js` or `.d.ts` files, that the built `holqa` binary runs, that the built compiler compiles an SDK application, and that the manifest JSON Schemas and the CLI's analysis entry point are shipped.
 - **Run:** `pnpm --filter @holqa/example-package-smoke test` (after `pnpm build`), or as part of `pnpm test` / `pnpm check`.
 
 ## Planned packages
 
 | Package | Intended responsibility | Allowed internal dependencies |
 | --- | --- | --- |
-| `@holqa/runtime-bun` (extensions) | Queue, storage and schedule transports on the dispatcher; worker or process isolation. | `core` |
-| `@holqa/local` | Local runtime drivers: queue, storage, and scheduler emulation; event inspection. | `core`, `runtime-bun` |
+| `@holqa/runtime-bun` (extensions) | Worker or process isolation. | `core` |
 | `@holqa/testing` (extensions) | Deterministic test harness; simulated deliveries, retries, failures; fixtures. | `core`, `sdk`, `local`, `runtime-bun` |
 | `@holqa/client` | Fetch-based runtime for generated, browser-safe clients. Runtime-neutral. | `core` |
 | `packages/integrations/*` (except `zod`) | Schema, handler, transport, and client adapters. See [integrations](../integrations/index.md). | `core`, `sdk`, `client` |

@@ -36,4 +36,18 @@ describe("checkCapabilities", () => {
     ]);
     expect(checkCapabilities(scheduleDescriptor("nightly"), { schedule: { overlap: ["allow"] } }, "edge")).toHaveLength(1);
   });
+
+  it("checks a declared backoff against the strategies and delays a binding supports", () => {
+    const exponential = queueDescriptor("orders", { backoff: { strategy: "exponential", initialDelaySeconds: 1, maxDelaySeconds: 600 } });
+    const base = { delivery: ["at-least-once" as const], maxAttempts: 5, deadLetter: true };
+    expect(checkCapabilities(exponential, { queue: { ...base, backoff: ["fixed", "exponential"], maxDelaySeconds: 900 } }, "local")).toEqual([]);
+    expect(checkCapabilities(exponential, { queue: base }, "local").map(diagnostic => diagnostic.message)).toEqual([
+      "Binding \"local\" cannot satisfy queue \"orders\": exponential backoff is required."
+    ]);
+    expect(checkCapabilities(exponential, { queue: { ...base, backoff: ["exponential"], maxDelaySeconds: 60 } }, "local").map(diagnostic => diagnostic.message)).toEqual([
+      "Binding \"local\" cannot satisfy queue \"orders\": redelivery delays of 600 seconds are required but at most 60 are supported."
+    ]);
+    const fixed = queueDescriptor("orders", { backoff: { strategy: "fixed", delaySeconds: 5 } });
+    expect(checkCapabilities(fixed, { queue: { ...base, backoff: ["fixed"], maxDelaySeconds: 5 } }, "local")).toEqual([]);
+  });
 });

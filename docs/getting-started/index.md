@@ -64,7 +64,7 @@ This only works inside the monorepo workspace (for example in a new package or e
 
 ## Preview: a future Holqa application
 
-> **Illustrative only.** This section describes the intended developer experience. `defineApp`, the resource factories and typed handles exist in the private `@holqa/sdk` package, but HTTP routes, running handlers, local emulation and an installable release do not, and the code below is not type-checked against the SDK. Names and shapes may change.
+> **Illustrative only.** This section describes the intended developer experience. `defineApp`, the resource factories and typed handles exist in the private `@holqa/sdk` package, and so do HTTP routes, handler execution and local drivers in the repository, but an installable release, `holqa dev` and the other workflow commands do not, and the code below is not type-checked against the SDK. Names and shapes may change.
 
 ### Intended layout
 

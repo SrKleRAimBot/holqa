@@ -1,4 +1,8 @@
-import type { HolqaError } from "@holqa/core";
+import type {
+  HolqaError,
+  QueueSendOptions,
+  QueueSendReceipt
+} from "@holqa/core";
 import type {
   QueueConsumer,
   QueueConsumerFor,
@@ -134,7 +138,7 @@ describe("queue", () => {
     const unbind = bindApp(getAppDescriptor(app)!, binding);
     try {
       await events.send({ at: "2026-10-17T00:00:00.000Z" });
-      expect(binding.sent).toEqual([{ queue: "events", message: { at: "2026-10-17T00:00:00.000Z" } }]);
+      expect(binding.sent.map(({ queue, message }) => ({ queue, message }))).toEqual([{ queue: "events", message: { at: "2026-10-17T00:00:00.000Z" } }]);
       const error = await events.send({ at: "yesterday" }).catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(InputValidationError);
       expect((error as InputValidationError).issues.map(issue => issue.path)).toEqual(["at"]);
@@ -153,7 +157,7 @@ describe("queue", () => {
       const message = { text: "hello", tag: undefined };
       await notes.send(message);
       message.text = "changed";
-      expect(binding.sent).toEqual([{ queue: "notes", message: { text: "hello" } }]);
+      expect(binding.sent.map(({ queue, message }) => ({ queue, message }))).toEqual([{ queue: "notes", message: { text: "hello" } }]);
     } finally {
       unbind();
     }
@@ -260,5 +264,95 @@ describe("queue consumers", () => {
       "HOLQA_DECLARATION_INVALID",
       "HOLQA_DECLARATION_INVALID"
     ]);
+  });
+
+  it("sends versioned envelopes, returns the queue's receipt and forwards delays", async () => {
+    const jobs = queue({ id: "jobs", message: orderV1, schemaVersion: 3 });
+    const app = defineApp({ name: "envelopes", resources: { jobs } });
+    const binding = createTestBinding();
+    const unbind = bindApp(getAppDescriptor(app)!, binding);
+    try {
+      expect(await jobs.send({ orderId: "o-1" })).toEqual({ messageId: "m-1" });
+      expect(await jobs.send({ orderId: "o-2" }, { delaySeconds: 30 })).toEqual({ messageId: "m-2" });
+      expect(binding.sent.map(({ envelope, options }) => ({ envelope, options }))).toEqual([
+        { envelope: { format: "holqa.message/1", schemaVersion: 3, payload: { orderId: "o-1" } }, options: {} },
+        { envelope: { format: "holqa.message/1", schemaVersion: 3, payload: { orderId: "o-2" } }, options: { delaySeconds: 30 } }
+      ]);
+    } finally {
+      unbind();
+    }
+  });
+
+  it("rejects malformed delays and delays the binding cannot honour, without sending", async () => {
+    const jobs = queue({ id: "jobs", message: orderV1, schemaVersion: 1 });
+    const app = defineApp({ name: "delays", resources: { jobs } });
+    const binding = createTestBinding({}, { queue: { delivery: ["at-least-once"], maxAttempts: 5, deadLetter: false, maxDelaySeconds: 60 } });
+    const unbind = bindApp(getAppDescriptor(app)!, binding);
+    /**
+     * Sends with options that must be rejected and returns the error code.
+     *
+     * @param options - The send options under test.
+     * @returns The code of the thrown error.
+     */
+    const rejected = async (options: unknown): Promise<string> => jobs.send({ orderId: "o" }, options as never).then(() => "sent", (error: HolqaError) => error.code);
+    try {
+      expect(await rejected({ delaySeconds: -1 })).toBe("HOLQA_OPERATION_INVALID");
+      expect(await rejected({ delaySeconds: 1.5 })).toBe("HOLQA_OPERATION_INVALID");
+      expect(await rejected("soon")).toBe("HOLQA_OPERATION_INVALID");
+      expect(await rejected({ delaySeconds: 61 })).toBe("HOLQA_BINDING_CAPABILITY_UNSUPPORTED");
+      expect(binding.sent).toEqual([]);
+      expect(await rejected({ delaySeconds: 60 })).toBe("sent");
+    } finally {
+      unbind();
+    }
+  });
+
+  it("declares a backoff as a requirement and rejects malformed ones", () => {
+    const retried = queue({ id: "retried", message: orderV1, schemaVersion: 1, delivery: { maxAttempts: 4, backoff: { strategy: "exponential", initialDelaySeconds: 2, maxDelaySeconds: 60 } } });
+    expect<unknown>(getResourceDescriptor(retried)?.requirements).toEqual({
+      delivery: "at-least-once",
+      deadLetter: false,
+      maxAttempts: 4,
+      backoff: { strategy: "exponential", initialDelaySeconds: 2, maxDelaySeconds: 60 }
+    });
+    expect<unknown>(getResourceDescriptor(queue({ id: "fixed", message: orderV1, schemaVersion: 1, delivery: { backoff: { strategy: "fixed", delaySeconds: 5 } } }))?.requirements).toMatchObject({ backoff: { strategy: "fixed", delaySeconds: 5 } });
+    /** Holds deliberate type errors checked by tsc; never executed. */
+    const neverCalled = (): void => {
+      // @ts-expect-error -- "linear" is not a backoff strategy.
+      queue({ id: "bad", message: orderV1, schemaVersion: 1, delivery: { backoff: { strategy: "linear", delaySeconds: 1 } } });
+      // @ts-expect-error -- exponential backoff needs a maximum delay.
+      queue({ id: "bad", message: orderV1, schemaVersion: 1, delivery: { backoff: { strategy: "exponential", initialDelaySeconds: 1 } } });
+    };
+    expect(typeof neverCalled).toBe("function");
+    for (const backoff of [
+      { strategy: "linear" },
+      { strategy: "fixed", delaySeconds: -1 },
+      { strategy: "exponential", initialDelaySeconds: 10, maxDelaySeconds: 5 },
+      { strategy: "exponential", initialDelaySeconds: 1, maxDelaySeconds: 5, multiplier: 0.5 }
+    ])
+      expect(thrownCodes(() => queue({ id: "bad", message: orderV1, schemaVersion: 1, delivery: { backoff } } as never))).toEqual(["HOLQA_DECLARATION_INVALID"]);
+  });
+
+  it("passes the producer's schema version to consumers", async () => {
+    const jobs = queue({ id: "jobs", message: orderV1, schemaVersion: 2 });
+    const seen: unknown[] = [];
+    const consumer = jobs.consume({ id: "jobs.run", handler: ({ delivery }) => {
+      seen.push(delivery);
+    } });
+    await consumer["~holqa"].invoke({ orderId: "o" }, createContext({ attempt: 1, messageId: "m-1", schemaVersion: 2 }));
+    await consumer["~holqa"].invoke({ orderId: "o" }, createContext({ attempt: 2, messageId: "m-1" }));
+    expect(seen).toEqual([{ attempt: 1, messageId: "m-1", schemaVersion: 2 }, { attempt: 2, messageId: "m-1" }]);
+  });
+
+  it("types sends with their options and receipt", () => {
+    const jobs = queue({ id: "jobs", message: orderV1, schemaVersion: 1 });
+    expectTypeOf(jobs.send).returns.toEqualTypeOf<Promise<QueueSendReceipt>>();
+    expectTypeOf<Parameters<typeof jobs.send>[1]>().toEqualTypeOf<QueueSendOptions | undefined>();
+    /** Holds deliberate type errors checked by tsc; never executed. */
+    const neverCalled = (): void => {
+      // @ts-expect-error -- delays are given in seconds.
+      void jobs.send({ orderId: "o" }, { delayMs: 10 });
+    };
+    expect(typeof neverCalled).toBe("function");
   });
 });

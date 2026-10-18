@@ -398,3 +398,27 @@ describe("compileApplication", () => {
     expect(await failureCodes({ ...shopFixture(), appModule: "/home/user/app/infra.ts" })).toEqual(["HOLQA_DECLARATION_INVALID"]);
   });
 });
+
+describe("event-driven declarations", () => {
+  it("records object-deleted handlers and queue backoff in a manifest that validates", async () => {
+    const message = fixtureSchema({ type: "object", properties: { documentId: { type: "string" } }, required: ["documentId"] });
+    const jobs = queueResource("jobs", message, { maxAttempts: 3, deadLetter: true });
+    const retried = { ...jobs, requirements: { ...jobs.requirements, backoff: { strategy: "fixed", delaySeconds: 10 } } } as typeof jobs;
+    const deleted = objectCreatedHandler("files.deleted", "files", "raw/");
+    const descriptor = deleted["~holqa"];
+    const result = await compile({
+      app: application({ resources: [retried, bucketResource("files")] }),
+      modules: [module("handlers/files.ts", {
+        deleted: described({ ...descriptor, definition: { ...descriptor.definition, trigger: { ...descriptor.definition.trigger, kind: "bucket.object-deleted" } } })
+      })]
+    });
+    if (!result.ok)
+      throw new Error(result.diagnostics.map(diagnostic => diagnostic.message).join("\n"));
+    expect(result.manifest.resources.find(resource => resource.id === "jobs")?.requirements).toMatchObject({ backoff: { strategy: "fixed", delaySeconds: 10 } });
+    expect<unknown>(result.manifest.handlers.map(handler => handler.trigger)).toEqual([
+      { kind: "bucket.object-deleted", resource: { kind: "bucket", id: "files" }, options: { prefix: "raw/" } }
+    ]);
+    expect(result.manifest.requiredCapabilities).toEqual(expect.arrayContaining(["queue.backoff.fixed", "trigger.bucket.object-deleted"]));
+    expect(validateManifest(JSON.parse(serializeManifest(result.manifest))).ok).toBe(true);
+  });
+});

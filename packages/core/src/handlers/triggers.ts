@@ -40,24 +40,54 @@ export interface QueueMessageTriggerSchemas {
 export interface QueueMessageMetadata {
   /** 1 for the first delivery; higher values mean redelivery. */
   readonly attempt: number;
+  /** Assigned by the queue when the message was sent; the same for every delivery of the message, including duplicates. */
   readonly messageId: string;
+  /** The `schemaVersion` the producer sent the message with, when the transport knows it. */
+  readonly schemaVersion?: number;
 }
 
-/** Options of an object-created handler. */
-export interface ObjectCreatedTriggerOptions {
+/** Options of an object event handler. */
+export interface ObjectEventTriggerOptions {
   /** Only objects whose key starts with this prefix trigger the handler. */
   readonly prefix?: string;
 }
 
-/** Schemas an object-created handler validates its portable event with. */
-export interface ObjectCreatedTriggerSchemas {
+/** Schemas an object event handler validates its portable object description with. */
+export interface ObjectEventTriggerSchemas {
   readonly object: StandardSchemaV1;
 }
 
+/** Options of an object-created handler. */
+export interface ObjectCreatedTriggerOptions extends ObjectEventTriggerOptions {}
+
+/** Schemas an object-created handler validates its portable event with. */
+export interface ObjectCreatedTriggerSchemas extends ObjectEventTriggerSchemas {}
+
+/**
+ * Runtime metadata of one object event delivery. Events are delivered at
+ * least once and in no guaranteed order: the same `eventId` may arrive more
+ * than once, with a higher `attempt`.
+ */
+export interface ObjectEventMetadata {
+  /** The event's identity, stable across redeliveries. Use it to discard duplicates. */
+  readonly eventId: string;
+  /** When the change happened (ISO 8601, UTC). */
+  readonly eventTime: string;
+  /** 1 for the first delivery; higher values mean redelivery. */
+  readonly attempt: number;
+}
+
+/** How a scheduled run was started. */
+export type ScheduleRunTrigger = "cron" | "manual";
+
 /** Runtime metadata of one scheduled run. */
 export interface ScheduleTickMetadata {
-  /** The time the run was scheduled for (ISO 8601), not the time it started. */
+  /** The time the run was scheduled for (ISO 8601), not the time it started. For a manual run, the time it was requested. */
   readonly scheduledTime: string;
+  /** Identifies the run in the scheduler's records. Absent when a caller invokes the handler directly. */
+  readonly runId?: string;
+  /** Whether the cron expression or a manual request started the run. Absent means `cron`. */
+  readonly trigger?: ScheduleRunTrigger;
 }
 
 /** The method and path template an HTTP route serves. */
@@ -104,7 +134,8 @@ export interface HttpProcedureTriggerSchemas {
  */
 export interface TriggerKindMap {
   readonly "queue.message": TriggerKindSpec<"queue", QueueMessageTriggerOptions, QueueMessageTriggerSchemas, QueueMessageMetadata>;
-  readonly "bucket.object-created": TriggerKindSpec<"bucket", ObjectCreatedTriggerOptions, ObjectCreatedTriggerSchemas, EmptyObject>;
+  readonly "bucket.object-created": TriggerKindSpec<"bucket", ObjectCreatedTriggerOptions, ObjectCreatedTriggerSchemas, ObjectEventMetadata>;
+  readonly "bucket.object-deleted": TriggerKindSpec<"bucket", ObjectEventTriggerOptions, ObjectEventTriggerSchemas, ObjectEventMetadata>;
   readonly "schedule.tick": TriggerKindSpec<"schedule", EmptyObject, EmptyObject, ScheduleTickMetadata>;
   readonly "http.route": TriggerKindSpec<"http.api", HttpRouteTriggerOptions, HttpRouteTriggerSchemas, EmptyObject>;
   readonly "http.procedure": TriggerKindSpec<"http.api", HttpProcedureTriggerOptions, HttpProcedureTriggerSchemas, EmptyObject>;
@@ -117,6 +148,7 @@ export type TriggerKind = keyof TriggerKindMap;
 const triggerResourceKinds = {
   "queue.message": "queue",
   "bucket.object-created": "bucket",
+  "bucket.object-deleted": "bucket",
   "schedule.tick": "schedule",
   "http.route": "http.api",
   "http.procedure": "http.api"

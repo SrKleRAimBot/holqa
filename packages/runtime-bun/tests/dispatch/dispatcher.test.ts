@@ -28,10 +28,10 @@ import { RuntimeScope } from "@/runtime/application-scope";
  */
 function dispatcherFor(handle: (context: { readonly signal: AbortSignal }) => Promise<unknown>, options: { readonly concurrency?: number; readonly queue?: number } = {}): Dispatcher {
   application([scheduleResource("nightly")]);
-  const { definition, invoke } = scheduleHandler("nightly.run", "nightly", handle)["~holqa"];
+  const { definition, invoke, schemas } = scheduleHandler("nightly.run", "nightly", handle)["~holqa"];
   const logger = new StructuredLogger(() => {});
   return new Dispatcher({
-    handlers: new Map<string, RegisteredHandler>([["nightly.run", { definition, invoke: invoke as RegisteredHandler["invoke"] }]]),
+    handlers: new Map<string, RegisteredHandler>([["nightly.run", { definition, schemas, invoke: invoke as RegisteredHandler["invoke"] }]]),
     concurrency: options.concurrency ?? 4,
     queueLimit: options.queue ?? 4,
     timeoutMs: 1_000,
