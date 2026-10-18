@@ -1,6 +1,6 @@
 # Holqa agent skills
 
-> **Status:** Preview — these skills describe Holqa's **proposed** API and CLI. Most workflows cannot be carried out yet. The skills are not published and must not be published until the features they describe exist.
+> **Status:** Preview — these skills describe Holqa's API and CLI, part of which is implemented in private packages and part of which is **proposed**. Many workflows cannot be carried out yet. The skills are not published and must not be published until the features they describe exist.
 
 This directory is the library of [Agent Skills](https://agentskills.io) for developers who build applications **with** Holqa. Each skill teaches a coding agent (or a human) one workflow: declaring resources, adding a queue consumer, reviewing security, and so on.
 
@@ -15,9 +15,11 @@ Holqa is at the bootstrap stage. What exists today is limited to:
 | `holqa --help`, `--version`, `--json` (from a repository checkout; packages are private) | **Implemented** |
 | Structured diagnostics with stable codes (`HOLQA_CLI_NOT_IMPLEMENTED`, `HOLQA_RESOURCE_ID_INVALID`, ...) | **Implemented** |
 | Resource ID validation (`parseResourceId` in `@holqa/core`, not yet a public package) | **Implemented** |
-| `@holqa/sdk` (`defineApp`, `http.api`, `queue`, `bucket`, `schedule`, `staticSite`, `secret`, `variable`) | Accepted design / proposed API — not implemented |
-| `holqa dev`, `build`, `inspect`, `doctor`, `invoke`, `queue send`, `storage put`, `cron run`, `openapi generate` | Proposed — each reports `HOLQA_CLI_NOT_IMPLEMENTED` |
-| `@holqa/testing`, `@holqa/client`, local runtime, integrations | Planned |
+| `@holqa/sdk` (`defineApp`, `http.api` with routes, RPC procedures and middleware, `queue`, `bucket`, `schedule`, `secret`, `variable`) | **Implemented** (private, unpublished); `staticSite` is proposed |
+| `@holqa/runtime-bun` (serving HTTP routes and RPC procedures of a compiled application) | **Implemented** (private, unpublished) |
+| `holqa inspect`, `holqa build --manifest` | **Implemented** |
+| `holqa dev`, `build` (bundling), `doctor`, `invoke`, `queue send`, `storage put`, `cron run`, `openapi generate` | Proposed — each reports `HOLQA_CLI_NOT_IMPLEMENTED` |
+| `@holqa/testing` (beyond type assertions), `@holqa/client`, local emulators (`@holqa/local`), integrations other than `@holqa/zod` | Planned |
 
 Every skill therefore starts with a preview notice and separates **Works today** from **Planned workflow**. Code in the skills is illustrative and uses the proposed API style shown in [`docs/concepts/application-model.md`](../docs/concepts/application-model.md); names may change before release. When a skill and the implementation disagree, the implementation and the reference documentation win.
 

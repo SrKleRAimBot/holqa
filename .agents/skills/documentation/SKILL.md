@@ -56,7 +56,7 @@ Mixed docs summarize in the status line and label individual rows or sections.
 ## Honesty rules
 
 - Write unimplemented behavior as intent: "Holqa is designed to retry failed deliveries", not "Holqa retries".
-- Put this sentence immediately before code that uses APIs that do not exist (HTTP routes, RPC procedures, `staticSite`, bindings, ...):
+- Put this sentence immediately before code that uses APIs that do not exist (`staticSite`, generated clients, infrastructure bindings, `holqa dev`, ...):
 
   > The following code is illustrative. The API is proposed, not implemented, and may change.
 

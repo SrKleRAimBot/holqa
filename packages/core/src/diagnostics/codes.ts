@@ -75,7 +75,37 @@ export const diagnosticCodes = {
   /** The CLI received a malformed option or option value. */
   cliArgumentInvalid: "HOLQA_CLI_ARGUMENT_INVALID",
   /** The CLI could not write a build output file. */
-  buildOutputFailed: "HOLQA_BUILD_OUTPUT_FAILED"
+  buildOutputFailed: "HOLQA_BUILD_OUTPUT_FAILED",
+  /** No HTTP route or RPC procedure matches the request path. */
+  httpRouteNotFound: "HOLQA_HTTP_ROUTE_NOT_FOUND",
+  /** A route matches the request path, but not its method. */
+  httpMethodNotAllowed: "HOLQA_HTTP_METHOD_NOT_ALLOWED",
+  /** A request body has a media type the route or procedure does not accept. */
+  httpMediaTypeUnsupported: "HOLQA_HTTP_MEDIA_TYPE_UNSUPPORTED",
+  /** Middleware or a handler rejected a request with an explicit HTTP status. */
+  httpRejected: "HOLQA_HTTP_REJECTED",
+  /** A handler produced a response its contract does not declare: an undeclared status, or a body its schema rejects. */
+  responseInvalid: "HOLQA_RESPONSE_INVALID",
+  /** A handler threw an error that is not a Holqa diagnostic. Details are logged, never sent to callers. */
+  handlerFailed: "HOLQA_HANDLER_FAILED",
+  /** An invocation named a handler the runtime has not registered. */
+  handlerNotFound: "HOLQA_HANDLER_NOT_FOUND",
+  /** An invocation exceeded its time limit and was aborted. */
+  invocationTimeout: "HOLQA_INVOCATION_TIMEOUT",
+  /** An invocation was cancelled by its caller or by runtime shutdown. */
+  invocationCancelled: "HOLQA_INVOCATION_CANCELLED",
+  /** The runtime rejected an invocation because its concurrency limit and wait queue are full. */
+  runtimeOverloaded: "HOLQA_RUNTIME_OVERLOADED",
+  /** The runtime is not accepting invocations: it has not started, or it is stopping or stopped. */
+  runtimeNotRunning: "HOLQA_RUNTIME_NOT_RUNNING",
+  /** The runtime could not start an application, for example because two handlers serve the same route. */
+  runtimeStartFailed: "HOLQA_RUNTIME_START_FAILED",
+  /** A configuration value is missing or fails its schema. Secret values are never included. */
+  configInvalid: "HOLQA_CONFIG_INVALID",
+  /** An RPC request asks for a protocol version this runtime does not implement. */
+  rpcVersionUnsupported: "HOLQA_RPC_VERSION_UNSUPPORTED",
+  /** Build output no longer matches the application it was compiled from; rebuild it. */
+  buildStale: "HOLQA_BUILD_STALE"
 } as const;
 
 /**

@@ -22,8 +22,10 @@ Framework-neutral contracts and primitives shared by every Holqa package.
 | `PayloadCodec`, `jsonPayloadCodec`, `bytesPayloadCodec` | Explicit codecs for JSON and binary payloads. |
 | `SchemaAdapter`, `SchemaSideDescription`, `RuntimeOnlyConstraint`, `hasStandardJsonSchema()` | The contract schema-library adapters implement. |
 | Descriptor protocol: `AppDescriptor`, `ResourceDescriptor`, `HandlerDescriptor`, `ConfigDescriptor`, `getDescriptor()` and friends | What the SDK writes and compilers and runtimes read. |
-| `ResourceKindMap`, `TriggerKindMap` | Typed registries of resource kinds (`queue`, `bucket`, `schedule`, `http.api`) and trigger kinds. |
+| `ResourceKindMap`, `TriggerKindMap` | Typed registries of resource kinds (`queue`, `bucket`, `schedule`, `http.api`) and trigger kinds (including `http.route` and `http.procedure`). |
 | `RuntimeBinding`, `bindApp()`, `resolveDriver()`, `readConfig()`, `checkCapabilities()` | How logical resources resolve to drivers at run time. |
+| `HttpInvocationInput`, `HttpRejectedError`, `HttpErrorBody`, `rpcProtocolFormat`, `RpcResponseEnvelope`, ... | HTTP and `holqa.rpc/1` wire contracts shared by the SDK, runtimes and future clients. |
+| `ApplicationScope`, `ScopedDefinition` | The application execution context that invocations share. |
 
 ```ts
 import { formatDiagnostic, parseResourceId } from "@holqa/core";

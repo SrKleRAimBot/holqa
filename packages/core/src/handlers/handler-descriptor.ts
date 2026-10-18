@@ -1,3 +1,4 @@
+import type { ApplicationScope } from "@/handlers/application-scope";
 import type {
   TriggerKind,
   TriggerKindMap
@@ -53,11 +54,20 @@ export interface InvocationLogger {
  * @typeParam Metadata - Trusted, trigger-specific runtime data such as the delivery attempt.
  */
 export interface InvocationContext<Metadata = EmptyObject> {
+  /** Unique per invocation. */
   readonly invocationId: string;
+  /**
+   * Groups related invocations, for example every invocation caused by one
+   * incoming request. Runtimes set it from a trusted caller or default it to
+   * `invocationId`. Absent when the caller provides none.
+   */
+  readonly correlationId?: string;
   /** Aborted when the invocation is cancelled, times out, or the runtime shuts down. */
   readonly signal: AbortSignal;
   readonly metadata: Metadata;
   readonly log: InvocationLogger;
+  /** The application execution context. Absent outside a runtime, for example when a test calls `invoke` directly. */
+  readonly scope?: ApplicationScope;
 }
 
 /**

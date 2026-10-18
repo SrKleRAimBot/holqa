@@ -2,7 +2,7 @@
 
 > **Status:** Planned. No oRPC or Hono integration exists. All code on this page is illustrative; the API is proposed and may change.
 
-Holqa does not require developers to use one HTTP framework, and it does not define a proprietary RPC protocol. HTTP and RPC are trigger types within the resource graph ([triggers and execution](../concepts/triggers-and-execution.md)), and existing frameworks should be usable as their implementation.
+Holqa does not require developers to use one HTTP framework. Its own procedures use a small, versioned, documented protocol (`holqa.rpc/1`, [runtime reference](../reference/runtime.md#rpc-procedures)), but nothing requires it. HTTP and RPC are trigger types within the resource graph ([triggers and execution](../concepts/triggers-and-execution.md)), and existing frameworks should be usable as their implementation.
 
 ## The common ground: the Fetch API
 
@@ -67,7 +67,7 @@ Open questions (**Proposed**):
 
 ## Native handlers
 
-For teams without an existing framework, Holqa's own route and procedure definitions (illustrated in [triggers and execution](../concepts/triggers-and-execution.md#http)) remain available and give the compiler full contract information.
+For teams without an existing framework, Holqa's own route and procedure definitions (**Implemented**; see the [runtime reference](../reference/runtime.md)) remain available and give the compiler full contract information.
 
 ## Related
 

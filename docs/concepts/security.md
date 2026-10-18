@@ -1,6 +1,6 @@
 # Security
 
-> **Status:** Accepted design, with **Implemented** parts: runtime validation at trust boundaries (`validateInput`), secret handling in manifests, and the analysis process used by `holqa inspect` and `holqa build --manifest` ([untrusted build-time execution](#untrusted-build-time-execution)). These are the security principles that Holqa's SDK, compiler, runtime, providers, and tooling must follow. To report a vulnerability, see [`SECURITY.md`](../../SECURITY.md).
+> **Status:** Accepted design, with **Implemented** parts: runtime validation at trust boundaries (`validateInput`), secret handling in manifests, the runtime's error responses and configuration reporting ([runtime execution](#runtime-execution)), and the analysis process used by `holqa inspect` and `holqa build --manifest` ([untrusted build-time execution](#untrusted-build-time-execution)). These are the security principles that Holqa's SDK, compiler, runtime, providers, and tooling must follow. To report a vulnerability, see [`SECURITY.md`](../../SECURITY.md).
 
 Holqa sits between application code and infrastructure, so its design choices affect what data is trusted, who can change infrastructure, and where secrets can leak. This page records the principles that apply across all packages.
 
@@ -65,6 +65,18 @@ Holqa's position:
 
 The implemented canonical JSON serializer contributes a narrow guarantee: it rejects functions, symbols, class instances, `undefined`, non-finite numbers, and cycles, so executable values cannot be smuggled into a manifest as data.
 
+## Runtime execution
+
+**Implemented** in `@holqa/runtime-bun` and `@holqa/sdk` ([runtime reference](../reference/runtime.md)):
+
+- Every request part (path parameters, query, headers, body, RPC input) is validated before the handler runs. Problems found while reading the request answer `4xx` with per-field issues; the rejected values are not echoed.
+- Error responses carry a code, a caller-safe message and the invocation identifier only. Handler error messages, stack traces and diagnostics of server errors (`HOLQA_HANDLER_FAILED`, `HOLQA_RESPONSE_INVALID`) go to the structured logs, never to callers. Request and response bodies are never logged.
+- Configuration is validated at start; an invalid secret is reported by name only (`HOLQA_CONFIG_INVALID`), without its value or the schema's message.
+- A caller's `x-correlation-id` is adopted only when it is short and free of characters that could forge log lines; `trustCorrelationHeader: false` ignores it.
+- `serve` listens on `127.0.0.1` and limits request bodies to 1 MiB by default. CORS headers are sent only when a policy is configured; credentials cannot be combined with every origin.
+- `loadCompiledApplication` imports and runs the application's modules in the current process with its permissions. It rejects module paths outside the application root, but it is not a sandbox: load only build output you trust.
+- Cancellation is cooperative: a handler that ignores its abort signal keeps running (and keeps its concurrency slot) after its caller received a timeout.
+
 ## Browser-safe clients
 
 Generated clients run in browsers, which are fully untrusted environments:
@@ -76,7 +88,7 @@ Generated clients run in browsers, which are fully untrusted environments:
 
 ## Authentication
 
-Holqa does not provide or require its own identity service. Authentication is expected to be implemented with general-purpose typed middleware and optional integrations ([triggers and execution](triggers-and-execution.md#middleware)).
+Holqa does not provide or require its own identity service. Authentication is implemented with general-purpose typed middleware (**Implemented**; throw `HttpRejectedError(401, ...)` to reject) and optional integrations (**Planned**) ([runtime reference](../reference/runtime.md#middleware)).
 
 ## Related
 

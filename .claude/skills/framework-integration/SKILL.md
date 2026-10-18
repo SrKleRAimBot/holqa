@@ -48,7 +48,7 @@ Holqa must compose with the TypeScript ecosystem rather than replace it. Every i
 
 1. Read [docs/integrations/index.md](../../../docs/integrations/index.md), [docs/concepts/type-safety-and-schemas.md](../../../docs/concepts/type-safety-and-schemas.md), and ADR 0016 (which supersedes ADR 0006).
 2. Write the design as a Proposed section in `docs/integrations/` or a Proposed ADR: the user-facing API (labeled illustrative), the Holqa contract it maps to, unsupported features, and the package's dependencies.
-3. Confirm the Holqa contract it depends on exists. `@holqa/sdk` implements declarations and typed handles but no HTTP routes or execution yet, and `@holqa/client` is Planned; do not create fake versions of missing contracts to unblock an integration.
+3. Confirm the Holqa contract it depends on exists. `@holqa/sdk` implements declarations, typed handles, HTTP routes, RPC procedures and middleware, `@holqa/runtime-bun` executes routes and procedures, and `@holqa/client` is Planned; do not create fake versions of missing contracts to unblock an integration.
 
 ### Scaffolding a package (only when its dependencies are real)
 

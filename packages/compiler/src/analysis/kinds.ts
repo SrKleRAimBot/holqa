@@ -130,6 +130,10 @@ const triggerKindRules: { readonly [Trigger in TriggerKind]: TriggerKindRule<Tri
       method: reader.oneOf(raw.method, "options.method", ["GET", "POST", "PUT", "PATCH", "DELETE"]),
       path: reader.string(raw.path, "options.path", routePathPattern)
     };
+  },
+  "http.procedure": (options, reader) => {
+    const raw = reader.object(options, "options", ["operation"]);
+    return { operation: reader.oneOf(raw.operation, "options.operation", ["query", "mutation"]) };
   }
 };
 
@@ -170,7 +174,8 @@ const triggerSchemaRoles: { readonly [Trigger in TriggerKind]: SchemaRoleSpec } 
   "queue.message": { required: ["message"], optional: [], responses: false },
   "bucket.object-created": { required: ["object"], optional: [], responses: false },
   "schedule.tick": noSchemas,
-  "http.route": { required: [], optional: ["params", "query", "body"], responses: true }
+  "http.route": { required: [], optional: ["params", "query", "body", "headers"], responses: true },
+  "http.procedure": { required: ["output"], optional: ["input"], responses: false }
 };
 
 /**

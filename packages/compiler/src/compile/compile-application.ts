@@ -2,6 +2,7 @@ import type {
   AppDescriptor,
   Diagnostic,
   DiagnosticLocation,
+  HandlerDefinition,
   HandlerDescriptor,
   ResourceDescriptor,
   SchemaAdapter
@@ -30,6 +31,7 @@ import {
   descriptorKey,
   diagnosticCodes,
   getAppDescriptor,
+  httpRouteKeys,
   isJsonValue
 } from "@holqa/core";
 
@@ -40,10 +42,6 @@ import {
   resourceSchemas,
   triggerSchemas
 } from "@/analysis/kinds";
-import {
-  joinRoutePath,
-  routeShape
-} from "@/analysis/routes";
 import { SchemaTable } from "@/analysis/schema-table";
 import { SourceLocator } from "@/analysis/source-locator";
 import {
@@ -360,8 +358,8 @@ async function analyzeHandlers(discovered: readonly DiscoveredHandler[], resourc
       capabilities.add(capability);
     if (trigger.queue !== undefined)
       consumers.set(trigger.queue, [...consumers.get(trigger.queue) ?? [], first!]);
-    if (trigger.route !== undefined)
-      routes.set(trigger.route, [...routes.get(trigger.route) ?? [], { ...first!, route: trigger.route }]);
+    for (const route of trigger.routes ?? [])
+      routes.set(route, [...routes.get(route) ?? [], { ...first!, route }]);
     results.push({
       manifest: { id: descriptor.definition.id, trigger: trigger.manifest, schemas: trigger.schemas },
       entrypoint: { id: descriptor.definition.id, module, export: exports.includes("default") ? "default" : exports[0]!, exports: [...exports] }
@@ -391,10 +389,10 @@ async function analyzeHandlers(discovered: readonly DiscoveredHandler[], resourc
       report(createDiagnostic({
         code: diagnosticCodes.routeConflict,
         severity: "error",
-        message: `The routes ${ids.map(id => `"${id}"`).join(", ")} all match ${route.slice(route.indexOf(" ") + 1)}.`,
+        message: `The routes ${ids.map(id => `"${id}"`).join(", ")} all match ${route}.`,
         location: extra.location,
         hint: "Two routes conflict when they have the same method and the same path once parameter names are ignored. Change the method or path of one of them.",
-        details: { route: route.slice(route.indexOf(" ") + 1), handlers: ids }
+        details: { route, handlers: ids }
       }));
     }
   }
@@ -408,8 +406,8 @@ interface AnalyzedTrigger {
   readonly capabilities: readonly string[];
   /** The consumed queue's id, for the one-consumer check. */
   readonly queue?: string;
-  /** `<api> <METHOD> <shape>`, for the route conflict check. */
-  readonly route?: string;
+  /** `<METHOD> <shape>` for every method and path the handler serves (`httpRouteKeys`), for the route conflict check across every API. */
+  readonly routes?: readonly string[];
 }
 
 /**
@@ -477,10 +475,8 @@ async function analyzeTrigger(descriptor: HandlerDescriptor, resourcesById: Read
       triggerInvalid(`The ${label} consumes queue "${trigger.resource.id}" with a message contract that differs from the queue's.`, "Register the consumer on the queue handle declared in the application, so that both use the same message schema.");
     return { manifest, schemas, capabilities: normalized.capabilities, queue: trigger.resource.id };
   }
-  if (target.resource.kind === "http.api" && manifest.kind === "http.route") {
-    const path = joinRoutePath(target.resource.config.basePath, manifest.options.path);
-    return { manifest, schemas, capabilities: normalized.capabilities, route: `${target.resource.id} ${manifest.options.method} ${routeShape(path)}` };
-  }
+  if (target.resource.kind === "http.api")
+    return { manifest, schemas, capabilities: normalized.capabilities, routes: httpRouteKeys(target.resource.config.basePath, { id: descriptor.definition.id, trigger: manifest } as HandlerDefinition) };
   return { manifest, schemas, capabilities: normalized.capabilities };
 }
 

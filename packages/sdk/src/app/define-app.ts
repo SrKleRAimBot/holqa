@@ -11,7 +11,14 @@ import type {
   AnyConfigEntry,
   EnvRecord
 } from "@/config/config-entry";
+import type {
+  AnyHttpMiddleware,
+  CheckMiddlewareChain,
+  ExtendContext,
+  MiddlewareChainContext
+} from "@/http/middleware";
 import type { ResourceRecord } from "@/resources/handle";
+import type { HttpApiHandle } from "@/resources/http";
 import type {
   CheckResourceId,
   CheckUniqueResourceIds
@@ -27,6 +34,8 @@ import {
   readConfig
 } from "@holqa/core";
 
+import { middlewareList } from "@/http/middleware";
+import { setAppMiddleware } from "@/internal/app-middleware";
 import {
   DeclarationProblems,
   freezeJson,
@@ -55,7 +64,7 @@ export type HandlerDiscoveryOptions = readonly string[] | {
  * @typeParam Resources - Resource handles keyed by local alias.
  * @typeParam Env - Configuration entries keyed by name.
  */
-export interface AppDefinition<Resources extends ResourceRecord, Env extends EnvRecord, Name extends string = string> {
+export interface AppDefinition<Resources extends ResourceRecord, Env extends EnvRecord, Name extends string = string, Middleware extends readonly AnyHttpMiddleware[] = []> {
   /** The application's name, in resource identifier grammar (for example `commerce`). */
   readonly name: Name;
   /** A short human-readable description. */
@@ -66,6 +75,12 @@ export interface AppDefinition<Resources extends ResourceRecord, Env extends Env
   readonly resources: Resources;
   /** Secrets and variables keyed by name. */
   readonly env?: Env;
+  /**
+   * HTTP middleware for every route and procedure of every API in the
+   * application. It runs before API and route middleware, and the context it
+   * adds is visible to routes registered through `app.resources`.
+   */
+  readonly middleware?: Middleware & CheckMiddlewareChain<{}, Middleware>;
 }
 
 /**
@@ -84,13 +99,30 @@ export type ConfigValues<Env> = {
  * @typeParam Resources - Resource handles keyed by local alias, exactly as declared.
  * @typeParam Env - Configuration entries keyed by name.
  */
-export interface App<Resources extends ResourceRecord, Env extends EnvRecord> extends Described<AppDescriptor> {
+export interface App<Resources extends ResourceRecord, Env extends EnvRecord, Context extends object = {}> extends Described<AppDescriptor> {
   readonly name: string;
-  /** The handles passed to `defineApp`, unchanged, so their types flow to importing modules. */
-  readonly resources: Resources;
+  /**
+   * The handles passed to `defineApp`, unchanged at run time, so their types
+   * flow to importing modules. HTTP API handles additionally carry the
+   * context of the application's middleware.
+   */
+  readonly resources: AppResources<Resources, Context>;
   /** Configuration values. Each read goes to the runtime binding; reading one outside a runtime fails with `HOLQA_RUNTIME_NOT_BOUND`. */
   readonly env: ConfigValues<Env>;
 }
+
+/**
+ * The resource handles of an application as importing modules see them: HTTP
+ * API handles carry the application middleware's context in front of their
+ * own; every other handle is unchanged. Without application middleware the
+ * record is exactly the declared one.
+ *
+ * @typeParam Resources - Resource handles keyed by local alias.
+ * @typeParam Context - The context the application's middleware provides.
+ */
+export type AppResources<Resources extends ResourceRecord, Context extends object> = [keyof Context] extends [never]
+  ? Resources
+  : { readonly [Alias in keyof Resources]: Resources[Alias] extends HttpApiHandle<infer Id, infer ApiContext> ? HttpApiHandle<Id, ExtendContext<Context, ApiContext>> : Resources[Alias] };
 
 /**
  * Defines an application from resource handles and configuration entries.
@@ -109,8 +141,9 @@ export interface App<Resources extends ResourceRecord, Env extends EnvRecord> ex
 export function defineApp<
   const Resources extends ResourceRecord,
   const Env extends EnvRecord = {},
-  const Name extends string = string
->(definition: AppDefinition<Resources, Env, Name> & CheckUniqueResourceIds<Resources> & CheckResourceId<Name>): App<Resources, Env> {
+  const Name extends string = string,
+  const Middleware extends readonly AnyHttpMiddleware[] = []
+>(definition: AppDefinition<Resources, Env, Name, Middleware> & CheckUniqueResourceIds<Resources> & CheckResourceId<Name>): App<Resources, Env, MiddlewareChainContext<{}, Middleware>> {
   const raw = requireOptions(definition, "defineApp");
   const problems = new DeclarationProblems(`application "${String(raw.name)}"`);
   const nameCandidate = problems.identifier(raw.name, "name");
@@ -119,6 +152,7 @@ export function defineApp<
   const handlers = handlerDiscovery(raw.handlers, problems);
   const resources = resourceEntries(raw.resources, problems);
   const config = configEntries(raw.env, problems);
+  const middleware = middlewareList(raw.middleware, problems);
   const name = problems.valid(nameCandidate);
 
   const descriptor: AppDescriptor = Object.freeze({
@@ -133,6 +167,7 @@ export function defineApp<
   });
   for (const [handle] of resources)
     claim(handle, descriptor);
+  setAppMiddleware(descriptor, middleware);
 
   const env = {};
   for (const entry of config)
@@ -141,7 +176,9 @@ export function defineApp<
   return Object.freeze({
     [descriptorKey]: descriptor,
     name: definition.name,
-    resources: definition.resources,
+    // Only the types change: every route and procedure of these APIs runs the
+    // application middleware recorded by `setAppMiddleware` above.
+    resources: definition.resources as AppResources<Resources, MiddlewareChainContext<{}, Middleware>>,
     env: Object.freeze(env) as ConfigValues<Env>
   });
 }

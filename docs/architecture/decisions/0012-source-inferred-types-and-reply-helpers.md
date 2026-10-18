@@ -4,7 +4,7 @@
 - **Date:** 2026-10-17
 - **Deciders:** Holqa maintainers
 
-> **Implementation status:** Source inference (decisions 1, 2, 4 and 6) is implemented in `@holqa/sdk` for queues, buckets, schedules and configuration. HTTP routes and the `reply` helper (decision 3) are not implemented. Originally validated by the disposable M0 prototype in [`experiments/sdk`](../../../experiments/sdk/README.md).
+> **Implementation status:** Source inference (decisions 1, 2, 4 and 6) is implemented in `@holqa/sdk` for queues, buckets, schedules and configuration. HTTP routes and the `reply` helper (decision 3) are implemented in `@holqa/sdk` ([ADR 0023](0023-common-invocation-engine-and-http-rpc-execution.md), [runtime reference](../../reference/runtime.md#http-routes)). Originally validated by the disposable M0 prototype in [`experiments/sdk`](../../../experiments/sdk/README.md).
 
 ## Context
 

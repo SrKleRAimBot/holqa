@@ -16,7 +16,7 @@
     "typecheck": "turbo run typecheck typecheck:repo",
     "typecheck:repo": "tsc -p tsconfig.json --noEmit",
     "lint": "turbo run lint lint:repo",
-    "lint:repo": "eslint . --ignore-pattern \"packages/**\" --ignore-pattern \"experiments/**\" --ignore-pattern \"examples/package-smoke/**\" --ignore-pattern \"examples/commerce/**\" --ignore-pattern \"examples/schema-evolution/**\" --ignore-pattern \"examples/manifest/**\" --cache --cache-location node_modules/.cache/eslint-repo",
+    "lint:repo": "eslint . --ignore-pattern \"packages/**\" --ignore-pattern \"experiments/**\" --ignore-pattern \"examples/package-smoke/**\" --ignore-pattern \"examples/commerce/**\" --ignore-pattern \"examples/schema-evolution/**\" --ignore-pattern \"examples/manifest/**\" --ignore-pattern \"examples/http-api/**\" --cache --cache-location node_modules/.cache/eslint-repo",
     "lint:fix": "eslint . --fix",
     "test": "turbo run test",
     "test:watch": "turbo run test:watch",

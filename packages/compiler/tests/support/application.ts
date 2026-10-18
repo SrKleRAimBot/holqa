@@ -269,6 +269,26 @@ export function routeHandler(handlerId: string, apiId: string, method: HttpMetho
 }
 
 /**
+ * Builds an RPC procedure handler.
+ *
+ * @param handlerId - The procedure identifier.
+ * @param apiId - The API serving the procedure.
+ * @param operation - Whether the procedure is a query or a mutation.
+ * @param output - The output schema.
+ * @param input - The input schema, if any.
+ * @returns A value carrying a handler descriptor.
+ */
+export function procedureHandler(handlerId: string, apiId: string, operation: "query" | "mutation", output: StandardSchemaV1, input?: StandardSchemaV1): Described<HandlerDescriptor> {
+  return described({
+    protocol: 1,
+    type: "handler",
+    definition: { id: id(handlerId), trigger: { kind: "http.procedure", resource: { kind: "http.api", id: id(apiId) }, options: { operation } } },
+    schemas: input === undefined ? { output } : { input, output },
+    invoke
+  });
+}
+
+/**
  * Builds an evaluated module.
  *
  * @param path - The root-relative module path.

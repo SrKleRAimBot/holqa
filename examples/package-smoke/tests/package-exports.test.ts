@@ -22,7 +22,12 @@ import {
   parseResourceId
 } from "@holqa/core";
 import {
+  createRuntime,
+  silentSink
+} from "@holqa/runtime-bun";
+import {
   defineApp,
+  http,
   queue
 } from "@holqa/sdk";
 import { assertType } from "@holqa/testing";
@@ -76,6 +81,21 @@ describe("@holqa/sdk public exports", () => {
     expectTypeOf(app.resources.counts.id).toEqualTypeOf<"counts">();
     expectTypeOf<QueueMessageInput<typeof app.resources.counts>>().toEqualTypeOf<number>();
     expect(getAppDescriptor(app)?.resources.map(resource => resource.kind)).toEqual(["queue"]);
+  });
+});
+
+describe("@holqa/runtime-bun public exports", () => {
+  it("serves an SDK route and procedure through the built runtime", async () => {
+    const api = http.api({ id: "smoke-api", basePath: "/api" });
+    const app = defineApp({ name: "runtime-smoke", resources: { api } });
+    const route = app.resources.api.route({ id: "hello", method: "GET", path: "/hello/:name", responses: { 200: z.object({ hello: z.string() }) }, handler: ({ params, reply }) => reply(200, { hello: params.name }) });
+    const procedure = app.resources.api.procedure({ id: "ping", operation: "query", output: z.literal("pong"), handler: () => "pong" as const });
+    const runtime = createRuntime({ app, handlers: [route, procedure], env: {}, log: silentSink });
+    await runtime.start();
+    expect(await (await runtime.fetch(new Request("http://localhost/api/hello/ada"))).json()).toEqual({ hello: "ada" });
+    expect(await (await runtime.fetch(new Request("http://localhost/api/rpc/ping"))).json()).toEqual({ format: "holqa.rpc/1", ok: true, output: "pong" });
+    expect((await runtime.fetch(new Request("http://localhost/api/hello"))).status).toBe(404);
+    await runtime.stop();
   });
 });
 

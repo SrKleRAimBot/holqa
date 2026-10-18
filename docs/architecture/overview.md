@@ -1,6 +1,6 @@
 # Architecture overview
 
-> **Status:** Accepted design. The package boundaries and their enforcement are **Implemented**; `@holqa/core` (contracts and the descriptor protocol), `@holqa/sdk` (the application and resource model), `@holqa/testing` (type assertions), `@holqa/compiler` (canonical JSON, application compilation, graph validation and manifest version 1) and `@holqa/cli` (help, version, `inspect` and `build --manifest`) contain implemented parts. All other layers are planned.
+> **Status:** Accepted design. The package boundaries and their enforcement are **Implemented**; `@holqa/core` (contracts and the descriptor protocol), `@holqa/sdk` (the application and resource model), `@holqa/testing` (type assertions), `@holqa/compiler` (canonical JSON, application compilation, graph validation and manifest version 1), `@holqa/runtime-bun` (invocation dispatcher, lifecycle, HTTP routes and RPC procedures) and `@holqa/cli` (help, version, `inspect` and `build --manifest`) contain implemented parts. All other layers are planned.
 
 This document describes Holqa's layers, how packages map to them, and how data flows from source code to a running application. For the reasoning behind individual decisions, see the [ADRs](decisions/README.md).
 
@@ -11,10 +11,10 @@ Holqa is organized into layers whose dependencies point **inward**, toward frame
 | Layer | Concern | Packages | Runtime-neutral? |
 | --- | --- | --- | --- |
 | **Contracts** | Resource model, diagnostics, identity, schema representation, shared types. | `@holqa/core` | Yes. No Bun, Node, or other Holqa imports. |
-| **Authoring** | Public API for declaring resources and handlers; typed handles. | `@holqa/sdk` (implemented: application and resource model) | Yes |
+| **Authoring** | Public API for declaring resources and handlers; typed handles. | `@holqa/sdk` (implemented: application and resource model, HTTP routes, RPC procedures, middleware) | Yes |
 | **Client** | Browser-safe runtime for generated clients. | `@holqa/client` (planned) | Yes |
 | **Compilation** | Analysis, resource graph, manifest IR, diagnostics, client generation. | `@holqa/compiler` | Yes, in its own source (no Bun or Node imports). |
-| **Execution** | Running handlers on Bun; invocation adapters. | `@holqa/runtime-bun` (planned) | No (Bun) |
+| **Execution** | Running handlers on Bun; invocation dispatcher and transports. | `@holqa/runtime-bun` (implemented: dispatcher, lifecycle, HTTP and RPC; queue, storage and schedule transports planned) | No (Bun) |
 | **Local environment** | Local runtime drivers and emulators. | `@holqa/local` (planned) | No |
 | **Testing** | Deterministic test utilities and fixtures. | `@holqa/testing` (type assertions implemented) | No |
 | **Tooling** | Developer CLI composing compiler, runtime, and local environment. | `@holqa/cli` | No (Bun) |
@@ -30,7 +30,7 @@ flowchart TB
     compiler["@holqa/compiler<br/>compilation"]
   end
   subgraph Execution["Execution and tooling"]
-    runtime["@holqa/runtime-bun<br/>(planned)"]
+    runtime["@holqa/runtime-bun<br/>(HTTP and RPC)"]
     local["@holqa/local<br/>(planned)"]
     testing["@holqa/testing<br/>(partial)"]
     cli["@holqa/cli"]
@@ -93,10 +93,10 @@ flowchart LR
   bundle --> providers
 ```
 
-1. Developers write `infra.ts` and handler modules using `@holqa/sdk` (**Implemented** for queues, buckets and schedules).
+1. Developers write `infra.ts` and handler modules using `@holqa/sdk` (**Implemented** for queues, buckets, schedules, HTTP routes and RPC procedures).
 2. The compiler analyzes them, builds the resource graph, normalizes schemas, validates the graph, and emits a deterministic manifest and diagnostics (**Implemented**: `holqa inspect` and `holqa build --manifest`, see the [compiler specification](../reference/compiler-specification.md)), and generated clients (**Planned**).
 3. Bundling produces executable artifacts for Bun as a separate step ([ADR 0007](decisions/0007-separate-compiler-and-runtime.md)).
-4. The local environment or a production binding reads the manifest, validates capabilities, and runs the artifacts.
+4. The local environment or a production binding reads the manifest, validates capabilities, and runs the artifacts. **Implemented** today without bundling: `@holqa/runtime-bun` loads `holqa build --manifest` output with `loadCompiledApplication` and serves HTTP routes and RPC procedures ([runtime reference](../reference/runtime.md)).
 
 See [compiler](compiler.md) for the pipeline in detail.
 
@@ -121,6 +121,7 @@ See [compiler](compiler.md) for the pipeline in detail.
 | Runtime generations and reload | [0015](decisions/0015-runtime-generations-and-reload.md) |
 | Schema adapters and conversion fidelity | [0016](decisions/0016-schema-adapters-and-conversion-fidelity.md) |
 | Package layers after M0 | [0017](decisions/0017-package-layers-after-m0.md) |
+| A common invocation engine, with HTTP and RPC as its first transports | [0023](decisions/0023-common-invocation-engine-and-http-rpc-execution.md) |
 
 ## Build and packaging
 

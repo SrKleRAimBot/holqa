@@ -1,6 +1,6 @@
 # Diagnostic codes
 
-> **Status:** Thirty-five codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). Other codes on this page are planned examples and are not emitted by any code.
+> **Status:** Fifty codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). Other codes on this page are planned examples and are not emitted by any code.
 
 Every problem Holqa reports is a structured `Diagnostic` with a stable code. Tools, CI scripts, and agents should match on the code, never on the message text, which may be reworded.
 
@@ -72,12 +72,31 @@ JSON form (as emitted by `holqa --json`):
 | `HOLQA_RESOURCE_NOT_FOUND` | `resourceNotFound` | `compileApplication` (`@holqa/compiler`) | A handler's trigger references a resource the application does not declare. The hint lists the declared resources of that kind. `details`: `handler`, `resource`, `kind`. |
 | `HOLQA_TRIGGER_INVALID` | `triggerInvalid` | `compileApplication` (`@holqa/compiler`) | A trigger targets a resource of another kind, has malformed options or schema roles, or a queue consumer's message contract differs from its queue's. `details`: `handler`, `trigger`. |
 | `HOLQA_QUEUE_CONSUMER_DUPLICATE` | `queueConsumerDuplicate` | `compileApplication` (`@holqa/compiler`) | A queue has more than one consumer. `details`: `queue`, `handlers`. |
-| `HOLQA_ROUTE_CONFLICT` | `routeConflict` | `compileApplication` (`@holqa/compiler`) | Two HTTP routes of one API have the same method and path shape (parameter names ignored). `details`: `route`, `handlers`. |
+| `HOLQA_ROUTE_CONFLICT` | `routeConflict` | `compileApplication` (`@holqa/compiler`), `createRuntime` (`@holqa/runtime-bun`) | Two HTTP routes or RPC procedures of one application serve the same method and path shape (parameter names ignored), whichever APIs they belong to. The compiler and runtime apply the same rule (`httpRouteKeys`). A procedure serves `POST <basePath>/rpc/<id>`, and queries also `GET`. `details`: `route`, `handlers`. |
 | `HOLQA_MANIFEST_INVALID` | `manifestInvalid` | `validateManifest`, `validateEntrypoints` (`@holqa/compiler`) | A manifest or entry point map does not match its JSON Schema or its cross-references. One per problem. `details`: `path`. |
 | `HOLQA_MANIFEST_VERSION_UNSUPPORTED` | `manifestVersionUnsupported` | `validateManifest` (`@holqa/compiler`) | The document's `manifestVersion` is not one the reader understands. `details`: `found`, `supported`. |
 | `HOLQA_ANALYSIS_FAILED` | `analysisFailed` | `holqa inspect`, `holqa build` (`@holqa/cli`) | The analysis process exited without a report, exceeded its timeout, or sent a malformed report. `details`: `output` (the last 4000 characters the process printed), and `exitCode` or `timeoutMs`. |
 | `HOLQA_CLI_ARGUMENT_INVALID` | `cliArgumentInvalid` | `runCli` (`@holqa/cli`) | An unknown, repeated or value-less option, or an unexpected argument, for `inspect` or `build`. Exit code `2`. |
 | `HOLQA_BUILD_OUTPUT_FAILED` | `buildOutputFailed` | `holqa build` (`@holqa/cli`) | The build output could not be written. |
+| `HOLQA_HTTP_ROUTE_NOT_FOUND` | `httpRouteNotFound` | `@holqa/runtime-bun` | No route or procedure serves the request path. HTTP `404`. |
+| `HOLQA_HTTP_METHOD_NOT_ALLOWED` | `httpMethodNotAllowed` | `@holqa/runtime-bun` | A route or procedure serves the path, but not the method. HTTP `405` with an `allow` header. |
+| `HOLQA_HTTP_MEDIA_TYPE_UNSUPPORTED` | `httpMediaTypeUnsupported` | Route and procedure `invoke` (`@holqa/sdk`) | A non-empty request body is not declared as JSON (`application/json` or `application/*+json`). HTTP `415`. |
+| `HOLQA_HTTP_REJECTED` | `httpRejected` | `HttpRejectedError` (`@holqa/core`) | Middleware or a handler rejected the request with an explicit status and a caller-safe message. `details`: `status`. |
+| `HOLQA_RESPONSE_INVALID` | `responseInvalid` | Route and procedure `invoke` (`@holqa/sdk`), `@holqa/runtime-bun` | A handler or middleware produced a response its contract does not declare: an undeclared status, a body its schema rejects, a body on `204`, or a value that is not a response. HTTP `500` with a generic message; `details` (logged only): `status`, `causes`. |
+| `HOLQA_HANDLER_FAILED` | `handlerFailed` | `@holqa/runtime-bun` | A handler threw an error that is not an `HttpRejectedError`. HTTP `500`; the message is generic and the original error is logged with the invocation identifier. |
+| `HOLQA_HANDLER_NOT_FOUND` | `handlerNotFound` | `Runtime.invoke` (`@holqa/runtime-bun`) | An invocation names a handler the runtime has not registered. |
+| `HOLQA_INVOCATION_TIMEOUT` | `invocationTimeout` | `@holqa/runtime-bun` | An invocation exceeded its time limit (including time waiting for a slot); its signal was aborted. HTTP `504`. |
+| `HOLQA_INVOCATION_CANCELLED` | `invocationCancelled` | `@holqa/runtime-bun` | The caller aborted the invocation (for example an HTTP client disconnected), or the runtime stopped after its grace period. HTTP `503`. |
+| `HOLQA_RUNTIME_OVERLOADED` | `runtimeOverloaded` | `@holqa/runtime-bun` | Every concurrency slot is held and the wait queue is full. HTTP `503` with `retry-after: 1`. |
+| `HOLQA_RUNTIME_NOT_RUNNING` | `runtimeNotRunning` | `@holqa/runtime-bun` | The runtime has not started, or is stopping or stopped. HTTP `503`. Also thrown by `scope.use` while stopping. |
+| `HOLQA_RUNTIME_START_FAILED` | `runtimeStartFailed` | `createRuntime`, `Runtime.start` (`@holqa/runtime-bun`) | The runtime cannot start: invalid options (limits, CORS), a handler whose trigger it cannot deliver (without `manualTriggers: true`), or a failed start, followed by its causes (for example `HOLQA_CONFIG_INVALID`, `HOLQA_RUNTIME_ALREADY_BOUND`, `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`). |
+| `HOLQA_CONFIG_INVALID` | `configInvalid` | `createEnvironmentBinding` (`@holqa/runtime-bun`) | A configuration value is missing or fails its schema. Secrets are reported by name only; neither the value nor the schema's message appears. `details`: `name`, `kind`, `missing`. |
+| `HOLQA_RPC_VERSION_UNSUPPORTED` | `rpcVersionUnsupported` | Procedure `invoke` (`@holqa/sdk`) | The `holqa-rpc-version` request header names a protocol version other than `1`. HTTP `400`. |
+| `HOLQA_BUILD_STALE` | `buildStale` | `loadCompiledApplication` (`@holqa/runtime-bun`) | Build output no longer matches the application: the entry point map belongs to another manifest, or the application name, resources (kind, identifier, settings, requirements), configuration entries, handler exports or triggers differ from the manifest. Schema changes and handler modules added after the build are not detected. Rebuild with `holqa build --manifest`. |
+
+`@holqa/runtime-bun` also reports `HOLQA_INPUT_INVALID` (`400`) for a direct invocation with an invalid `timeoutMs` or with metadata that does not fit the handler's trigger kind, and for a request path with invalid percent-encoding.
+
+Over HTTP, `HOLQA_INPUT_INVALID` (`400`), `HOLQA_PAYLOAD_MALFORMED` (`400`) and `HOLQA_HTTP_MEDIA_TYPE_UNSUPPORTED` (`415`) are caller errors only when they come from reading the request; the same codes raised later by handler code (for example an invalid queue `send`) are server errors and answer `HOLQA_HANDLER_FAILED`. See the [runtime reference](runtime.md#error-responses).
 
 `HOLQA_INPUT_INVALID` carries `details: { subject, issues }`, where each issue has `path`, `pointer`, `segments`, `message` and optional scalar library `details` (for example Zod's `code` and `minimum`). See [schema contracts](schema-contracts.md).
 
@@ -103,11 +122,11 @@ Codes follow `HOLQA_<AREA>_<PROBLEM>`:
 
 ## Planned codes (not implemented)
 
-The following are **examples of planned codes**. They are not in the registry and are not emitted by any code. Names may change before they are added; once added, they become stable. The previously planned `HOLQA_ROUTE_AMBIGUOUS` was implemented as `HOLQA_ROUTE_CONFLICT`; RPC procedure conflicts are planned with RPC procedures.
+The following are **examples of planned codes**. They are not in the registry and are not emitted by any code. Names may change before they are added; once added, they become stable. The previously planned `HOLQA_ROUTE_AMBIGUOUS` was implemented as `HOLQA_ROUTE_CONFLICT`, which also covers RPC procedures; the planned `HOLQA_CONFIG_INVALID` is now implemented.
 
 | Planned code | Intended meaning | Expected emitter |
 | --- | --- | --- |
-| `HOLQA_CONFIG_INVALID` | A secret or variable fails validation at startup. | Runtime |
+| `HOLQA_RELOAD_FAILED` | A development reload could not load the next generation; the previous one keeps serving. | `holqa dev` (planned) |
 
 ## Related
 

@@ -30,6 +30,7 @@ export {
   HolqaError,
   isHolqaError
 } from "@/errors/holqa-error";
+export type { ApplicationScope, ScopedDefinition } from "@/handlers/application-scope";
 export type {
   HandlerDefinition,
   HandlerDefinitionOf,
@@ -48,6 +49,9 @@ export {
 } from "@/handlers/triggers";
 export type {
   HttpMethod,
+  HttpProcedureOperation,
+  HttpProcedureTriggerOptions,
+  HttpProcedureTriggerSchemas,
   HttpRouteTriggerOptions,
   HttpRouteTriggerSchemas,
   ObjectCreatedTriggerOptions,
@@ -60,6 +64,21 @@ export type {
   TriggerKindMap,
   TriggerKindSpec
 } from "@/handlers/triggers";
+export { HttpRejectedError, isHttpRejectedError } from "@/http/http-error";
+export type {
+  HttpErrorBody,
+  HttpErrorDetail,
+  HttpRejectedErrorInit
+} from "@/http/http-error";
+export { isHttpInvocationInput, isResponseLike } from "@/http/http-invocation";
+export type { HttpInvocationInput } from "@/http/http-invocation";
+export {
+  httpEndpoint,
+  httpRouteKeys,
+  joinRoutePath,
+  routeShape
+} from "@/http/routes";
+export type { HttpEndpoint } from "@/http/routes";
 export {
   isResourceId,
   maxResourceIdLength,
@@ -126,6 +145,20 @@ export type {
   Ok,
   Result
 } from "@/result";
+export {
+  rpcInputQueryParameter,
+  rpcMountSegment,
+  rpcProcedurePath,
+  rpcProtocolFormat,
+  rpcProtocolVersion,
+  rpcVersionHeader
+} from "@/rpc/rpc-protocol";
+export type {
+  RpcFailureEnvelope,
+  RpcRequestEnvelope,
+  RpcResponseEnvelope,
+  RpcSuccessEnvelope
+} from "@/rpc/rpc-protocol";
 export { schemaSides } from "@/schema/schema-adapter";
 export type {
   RuntimeOnlyConstraint,

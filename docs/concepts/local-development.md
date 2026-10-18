@@ -1,6 +1,6 @@
 # Local development
 
-> **Status:** Planned — not implemented. `holqa dev` and the other local workflow commands are proposed; today the CLI reports `HOLQA_CLI_NOT_IMPLEMENTED` for them. Only `holqa inspect` and `holqa build --manifest` are **Implemented**. See Phase 3 of the [roadmap](../roadmap.md).
+> **Status:** Planned — not implemented. `holqa dev` and the other local workflow commands are proposed; today the CLI reports `HOLQA_CLI_NOT_IMPLEMENTED` for them. Only `holqa inspect` and `holqa build --manifest` are **Implemented**. The Bun runtime that serves HTTP routes and RPC procedures (`@holqa/runtime-bun`) is **Implemented** and can serve a compiled application locally ([runtime reference](../reference/runtime.md)); emulators, `holqa dev` and reloads are not. See Phase 3 of the [roadmap](../roadmap.md).
 
 Local development is central to Holqa. A developer should be able to clone an application and run it, including its queues, storage, and schedules, without cloud credentials. This page describes the planned local environment and the constraints it must respect.
 
@@ -9,7 +9,7 @@ Local development is central to Holqa. A developer should be able to clone an ap
 | Capability | Description |
 | --- | --- |
 | Bun-based function execution | Handlers run in Bun, the same runtime as production ([ADR 0002](../architecture/decisions/0002-bun-as-primary-runtime.md)). |
-| HTTP and RPC routing | A local server for declared APIs and RPC procedures. |
+| HTTP and RPC routing | A local server for declared APIs and RPC procedures. **Implemented** by `@holqa/runtime-bun` (`serve`). |
 | Local queue emulation | In-process or lightweight queue with retries, backoff, and dead-lettering. |
 | Object storage emulation | Filesystem-backed or otherwise lightweight storage that emits object-created and object-deleted events. |
 | Local scheduler | Fires schedule handlers according to cron, timezone, and overlap policy. |

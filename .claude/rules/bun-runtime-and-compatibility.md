@@ -2,7 +2,7 @@
 
 - Bun (version pinned in `.bun-version`, currently 1.3.13) is Holqa's runtime for the CLI and maintainer scripts and the repository's test runner. pnpm is the only package manager.
 - Never run `bun install`, `bun add`, `bun remove`, `bun update`, or `bun pm`. Never commit `bun.lock`, `bun.lockb`, `package-lock.json`, or `yarn.lock`. Use `pnpm add` / `pnpm install`.
-- Use Bun APIs (`Bun.*`, `bun:*`) only in packages allowed to depend on a runtime (`cli`, future `runtime-bun`, `local`, `testing`), in `scripts/`, and in tests. Keep `core`, `compiler`, `sdk`, and `client` source runtime-neutral (no `bun`, `bun:*`, `node:*` imports); ESLint enforces this.
+- Use Bun APIs (`Bun.*`, `bun:*`) only in packages allowed to depend on a runtime (`cli`, `runtime-bun`, future `local`, `testing`), in `scripts/`, and in tests. Keep `core`, `compiler`, `sdk`, and `client` source runtime-neutral (no `bun`, `bun:*`, `node:*` imports); ESLint enforces this.
 - Library code in neutral packages must run on any standards-compliant JavaScript runtime: use Web-standard APIs (`fetch`, `Request`, `Response`, `URL`, `TextEncoder`, `crypto.subtle`) rather than runtime-specific ones.
 - Use the global `process` and `Buffer`; never import them from `node:process` / `node:buffer` (`node/prefer-global` rule).
 - Write tests with `bun:test`. Run them through `pnpm test` or a package's `test` script, not with ad-hoc runners.

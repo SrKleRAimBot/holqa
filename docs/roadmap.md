@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Status:** Phase 0, phase 1 and phase 2 are in progress. Later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
+> **Status:** Phase 0 to phase 3 are in progress. Later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
 
 This roadmap distinguishes the current bootstrap state from future implementation work. Status terms follow the [status model](architecture/status-model.md). Each phase lists its goals and the exit criteria that must hold before the phase is considered complete. Later phases may start before earlier ones finish when the dependency allows it.
 
@@ -12,7 +12,7 @@ This roadmap distinguishes the current bootstrap state from future implementatio
 | M0 | Foundation and architecture validation | Complete (see [M0](milestones/m0/index.md)) |
 | 1 | Core resource model and SDK | In progress |
 | 2 | Compiler | In progress (manifest, discovery, validation, `inspect` and `build --manifest` **Implemented**) |
-| 3 | Bun runtime and local development | Planned |
+| 3 | Bun runtime and local development | In progress (dispatcher, lifecycle, HTTP routes and RPC procedures **Implemented**) |
 | 4 | Clients and integrations | Planned |
 | 5 | Providers and bindings | Planned |
 | Future | Extended triggers and tooling | Planned |
@@ -73,9 +73,10 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | Item | Status |
 | --- | --- |
 | Logical resource model in `@holqa/core`: descriptor protocol, typed resource and trigger kind registries, capability requirements, handler metadata separated from `invoke`, runtime binding contract ([resource model](architecture/resource-model.md), ADRs 0018 to 0020) | **Implemented** |
-| `defineApp`, `defineResources`, `composeResources`, `queue`, `bucket`, `schedule`, `http.api` (declaration only), `secret`, `variable` as pure declarations with declaration-time validation | **Implemented** |
+| `defineApp`, `defineResources`, `composeResources`, `queue`, `bucket`, `schedule`, `http.api`, `secret`, `variable` as pure declarations with declaration-time validation | **Implemented** |
 | Typed handles inferred from declarations, across modules, with no generated code | **Implemented** |
 | Handler registration for queues, buckets and schedules | **Implemented** |
+| HTTP routes with `reply`, RPC procedures, typed middleware and `scoped` values ([runtime reference](reference/runtime.md)) | **Implemented** |
 | Composition of resource registries from multiple files ([composing applications](concepts/composing-applications.md)) | **Implemented** |
 | Type-level tests, including negative tests, for every implemented resource kind; `@holqa/testing` type assertions | **Implemented** |
 | Schema system: structured validation errors, JSON wire payloads validated after encoding, versioned message envelopes, the `SchemaAdapter` contract, normalization into canonical contracts, fingerprints and a compatibility checker ([schema contracts](reference/schema-contracts.md), [ADR 0021](architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md)) | **Implemented** |
@@ -83,7 +84,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 
 ### Remaining goals
 
-- Implement the remaining factories and registrations: HTTP routes with `reply` and `staticSite`.
+- Implement the remaining factories: `staticSite`.
 - Extend the `ResourceId` grammar decision ([ADR 0004](architecture/decisions/0004-stable-logical-resource-identities.md)) and finalize it before 1.0.
 
 ### Exit criteria
@@ -127,9 +128,18 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 
 **Goal:** Run a Holqa application locally on Bun without cloud credentials. See [local development](concepts/local-development.md) and [triggers and execution](concepts/triggers-and-execution.md).
 
+### Done
+
+| Item | Status |
+| --- | --- |
+| `@holqa/runtime-bun`: one invocation dispatcher (identifiers, time limits, cancellation, bounded concurrency, error normalization, structured logs) and the application lifecycle (start, graceful stop, application-scoped values) ([runtime reference](reference/runtime.md), [ADR 0023](architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md)) | **Implemented** |
+| HTTP routing on the Fetch API, request validation, typed responses, CORS and streaming; RPC procedures (`holqa.rpc/1`) on the same HTTP runtime | **Implemented** |
+| Typed middleware at application, API and route scope | **Implemented** |
+| Loading `holqa build --manifest` output and serving it with `Bun.serve`, verified by [`examples/http-api`](../examples/http-api/README.md) | **Implemented** |
+
 ### Goals
 
-- `@holqa/runtime-bun`: HTTP routing on the Fetch API, RPC as an HTTP specialization, handler invocation with concurrency limits.
+- `@holqa/runtime-bun`: queue, storage and schedule transports on the dispatcher; worker or process isolation.
 - `@holqa/local`: local queue emulation, filesystem-backed object storage, a local scheduler, event inspection.
 - `holqa dev` with fast backend reloads and structured logs.
 - `holqa invoke`, `holqa queue send`, `holqa storage put`, `holqa cron run` for manual triggering.
@@ -139,7 +149,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 
 - An example application runs end to end locally with HTTP, a queue consumer, and a schedule.
 - Local emulators document their delivery and concurrency semantics and do not promise stronger guarantees than production drivers are expected to offer.
-- Runtime validation runs at every trust boundary (incoming HTTP, queue messages, storage events).
+- Runtime validation runs at every trust boundary (incoming HTTP, queue messages, storage events). **Met** for incoming HTTP and RPC.
 
 ## Phase 4: Clients and integrations
 

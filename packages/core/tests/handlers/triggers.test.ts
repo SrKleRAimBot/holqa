@@ -23,8 +23,9 @@ import {
 
 describe("trigger kind registry", () => {
   it("lists every trigger kind and the resource kind it belongs to", () => {
-    expect(triggerKinds).toEqual(["queue.message", "bucket.object-created", "schedule.tick", "http.route"]);
-    expect(triggerKinds.map(resourceKindOfTrigger)).toEqual(["queue", "bucket", "schedule", "http.api"]);
+    expect(triggerKinds).toEqual(["queue.message", "bucket.object-created", "schedule.tick", "http.route", "http.procedure"]);
+    expect(triggerKinds.map(resourceKindOfTrigger)).toEqual(["queue", "bucket", "schedule", "http.api", "http.api"]);
+    expectTypeOf(resourceKindOfTrigger("http.procedure")).toEqualTypeOf<"http.api">();
     expectTypeOf(resourceKindOfTrigger("queue.message")).toEqualTypeOf<"queue">();
   });
 
@@ -44,6 +45,8 @@ describe("trigger kind registry", () => {
     const neverCalled = (definition: HandlerDefinition): void => {
       if (definition.trigger.kind === "http.route")
         expectTypeOf(definition.trigger.options.method).toEqualTypeOf<"GET" | "POST" | "PUT" | "PATCH" | "DELETE">();
+      if (definition.trigger.kind === "http.procedure")
+        expectTypeOf(definition.trigger.options.operation).toEqualTypeOf<"query" | "mutation">();
       if (definition.trigger.kind === "queue.message") {
         expectTypeOf(definition.trigger.resource.kind).toEqualTypeOf<"queue">();
         // @ts-expect-error -- queue triggers have no HTTP method.

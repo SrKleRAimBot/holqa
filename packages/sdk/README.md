@@ -2,8 +2,9 @@
 
 Declare a Holqa application's resources, configuration and handlers in TypeScript, with types inferred from source.
 
-> **Status:** Implemented (application and resource model), private and unpublished. The API may change before the first
-> release. HTTP routes, RPC procedures and `staticSite` are proposed; nothing executes handlers yet.
+> **Status:** Implemented (application and resource model, HTTP routes, RPC procedures, middleware), private and
+> unpublished. The API may change before the first release. `staticSite` is proposed. `@holqa/runtime-bun` executes
+> routes and procedures; queue, storage and schedule delivery are planned.
 
 Handler contexts use the standard `AbortSignal` type, so consumers need a `lib` or `types` setting that declares it
 (DOM, `@types/node` or `@types/bun`).
@@ -20,6 +21,10 @@ or provider code. See [package boundaries](../../docs/architecture/package-bound
 | `queue()`, `bucket()`, `schedule()`, `http.api()` | Resource declarations returning typed handles. |
 | `secret()`, `variable()` | Configuration entries. |
 | `consume()`, `onObjectCreated()`, `handle()` (on handles) | Declarative handler registration. |
+| `route()`, `procedure()` (on `http.api` handles), `reply` | HTTP routes and RPC procedures; see the [runtime reference](../../docs/reference/runtime.md). |
+| `middleware()`, `middleware.requires()` | Typed middleware for applications, APIs, routes and procedures. |
+| `scoped()` | Application-scoped values (pools, clients) created once per runtime. |
+| `InferRouteContract`, `InferProcedureContract` | Client-facing contracts of routes and procedures. |
 | `QueueMessageInput`, `QueueMessageOutput`, `QueueConsumerFor`, `ResourceById`, ... | Types derived from handles. |
 
 ```ts

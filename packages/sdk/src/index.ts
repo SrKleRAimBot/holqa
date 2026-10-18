@@ -2,6 +2,7 @@ export { defineApp } from "@/app/define-app";
 export type {
   App,
   AppDefinition,
+  AppResources,
   ConfigValues,
   HandlerDiscoveryOptions
 } from "@/app/define-app";
@@ -14,6 +15,46 @@ export type {
   EnvRecord,
   VariableOptions
 } from "@/config/config-entry";
+export { middleware } from "@/http/middleware";
+export type {
+  AnyHttpMiddleware,
+  CheckMiddlewareChain,
+  DefineMiddleware,
+  ExtendContext,
+  HttpMiddleware,
+  MiddlewareArgs,
+  MiddlewareChainContext,
+  MiddlewareExtension,
+  MiddlewareFactory,
+  MiddlewareNext,
+  MiddlewareOptions,
+  MiddlewareRequirement,
+  MiddlewareResult,
+  MiddlewareReturn
+} from "@/http/middleware";
+export type {
+  HttpProcedure,
+  InferProcedureContract,
+  ProcedureContext,
+  ProcedureContract,
+  ProcedureOptions
+} from "@/http/procedure";
+export type { HeaderRecord, QueryRecord } from "@/http/request";
+export type {
+  BodylessMethod,
+  CheckParams,
+  HttpRoute,
+  InferRouteContract,
+  PathParamNames,
+  PathParams,
+  ResponseSchemas,
+  RouteContext,
+  RouteContract,
+  RouteOptions,
+  RouteReply,
+  RouteReplyValue,
+  RouteResult
+} from "@/http/route";
 export { bucket } from "@/resources/bucket";
 export type {
   BucketHandle,
@@ -56,6 +97,8 @@ export type {
   ScheduleHandlerOptions,
   ScheduleOptions
 } from "@/resources/schedule";
+export { scoped } from "@/scope/scoped";
+export type { ScopedOptions } from "@/scope/scoped";
 export type {
   CheckResourceId,
   CheckUniqueResourceIds,

@@ -11,7 +11,7 @@ Bun plays two distinct roles here, and confusing them is the most common mistake
 
 | Role | Where | Tool |
 | --- | --- | --- |
-| Holqa's intended application runtime | `@holqa/cli` today; `@holqa/runtime-bun`, `@holqa/local` (planned) | Bun |
+| Holqa's intended application runtime | `@holqa/cli` and `@holqa/runtime-bun` today; `@holqa/local` (planned) | Bun |
 | Runtime for maintainer scripts | `scripts/*.ts` (`agents-sync.ts`, `check-boundaries.ts`) | Bun |
 | Test runner | every package's `test` script (`bun test`) | Bun |
 | **Repository package manager** | installs, lockfile, workspace linking | **pnpm only** |
@@ -24,7 +24,7 @@ Applications built *with* Holqa may use any package manager. That choice is unre
 - Writing or changing `scripts/*.ts` or `packages/cli`.
 - Deciding whether a package may import `bun`, `bun:*`, or `node:*`.
 - Debugging import resolution, `@/` aliases, or Bun vs. Node differences.
-- Designing future runtime code (`runtime-bun`, `local`) that uses `Bun.serve`.
+- Writing runtime code (`runtime-bun`, future `local`) that uses `Bun.serve`.
 
 ## Version and setup
 
@@ -53,7 +53,7 @@ Applications built *with* Holqa may use any package manager. That choice is unre
 | Location | `bun` / `bun:*` | `node:*` |
 | --- | --- | --- |
 | `packages/core/src`, `compiler/src`, `sdk/src`, `client/src` | forbidden (ESLint) | forbidden (ESLint) |
-| `packages/cli/src`, future `runtime-bun`, `local`, `testing` | allowed | allowed |
+| `packages/cli/src`, `packages/runtime-bun/src`, future `local`, `testing` | allowed | allowed |
 | `<package>/tests/**`, `examples/*/tests/**`, `scripts/**` | allowed | allowed |
 
 Neutral packages must use Web-standard APIs (`fetch`, `Request`, `Response`, `URL`, `TextEncoder`, `structuredClone`, `crypto.subtle`). Use the global `process`/`Buffer`, never `import process from "node:process"`.
@@ -77,7 +77,7 @@ pnpm --filter @holqa/core test:watch        # bun test --watch
 
 ### 5. `Bun.serve` and Fetch interop (for future runtime work)
 
-`Bun.serve` takes a `fetch(request: Request): Response | Promise<Response>` handler, so a Holqa handler written against Web `Request`/`Response` stays portable. Keep the portable contract in neutral packages and the `Bun.serve` wiring in `runtime-bun`.
+`Bun.serve` takes a `fetch(request: Request): Response | Promise<Response>` handler, so a Holqa handler written against Web `Request`/`Response` stays portable. Keep the portable contract in neutral packages and the `Bun.serve` wiring in `runtime-bun`. On Bun 1.3.13, `server.stop(false)` resolves while idle keep-alive connections stay open and keep being served, even after a later `stop(true)`; `runtime-bun`'s `serve` therefore drains the runtime, waits for `server.pendingRequests` to reach 0 and then calls `stop(true)` once.
 
 ```ts
 // Test-only sketch: start on an ephemeral port and always stop the server.

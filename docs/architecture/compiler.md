@@ -43,7 +43,7 @@ flowchart TB
 | 2. Handler discovery | Match the `handlers` globs (`selectHandlerModules`); find exported registrations (`discoverHandlers`). | `HOLQA_HANDLER_PATTERN_UNMATCHED`, `HOLQA_HANDLER_ID_DUPLICATE` | **Implemented** |
 | 3. Resource graph construction | Normalize resources, handlers and configuration; derive required capabilities; `buildResourceGraph` builds nodes and declared edges. | `HOLQA_RESOURCE_ID_DUPLICATE`, `HOLQA_DECLARATION_INVALID` | **Implemented** |
 | 4. Contract and schema normalization | Convert Standard Schema schemas into the normalized representation; compute fingerprints. | `HOLQA_SCHEMA_UNSUPPORTED`, `HOLQA_SCHEMA_FIDELITY_UNVERIFIED`, `HOLQA_SCHEMA_RUNTIME_ONLY` | **Implemented** |
-| 5. Static validation | Check references, trigger kinds, one consumer per queue, routes. | `HOLQA_RESOURCE_NOT_FOUND`, `HOLQA_TRIGGER_INVALID`, `HOLQA_QUEUE_CONSUMER_DUPLICATE`, `HOLQA_ROUTE_CONFLICT` | **Implemented**; checking requirements against a binding is Planned |
+| 5. Static validation | Check references, trigger kinds, one consumer per queue, routes and RPC procedure paths. | `HOLQA_RESOURCE_NOT_FOUND`, `HOLQA_TRIGGER_INVALID`, `HOLQA_QUEUE_CONSUMER_DUPLICATE`, `HOLQA_ROUTE_CONFLICT` | **Implemented**; checking requirements against a binding is Planned |
 | 6. Client generation | Emit browser-safe clients and OpenAPI for public contracts. | A public contract referencing a private type. | Planned |
 | 7. Executable artifact creation | Hand the entry point map to a bundler to produce Bun artifacts. | Bundling failures. | Planned |
 | 8. Manifest serialization | Serialize the manifest and entry point map with canonical JSON. | `HOLQA_MANIFEST_NOT_SERIALIZABLE` | **Implemented** |

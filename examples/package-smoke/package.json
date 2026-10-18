@@ -15,6 +15,7 @@
     "@holqa/cli": "workspace:*",
     "@holqa/compiler": "workspace:*",
     "@holqa/core": "workspace:*",
+    "@holqa/runtime-bun": "workspace:*",
     "@holqa/sdk": "workspace:*",
     "@holqa/testing": "workspace:*",
     "@holqa/zod": "workspace:*",

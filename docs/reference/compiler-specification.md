@@ -52,9 +52,12 @@ Unknown settings are rejected with `HOLQA_DECLARATION_INVALID`; nothing is dropp
 | `queue.message` | `queue` | optional `concurrency` | `message` |
 | `bucket.object-created` | `bucket` | optional `prefix` | `object` |
 | `schedule.tick` | `schedule` | `{}` | none |
-| `http.route` | `http.api` | `method`, `path` (`/orders/:orderId`) | optional `params`, `query`, `body`; `response.<status>` |
+| `http.route` | `http.api` | `method`, `path` (`/orders/:orderId`) | optional `params`, `query`, `headers`, `body`; `response.<status>` |
+| `http.procedure` | `http.api` | `operation` (`query` or `mutation`) | `output` (required), optional `input` |
 
-`http.route` is defined by the core descriptor protocol and checked by the compiler, but the SDK has no route registration yet.
+Routes and procedures are registered with the SDK's `route(...)` and `procedure(...)` and executed by `@holqa/runtime-bun` ([runtime reference](runtime.md)). A procedure has no path option: it is served at `<basePath>/rpc/<id>`.
+
+The `http.procedure` trigger and the `headers`, `input` and `output` roles were added to the manifest version 1 JSON Schema without a new version ([ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md), decision 9). Manifests that use none of them are unchanged byte for byte; readers built before the addition reject manifests that use them.
 
 ### Schema references and the schema table
 
@@ -66,7 +69,7 @@ A schema reference is `{ fingerprint, source, schemaVersion? }`:
 
 Table entries are `holqa.schema-contract/1` contracts without `source`. Two uses with the same fingerprint share one entry. If their non-fingerprinted text differs (for example a library's wording of a runtime-only constraint), the entry with the smallest canonical text is kept, which is deterministic.
 
-The wire side of every role is the schema's input, except `response.<status>`, which is sent after validation and therefore uses the output. A wire side without a portable description fails with `HOLQA_SCHEMA_UNSUPPORTED`; an unrepresentable non-wire side (for example a transform's output on a queue message) is recorded as `representable: false`.
+The wire side of every role (including a procedure's `input`) is the schema's input, except `response.<status>` and a procedure's `output`, which are sent after validation and therefore use the output. A wire side without a portable description fails with `HOLQA_SCHEMA_UNSUPPORTED`; an unrepresentable non-wire side (for example a transform's output on a queue message) is recorded as `representable: false`.
 
 Schemas whose vendor is `holqa` (written by Holqa, such as the SDK's object-created event) are described by a built-in adapter from their Standard JSON Schema and recorded as `verified` with library `holqa`.
 
@@ -170,7 +173,7 @@ Static analysis is used only to add line and column numbers to diagnostics, by f
 | A trigger on a resource the application does not declare | `HOLQA_RESOURCE_NOT_FOUND`, with the declared resources of that kind in the hint. |
 | A trigger on a resource of another kind, malformed options, or a consumer whose message contract differs from its queue's | `HOLQA_TRIGGER_INVALID`. |
 | A second consumer of one queue | `HOLQA_QUEUE_CONSUMER_DUPLICATE`. |
-| Two routes with the same method and path shape (parameter names ignored) on one API | `HOLQA_ROUTE_CONFLICT`. A static segment and a parameter (`/orders/new`, `/orders/:id`) do not conflict: routers must prefer the static segment. |
+| Two routes with the same method and path shape (parameter names ignored) on one API, or a route on a procedure's path (`POST <basePath>/rpc/<id>`, and `GET` for queries) | `HOLQA_ROUTE_CONFLICT`. A static segment and a parameter (`/orders/new`, `/orders/:id`) do not conflict: routers must prefer the static segment. |
 | Unknown settings, malformed requirements, invalid configuration names, a secret with a default, a non-JSON default | `HOLQA_DECLARATION_INVALID`. |
 | A schema without a portable wire form | `HOLQA_SCHEMA_UNSUPPORTED`. |
 | Handler patterns that are absolute or contain `..` | `HOLQA_DECLARATION_INVALID`. |
@@ -193,7 +196,7 @@ Every problem is a `Diagnostic` with a registered code ([diagnostic codes](diagn
 
 | Contract | Rule |
 | --- | --- |
-| `manifestVersion` | Readers accept only versions they know; `validateManifest` reports `HOLQA_MANIFEST_VERSION_UNSUPPORTED` for others. The version 1 schema is closed (`additionalProperties: false`), so any new field, any structural change and any change to normalization or fingerprinting is a new manifest version. |
+| `manifestVersion` | Readers accept only versions they know; `validateManifest` reports `HOLQA_MANIFEST_VERSION_UNSUPPORTED` for others. The version 1 schema is closed (`additionalProperties: false`), so any new field, any structural change and any change to normalization or fingerprinting is a new manifest version. One exception, until the first package is published ([ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) decision 9): new trigger kinds and schema roles that leave every existing manifest valid and byte-identical (`http.procedure`, `headers`, `input`, `output`) extend version 1; readers built before them reject manifests that use them. |
 | Identity | A resource or handler is the same logical entity as long as its `id` is unchanged. Changing an `id` is a removal and an addition, which future deployment tooling must treat as replacement. Renaming variables, aliases, files or exports changes nothing in the manifest. |
 | Schema fingerprints | A changed fingerprint means the contract may have changed. Use `checkSchemaCompatibility` to classify the change ([schema contracts](schema-contracts.md#compatibility)); comparing against the deployed manifest automatically is **Planned**. |
 | Entry point map | `holqa.entrypoints/1` is versioned separately from the manifest and tied to one manifest by fingerprint. |

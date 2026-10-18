@@ -1,6 +1,6 @@
 # Triggers and execution
 
-> **Status:** Accepted design — not implemented. No triggers, handlers, or runtime exist yet. All code on this page is illustrative; the API is proposed and may change.
+> **Status:** Partly implemented. Handler registration for every trigger is **Implemented** in `@holqa/sdk`; execution of HTTP routes and RPC procedures, the common dispatcher and manual invocation (`runtime.invoke`) are **Implemented** in `@holqa/runtime-bun` ([runtime reference](../reference/runtime.md)). Queue, storage and schedule delivery are **Accepted design** — not implemented.
 
 A **trigger** is an event source that invokes a handler. Every handler in Holqa responds to exactly one trigger, receives a typed, validated input, and runs in a Bun-based execution environment. This page describes each trigger type, its intended semantics, and the execution model.
 
@@ -8,12 +8,12 @@ A **trigger** is an event source that invokes a handler. Every handler in Holqa 
 
 | Trigger | Resource | Phase | Status |
 | --- | --- | --- | --- |
-| HTTP request | `http.api` | Initial core | Accepted design |
-| RPC query / mutation | `http.api` (RPC mount) | Initial core | Accepted design |
-| Queue message | `queue` | Initial core | Accepted design |
-| Object storage event | `bucket` | Initial core | Accepted design |
-| Cron schedule | `schedule` | Initial core | Accepted design |
-| Manual / internal invocation | Any handler | Initial core | Accepted design |
+| HTTP request | `http.api` | Initial core | **Implemented** |
+| RPC query / mutation | `http.api` (RPC mount) | Initial core | **Implemented** |
+| Queue message | `queue` | Initial core | Accepted design (registration **Implemented**; delivery not implemented) |
+| Object storage event | `bucket` | Initial core | Accepted design (registration **Implemented**; delivery not implemented) |
+| Cron schedule | `schedule` | Initial core | Accepted design (registration **Implemented**; scheduling not implemented) |
+| Manual / internal invocation | Any handler | Initial core | **Implemented** as `runtime.invoke`; CLI commands Proposed |
 | Event topics and fan-out | `topic` (future) | Future | Planned |
 | WebSocket | Future | Future | Planned |
 | Reactive queries | Future | Future | Planned |
@@ -23,17 +23,9 @@ A **trigger** is an event source that invokes a handler. Every handler in Holqa 
 
 ## HTTP
 
-HTTP contracts are designed to support explicit definitions for:
-
-- Path parameters, query parameters, and request headers.
-- Request bodies.
-- Status-specific responses (a schema per status code).
-- Typed middleware.
-- Documentation metadata and OpenAPI generation.
-- Streaming and native Fetch API interoperability (`Request`, `Response`, `ReadableStream`).
+HTTP routes declare path parameters, query parameters, request headers, a JSON request body and status-specific responses (a schema per status code), with typed middleware and Fetch API interoperability (`Request`, `Response`, `ReadableStream` for streaming). This is **Implemented**; documentation metadata is recorded, and OpenAPI generation is **Planned**. The [runtime reference](../reference/runtime.md#http-routes) specifies the contract.
 
 ```ts
-// Illustrative, proposed API.
 import { z } from "zod";
 import { resources } from "../../infra";
 
@@ -53,18 +45,18 @@ export default resources.api.route({
 
 ### Middleware
 
-Middleware is designed to be composable at the **application**, **API**, and **route** levels, and may extend the typed handler context (for example adding an authenticated `user`). Authentication is provided through general-purpose middleware and optional integrations; Holqa does not require its own identity service.
+Middleware composes at the **application**, **API**, and **route** levels and may extend the typed handler context (for example adding an authenticated `user`). Authentication is provided through general-purpose middleware and optional integrations; Holqa does not require its own identity service. This is **Implemented**; ordering and semantics are in the [runtime reference](../reference/runtime.md#middleware).
 
 ### Interoperability
 
-Because handlers speak the Fetch API, existing HTTP frameworks such as Hono should be mountable as the implementation of a route group. See [oRPC and Hono](../integrations/orpc-and-hono.md).
+Because handlers speak the Fetch API, existing HTTP frameworks such as Hono should be mountable as the implementation of a route group (**Planned**). See [oRPC and Hono](../integrations/orpc-and-hono.md).
 
 ## RPC
 
-RPC is a **specialization of the HTTP execution model**, not a separate engine. An RPC procedure is an HTTP route with a conventional path under the API's RPC mount, an input schema, an output schema, and a query/mutation classification.
+RPC is a **specialization of the HTTP execution model**, not a separate engine. An RPC procedure is an HTTP route with a conventional path under the API's RPC mount (`<basePath>/rpc/<id>`), an input schema, an output schema, and a query/mutation classification. This is **Implemented** with Holqa's own versioned `holqa.rpc/1` protocol, which is not JSON-RPC 2.0 ([runtime reference](../reference/runtime.md#rpc-procedures)).
 
 - Queries are side-effect-free reads; mutations change state. The classification informs client caching (for example TanStack Query keys).
-- Generated browser-safe clients will call procedures with full type inference ([type safety and schemas](type-safety-and-schemas.md#generated-browser-safe-clients)).
+- Generated browser-safe clients (**Planned**) will call procedures with full type inference ([type safety and schemas](type-safety-and-schemas.md#generated-browser-safe-clients)).
 - Existing RPC libraries such as oRPC should be usable instead of, or alongside, Holqa's own procedures.
 
 ## Queues
@@ -98,8 +90,9 @@ Exactly-once delivery is not promised. A binding that offers stronger guarantees
 
 When `deadLetter: true` is declared, messages that exhaust `maxAttempts` move to a dead-letter destination rather than being dropped. A binding that cannot provide dead-lettering must fail capability validation rather than silently discard messages.
 
+The following code uses the implemented registration API; queue delivery that would invoke it is not implemented.
+
 ```ts
-// Illustrative, proposed API.
 export default resources.orders.consume({
   id: "orders.process",
   concurrency: 10,
@@ -134,7 +127,7 @@ Missed runs (for example while the application is down) are not automatically ba
 
 ## Manual and internal invocations
 
-Any handler can be invoked directly for local development and testing, without the real trigger. This is the basis for the proposed CLI commands `holqa invoke`, `holqa queue send`, `holqa storage put`, and `holqa cron run`, and for the `@holqa/testing` package. **None of these commands are implemented**; today they exit with `HOLQA_CLI_NOT_IMPLEMENTED` ([CLI reference](../reference/cli.md)).
+Any handler can be invoked directly, without the real trigger, through `runtime.invoke({ handlerId, input, metadata })` (**Implemented**). This is the basis for the proposed CLI commands `holqa invoke`, `holqa queue send`, `holqa storage put`, and `holqa cron run`, and for the `@holqa/testing` package. **None of these commands are implemented**; today they exit with `HOLQA_CLI_NOT_IMPLEMENTED` ([CLI reference](../reference/cli.md)).
 
 ## Future triggers
 
@@ -151,13 +144,13 @@ The resource model is designed so that new trigger types can be added as new res
 
 ## Execution model
 
-Bun is the primary runtime ([ADR 0002](../architecture/decisions/0002-bun-as-primary-runtime.md)). The intended execution model:
+Bun is the primary runtime ([ADR 0002](../architecture/decisions/0002-bun-as-primary-runtime.md)). The execution model below is **Implemented** for HTTP routes and RPC procedures by one dispatcher shared by every trigger ([ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md), [runtime reference](../reference/runtime.md#invocations)):
 
-- An **application execution environment** is a Bun process (or group of processes) that hosts the application's handlers.
+- An **application execution environment** is a runtime (`createRuntime`) in a Bun process that hosts one application instance, its binding and its application-scoped values. Running several isolated environments per application (workers, processes) is **Planned**.
 - It supports **multiple concurrent invocations**, subject to explicit limits: per-handler concurrency (for example a queue consumer's `concurrency`), and environment-wide resource limits.
 - Each invocation receives a typed context: the validated input, trigger metadata (such as `delivery.attempt`), typed resource handles, and configuration.
 - Handlers must not rely on in-memory state surviving between invocations, because environments may scale, restart, or reload.
-- Inputs are validated before the handler runs ([type safety and schemas](type-safety-and-schemas.md#runtime-validation-at-trust-boundaries)). Unhandled errors are reported as structured diagnostics and, for queues, lead to redelivery according to the retry policy.
+- Inputs are validated before the handler runs ([type safety and schemas](type-safety-and-schemas.md#runtime-validation-at-trust-boundaries)). Unhandled errors are normalized into structured diagnostics (`HOLQA_HANDLER_FAILED`, with details only in logs) and, for queues, are designed to lead to redelivery according to the retry policy (not implemented).
 
 Bun as the framework runtime is separate from dependency management: this repository uses pnpm, and applications built with Holqa may use any package manager.
 

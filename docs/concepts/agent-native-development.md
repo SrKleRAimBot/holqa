@@ -14,7 +14,7 @@ Holqa is designed for both human developers and autonomous coding agents. Toolin
 | Infer correct types | Source-based inference ([type safety](type-safety-and-schemas.md)) | **Implemented** |
 | Generate clients | Compiler client generation | Planned |
 | Run local tests and simulated events | `holqa invoke`, `holqa queue send`, `@holqa/testing` | Planned |
-| Diagnose compiler and runtime failures | Structured diagnostics with stable codes | **Implemented** (model and compiler); runtime planned |
+| Diagnose compiler and runtime failures | Structured diagnostics with stable codes | **Implemented** (model, compiler and `@holqa/runtime-bun`, which logs invocation failures with their codes) |
 | Inspect infrastructure requirements | Manifest capability requirements | **Implemented** |
 | Generate deployment plans | Provisioning provider plans | Planned |
 | Verify behavior through logs and traces | Structured logs; OpenTelemetry integration | Planned |
