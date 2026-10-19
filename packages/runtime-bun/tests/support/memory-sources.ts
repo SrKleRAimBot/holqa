@@ -1,6 +1,7 @@
 import type {
   DeliveryFailure,
   DeliverySource,
+  DeliveryTrace,
   LeasedDelivery,
   ReceiveRequest,
   ScheduleListener,
@@ -22,6 +23,7 @@ export interface Settlement {
 interface Item<Body> {
   readonly id: string;
   readonly body: Body;
+  readonly trace?: DeliveryTrace;
   attempt: number;
   visibleAt: number;
   state: "ready" | "leased" | "done";
@@ -57,9 +59,10 @@ export class MemorySource<Body> implements DeliverySource<Body> {
    * @param id - Its identity.
    * @param body - What it delivers.
    * @param attempt - Attempts already made, to simulate expired leases.
+   * @param trace - Where the delivery came from, returned with every lease.
    */
-  add(id: string, body: Body, attempt = 0): void {
-    this.items.push({ id, body, attempt, visibleAt: this.now, state: "ready" });
+  add(id: string, body: Body, attempt = 0, trace?: DeliveryTrace): void {
+    this.items.push({ id, body, attempt, visibleAt: this.now, state: "ready", ...trace === undefined ? {} : { trace } });
     this.wake();
   }
 
@@ -100,7 +103,7 @@ export class MemorySource<Body> implements DeliverySource<Body> {
       item.state = "leased";
       item.attempt += 1;
       item.receipt = `r-${++this.receipts}`;
-      return { receipt: item.receipt, id: item.id, attempt: item.attempt, body: item.body };
+      return { receipt: item.receipt, id: item.id, attempt: item.attempt, body: item.body, ...item.trace === undefined ? {} : { trace: item.trace } };
     });
   }
 

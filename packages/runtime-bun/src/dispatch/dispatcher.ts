@@ -7,6 +7,11 @@ import type {
 } from "@holqa/core";
 
 import type { InvocationFailure } from "@/dispatch/failure";
+import type {
+  ActiveInvocation,
+  EmittedEvent,
+  InvocationTracker
+} from "@/dispatch/invocation-tracker";
 import type { StructuredLogger } from "@/logging/log";
 
 import { diagnosticCodes } from "@holqa/core";
@@ -50,6 +55,8 @@ export interface InvocationRequest {
   readonly signal?: AbortSignal;
   /** Groups related invocations in logs; defaults to the invocation identifier. */
   readonly correlationId?: string;
+  /** The invocation that caused this one, for example the one that sent the message being delivered. Logged as `causationId`. */
+  readonly causationId?: string;
   /** Overrides the runtime's default time limit for this invocation. */
   readonly timeoutMs?: number;
   /** Extra fields for this invocation's log entries, such as the HTTP method and path. */
@@ -63,6 +70,8 @@ interface OutcomeBase {
   readonly handlerId: string;
   /** Milliseconds from dispatch to outcome, including time spent waiting for a slot. */
   readonly durationMs: number;
+  /** Messages the handler sent and objects it changed before the outcome, in order. Empty when the handler did not run. */
+  readonly emitted: readonly EmittedEvent[];
 }
 
 /** A successful invocation and the value its handler resolved to. */
@@ -112,6 +121,10 @@ export interface DispatcherOptions {
   readonly scope: ApplicationScope;
   /** Whether new invocations are accepted, checked at dispatch. */
   readonly accepting: () => boolean;
+  /** Attributes resource operations to the invocation that performs them. */
+  readonly tracker: InvocationTracker;
+  /** Where each handler is implemented (`module#export`), by handler identifier; logged with failures. */
+  readonly sources: ReadonlyMap<string, string>;
 }
 
 /**
@@ -168,8 +181,18 @@ export class Dispatcher {
     const invocationId = options.createId();
     const correlationId = request.correlationId ?? invocationId;
     const started = options.now();
-    const log = options.logger.child({ handlerId: request.handlerId, invocationId, correlationId, ...request.logFields });
+    const handler = options.handlers.get(request.handlerId);
+    const trigger = handler?.definition.trigger;
+    const log = options.logger.child({
+      handlerId: request.handlerId,
+      invocationId,
+      correlationId,
+      ...request.causationId === undefined ? {} : { causationId: request.causationId },
+      ...trigger === undefined ? {} : { triggerKind: trigger.kind, resourceId: trigger.resource.id },
+      ...request.logFields
+    });
     const base = { invocationId, correlationId, handlerId: request.handlerId };
+    const source = options.sources.get(request.handlerId);
 
     /**
      * Records and logs a finished invocation.
@@ -177,25 +200,27 @@ export class Dispatcher {
      * @param outcome - The value on success, or the failure.
      * @param outcome.value - The handler's result.
      * @param outcome.failure - The normalized failure.
+     * @param emitted - What the handler emitted before the outcome.
      * @returns The outcome.
      */
-    const finish = (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }): InvocationOutcome => {
+    const finish = (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[] = []): InvocationOutcome => {
       const durationMs = options.now() - started;
+      const effects = Object.freeze([...emitted]);
+      const emittedField: JsonObject = effects.length === 0 ? {} : { emitted: effects.map(event => ({ ...event })) };
       if ("failure" in outcome) {
         this.failed += 1;
         const { failure } = outcome;
-        const fields: JsonObject = { outcome: "failed", code: failure.code, durationMs, ...failure.error === undefined ? {} : { error: describeError(failure.error) } };
+        const fields: JsonObject = { outcome: "failed", code: failure.code, durationMs, ...emittedField, ...source === undefined ? {} : { source }, ...failure.error === undefined ? {} : { error: describeError(failure.error) } };
         log.write(failure.status >= 500 ? "error" : "info", "invocation failed", fields);
-        return Object.freeze({ ...base, ok: false, failure, durationMs });
+        return Object.freeze({ ...base, ok: false, failure, durationMs, emitted: effects });
       }
       this.succeeded += 1;
-      log.write("info", "invocation completed", { outcome: "ok", durationMs });
-      return Object.freeze({ ...base, ok: true, value: outcome.value, durationMs });
+      log.write("info", "invocation completed", { outcome: "ok", durationMs, ...emittedField });
+      return Object.freeze({ ...base, ok: true, value: outcome.value, durationMs, emitted: effects });
     };
 
     if (!options.accepting())
       return finish({ failure: runtimeFailure(diagnosticCodes.runtimeNotRunning, "The runtime is not accepting invocations.") });
-    const handler = options.handlers.get(request.handlerId);
     if (handler === undefined)
       return finish({ failure: runtimeFailure(diagnosticCodes.handlerNotFound, `No handler with the identifier "${request.handlerId}" is registered.`) });
     const limit = request.timeoutMs ?? options.timeoutMs;
@@ -276,13 +301,15 @@ export class Dispatcher {
    * @param context - The invocation context passed to the handler.
    * @returns The outcome.
    */
-  private async execute(handler: RegisteredHandler, request: InvocationRequest, signal: AbortSignal, releases: ReadonlyArray<() => void>, log: StructuredLogger, finish: (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }) => InvocationOutcome, context: InvocationContext<never>): Promise<InvocationOutcome> {
+  private async execute(handler: RegisteredHandler, request: InvocationRequest, signal: AbortSignal, releases: ReadonlyArray<() => void>, log: StructuredLogger, finish: (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[]) => InvocationOutcome, context: InvocationContext<never>): Promise<InvocationOutcome> {
     this.running += 1;
     let settled = false;
     let orphan = false;
     const started = this.options.now();
+    const active: ActiveInvocation = { invocationId: context.invocationId, correlationId: context.correlationId ?? context.invocationId, handlerId: handler.definition.id, emitted: [] };
     // A handler that throws synchronously becomes a rejected execution, like an async one.
-    const execution = Promise.resolve().then(() => handler.invoke(request.input, context));
+    // Running it inside the tracker attributes its resource operations to this invocation.
+    const execution = Promise.resolve().then(() => this.options.tracker.run(active, () => handler.invoke(request.input, context)));
     /** Releases the slots once the handler's code has finished, whether or not its caller is still waiting. */
     const onSettled = (): void => {
       settled = true;
@@ -312,11 +339,11 @@ export class Dispatcher {
           orphan = true;
           this.orphaned += 1;
         }
-        return finish({ failure: failureFromError(winner.reason) });
+        return finish({ failure: failureFromError(winner.reason) }, active.emitted);
       }
-      return finish({ value: winner.value });
+      return finish({ value: winner.value }, active.emitted);
     } catch (error) {
-      return finish({ failure: failureFromError(error) });
+      return finish({ failure: failureFromError(error) }, active.emitted);
     } finally {
       signal.removeEventListener("abort", onAbort!);
     }

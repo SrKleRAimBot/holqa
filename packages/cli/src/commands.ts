@@ -15,7 +15,14 @@ export interface ProposedCommand {
  */
 export const implementedCommands: readonly ProposedCommand[] = [
   { name: "inspect", summary: "Analyze the application and print its resources, handlers, configuration and graph." },
-  { name: "build --manifest", summary: "Write the application's manifest and entry point map." }
+  { name: "build --manifest", summary: "Write the application's manifest and entry point map." },
+  { name: "dev", summary: "Run the application locally with emulated resources, and rebuild on changes." },
+  { name: "invoke", summary: "Invoke a queue, object event or schedule handler once with a test input." },
+  { name: "queue send", summary: "Send a message to a local queue." },
+  { name: "storage put", summary: "Upload a file to a local bucket." },
+  { name: "cron run", summary: "Run a schedule's handler now." },
+  { name: "state", summary: "Print local queue messages, objects, events and schedule runs." },
+  { name: "doctor", summary: "Check the project, its configuration and the local environment." }
 ];
 
 /**
@@ -24,12 +31,6 @@ export const implementedCommands: readonly ProposedCommand[] = [
  * `HOLQA_CLI_NOT_IMPLEMENTED`.
  */
 export const proposedCommands: readonly ProposedCommand[] = [
-  { name: "dev", summary: "Run the application locally with emulated resources." },
-  { name: "doctor", summary: "Diagnose project configuration and environment problems." },
-  { name: "invoke", summary: "Invoke a handler locally with a test event." },
-  { name: "queue send", summary: "Send a message to a local queue." },
-  { name: "storage put", summary: "Upload an object to local storage." },
-  { name: "cron run", summary: "Trigger a scheduled task immediately." },
   { name: "openapi generate", summary: "Generate an OpenAPI document for HTTP APIs." }
 ];
 

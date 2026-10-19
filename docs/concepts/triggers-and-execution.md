@@ -129,7 +129,7 @@ Missed runs while no runtime receives the schedule (for example while the applic
 
 ## Manual and internal invocations
 
-Any handler can be invoked directly, without the real trigger, through `runtime.invoke({ handlerId, input, metadata })` (**Implemented**). This is the basis for the proposed CLI commands `holqa invoke`, `holqa queue send`, `holqa storage put`, and `holqa cron run`, and for the `@holqa/testing` package. **None of these commands are implemented**; today they exit with `HOLQA_CLI_NOT_IMPLEMENTED` ([CLI reference](../reference/cli.md)).
+Any handler can be invoked directly, without the real trigger, through `runtime.invoke({ handlerId, input, metadata })` (**Implemented**). It is the basis of `holqa invoke` and of `createTestApp(...).invoke` in `@holqa/testing` (both **Implemented**), which generate the trusted metadata of a first delivery or a manual run with `manualTriggerMetadata` from `@holqa/local`. `holqa queue send`, `holqa storage put` and `holqa cron run` go through the real trigger instead: they store a message or object, or start a recorded manual run ([CLI reference](../reference/cli.md)). HTTP handlers are exercised with a request rather than invoked directly.
 
 ## Future triggers
 

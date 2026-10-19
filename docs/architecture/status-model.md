@@ -21,19 +21,20 @@ Only the following items carry the **Implemented** label. Everything else in the
 
 | Package | Implemented items |
 | --- | --- |
-| `@holqa/core` | `Result`, `ok`, `err`; `Diagnostic`, `createDiagnostic`, `formatDiagnostic`; the `diagnosticCodes` registry; `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`, `checkIdentities`; `HolqaError`; JSON and Standard Schema types, `validateInput` with structured issues; JSON wire payloads (`toWirePayload`, `prepareWirePayload`), message envelopes and codecs, payload codecs; the `SchemaAdapter` contract; the descriptor protocol with resource and trigger kind registries and readers; `RuntimeBinding` with drivers and delivery `sources`, `bindApp`, `resolveDriver`, `checkCapabilities`; the `bucket.object-deleted` trigger, the `holqa.object-event/1` envelope (`readObjectEvent`), `checkObjectKey`, queue backoff (`backoffDelaySeconds`), cron evaluation (`parseCronSchedule`, `nextCronTime`); the `http.procedure` trigger, `HttpInvocationInput`, `HttpRejectedError`, the `holqa.rpc/1` envelope types, `ApplicationScope` |
+| `@holqa/core` | `Result`, `ok`, `err`; `Diagnostic`, `createDiagnostic`, `formatDiagnostic`; the `diagnosticCodes` registry; `ResourceId`, `parseResourceId`, `isResourceId`, `maxResourceIdLength`, `checkIdentities`; `HolqaError`; JSON and Standard Schema types, `validateInput` with structured issues; JSON wire payloads (`toWirePayload`, `prepareWirePayload`), message envelopes and codecs, payload codecs; the `SchemaAdapter` contract; the descriptor protocol with resource and trigger kind registries and readers; `RuntimeBinding` with drivers and delivery `sources`, `bindApp`, `resolveDriver`, `checkCapabilities`; the `bucket.object-deleted` trigger, the `holqa.object-event/1` envelope (`readObjectEvent`), `checkObjectKey`, queue backoff (`backoffDelaySeconds`), cron evaluation (`parseCronSchedule`, `nextCronTime`); the `http.procedure` trigger, `HttpInvocationInput`, `HttpRejectedError`, the `holqa.rpc/1` envelope types, `ApplicationScope`; `DeliveryTrace` and `DriverOperationContext` for trace propagation |
 | `@holqa/sdk` | `defineApp`, `defineResources`, `composeResources`; `queue`, `bucket`, `schedule`, `http.api`; `secret`, `variable`; typed handles and handler registration for queues, buckets and schedules; queue `send` with delays and receipts; bucket `put`, `get`, `head`, `delete`, `list`, `signedUrl`, `onObjectCreated`, `onObjectDeleted`; HTTP routes (`route`, `reply`), RPC procedures (`procedure`), typed `middleware` and `scoped` values; compile-time identifier and duplicate checks |
-| `@holqa/testing` | Compile-time type assertions (`Equal`, `Expect`, `Accepts`, `HasTypeError`, `assertType`, ...) |
+| `@holqa/testing` | Compile-time type assertions (`Equal`, `Expect`, `Accepts`, `HasTypeError`, `assertType`, ...); `createTestApp` (isolated local state, virtual clock, `flush`, `advance`, `drain`, `failNext`, duplicate delivery, inspection, `dispose`), `invocationRecords` |
 | `@holqa/compiler` | `canonicalJsonStringify`, `CanonicalJsonError`, `CanonicalJsonValue`; schema normalization (`normalizeSchema`, `describeSchemaContract`, `canonicalizeJsonSchema`), `fingerprintSchemaContract`, `checkSchemaCompatibility`; `compileApplication` (handler discovery, graph validation, manifest version 1, entry point map), `selectHandlerModules`, `discoverHandlers`, `validateManifest`, `validateEntrypoints`, `buildResourceGraph`, the manifest and entry point JSON Schemas |
-| `@holqa/runtime-bun` | `createRuntime` (invocation dispatcher, lifecycle, HTTP routing, RPC, CORS, structured logs, queue, object event and schedule delivery with retries, backoff and dead-lettering), `serve` and `stopOnSignals` (`Bun.serve`), `loadCompiledApplication`, `createEnvironmentBinding`. See the [runtime reference](../reference/runtime.md) |
-| `@holqa/local` | `createLocalEnvironment` (SQLite-backed queues and event state, filesystem object storage with events and development signed URLs, a clock-driven scheduler, inspection), `ManualClock`, `systemClock`. See the [local environment reference](../reference/local.md) |
+| `@holqa/runtime-bun` | `createRuntime` (invocation dispatcher, lifecycle, HTTP routing, RPC, CORS, structured logs, queue, object event and schedule delivery with retries, backoff and dead-lettering), `serve` and `stopOnSignals` (`Bun.serve`), `loadCompiledApplication` (with `handlerSources`), `createEnvironmentBinding`; trace propagation through queue messages and object events, and `emitted` events in outcomes and logs. See the [runtime reference](../reference/runtime.md) |
+| `@holqa/local` | `createLocalEnvironment` (SQLite-backed queues and event state, filesystem object storage with events and development signed URLs, a clock-driven scheduler, inspection including `storage.objects` and `retainSubscriptions`), `ManualClock` (with `nextTimerDue`), `systemClock`, `manualTriggerMetadata`. See the [local environment reference](../reference/local.md) |
 | `@holqa/zod` | The Zod 4 schema adapter (`zodAdapter`, `createZodAdapter`, `isZodSchema`) |
-| `@holqa/cli` | `holqa --help`, `--version`, `--json`; `holqa inspect`; `holqa build --manifest`; analysis in a separate process (`createProcessHost`); structured errors for proposed and unknown commands |
+| `@holqa/cli` | `holqa --help`, `--version`, `--json`; `holqa inspect`; `holqa build --manifest`; `holqa dev` (development supervisor with change classification and two-phase process restarts); `holqa invoke`, `queue send`, `storage put`, `cron run`, `state`, `doctor`; analysis in a separate process (`createProcessHost`); structured errors for proposed and unknown commands |
 | `examples/package-smoke` | Verification that built packages are consumable through their public exports |
 | `examples/schema-evolution` | End-to-end schema contract corpus with Zod |
 | `examples/manifest` | End-to-end compilation of SDK applications through the built CLI |
 | `examples/http-api` | An SDK application compiled by the built CLI and served by `@holqa/runtime-bun` |
 | `examples/document-processing` | An event-driven SDK application (uploads, object events, a queue consumer with retries and dead-lettering, a scheduled cleanup) compiled by the built CLI and run on `@holqa/local` |
+| `examples/order-pipeline` | The local development example: run with `holqa dev`, tested end to end with `createTestApp` (controlled failures, retries, dead letters, duplicates, schedules) and through a real `holqa dev` session |
 | Repository tooling | pnpm workspace, Turborepo tasks, ESLint configuration, boundary checks, agent instruction sync |
 
 See [packages reference](../reference/packages.md), [CLI reference](../reference/cli.md), [runtime reference](../reference/runtime.md), and [diagnostic codes](../reference/diagnostic-codes.md) for details.
@@ -65,7 +66,7 @@ Use the exact bold terms in tables and prose when the status of a specific item 
 
 ### Illustrative code
 
-Code that uses APIs which do not exist (for example `staticSite(...)`, generated clients, or `holqa dev`) must be introduced as illustrative. Place a sentence such as the following immediately before the code block:
+Code that uses APIs which do not exist (for example `staticSite(...)`, generated clients, or `holqa openapi generate`) must be introduced as illustrative. Place a sentence such as the following immediately before the code block:
 
 > The following code is illustrative. The API is proposed, not implemented, and may change.
 
@@ -88,7 +89,7 @@ Use the [ADR template](decisions/template.md) for new decisions.
 1. Do not describe an unimplemented capability in the present tense as if it works ("Holqa retries failed messages"). Write "Holqa is designed to retry…" or label the section.
 2. Do not upgrade a status without the evidence listed above.
 3. When unsure, choose the weaker status.
-4. Proposed CLI commands must always be described as not implemented until they are. Today they exit with `HOLQA_CLI_NOT_IMPLEMENTED`. Only `holqa inspect` and `holqa build --manifest` are implemented workflow commands.
+4. Proposed CLI commands must always be described as not implemented until they are. Today they exit with `HOLQA_CLI_NOT_IMPLEMENTED`. The implemented workflow commands are `holqa inspect`, `holqa build --manifest`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa storage put`, `holqa cron run`, `holqa state` and `holqa doctor`; `holqa openapi generate` and `holqa build` without `--manifest` are not implemented.
 
 ## Related
 

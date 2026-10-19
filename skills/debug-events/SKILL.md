@@ -8,7 +8,7 @@ metadata:
 
 # Debugging events
 
-> **Preview — partly available.** CLI event inspection, replay and `holqa invoke` are **proposed**. What works today, in the Holqa repository (unpublished), is reading structured diagnostics from the CLI, `holqa inspect --json` to see which handlers are bound to which resources, structured runtime logs, and the inspection API of `@holqa/local` (messages, dead letters, redrive, storage events, schedule runs).
+> **Preview — not yet published.** In the Holqa repository (unpublished): structured diagnostics from the CLI, `holqa inspect --json`, `holqa dev` with structured logs carrying trace identifiers, `holqa invoke`, `queue send`, `storage put`, `cron run`, `holqa state --json`, and the inspection API of `@holqa/local` (messages, dead letters, redrive, storage events, schedule runs) are **implemented**. A CLI command for redriving dead letters and a graphical dashboard are **planned**.
 
 ## When to use
 
@@ -22,16 +22,18 @@ metadata:
 Holqa reports problems as diagnostics with a stable `code`, a `severity`, a `message`, an optional `location` and an optional `hint`. Codes are never renamed or reused, so match on `code`, not on the message.
 
 ```sh
-bun packages/cli/dist/bin.js queue send --json; echo "exit=$?"
-# stderr: {"diagnostics":[{"code":"HOLQA_CLI_NOT_IMPLEMENTED","severity":"error",
-#          "message":"\"holqa queue send\" is a proposed command and is not implemented yet.",
-#          "hint":"See docs/roadmap.md for implementation status."}]}
-# exit=1
+holqa queue send orders --data '{"orderId":1}' --app app/infra.ts --json; echo "exit=$?"
+# exit=1; standard error holds {"diagnostics":[{"code":"HOLQA_INPUT_INVALID",...}]}
+holqa state --app app/infra.ts --json   # queue messages with state, attempts and lastError
 ```
+
+Every runtime log entry of an invocation carries `handlerId`, `invocationId`, `correlationId` (shared by the whole causal chain: an HTTP request, the messages it sent and the handlers they triggered), `triggerKind`, `resourceId`, and for deliveries `deliveryId` and `attempt`. A handler triggered by a message or object that another invocation sent or wrote has `causationId` set to that invocation. `invocation completed` and `invocation failed` entries list `emitted` messages and objects; failures add `code`, `error` (name, message, stack) and `source` (`module#export`). `holqa dev` prints the first stack frame inside the application.
 
 | Code | Meaning today |
 | --- | --- |
-| `HOLQA_CLI_NOT_IMPLEMENTED` | The command is proposed but not built (exit 1). Do not retry; it will not succeed. |
+| `HOLQA_CLI_NOT_IMPLEMENTED` | The command is proposed but not built (exit 1), for example `holqa openapi generate`. Do not retry; it will not succeed. |
+| `HOLQA_RELOAD_FAILED` | A `holqa dev` reload failed; the causes follow it, and the previous generation keeps serving. |
+| `HOLQA_HANDLER_FAILED` | A handler threw; the log entry has the original error and source. |
 | `HOLQA_CLI_UNKNOWN_COMMAND` | The command is not recognized (exit 2). Run `--help`. |
 | `HOLQA_RESOURCE_ID_INVALID` | A resource ID does not match `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$` or exceeds 63 characters. |
 | `HOLQA_MANIFEST_NOT_SERIALIZABLE` | A value cannot be written to deterministic JSON; the diagnostic includes a JSON path such as `$.resources[0].id`. |
@@ -40,10 +42,10 @@ Human-readable form (without `--json`): `file:line:col severity CODE: message`, 
 
 With the local binding (`@holqa/local`), inspect delivery state directly: `env.queues.deadLetters(queueId)` lists dead-lettered messages with their payload, `schemaVersion`, attempts and last error (`code`, `message`, `invocationId`, which matches the runtime's `invocation failed` log entry); `env.queues.redrive(queueId, messageId)` makes one due again; `env.storage.events(bucketId)` shows each event's delivery state per handler; `env.scheduler.runs(scheduleId)` lists runs as `succeeded`, `failed`, `skipped` or `missed`. See the [local environment reference](../../docs/reference/local.md).
 
-## Planned workflow
+## Workflow
 
-1. **Reproduce locally** with `holqa dev` and the matching trigger (`queue send`, `storage put`, `cron run`, `invoke`).
-2. **Inspect the event**: payload, `schemaVersion`, attempt number, timestamps and the handler `id` that received it.
+1. **Reproduce locally** with `holqa dev` and the matching trigger (`holqa queue send`, `storage put`, `cron run`, `invoke`).
+2. **Inspect the event** with `holqa state --json`: payload, `schemaVersion`, attempts, timestamps and the last error; follow its `correlationId` through the logs to see what triggered the handler and what it emitted.
 3. **Classify the failure:**
    - *Validation error* — producer sent an incompatible shape → see `schema-evolution`.
    - *Transient error* (timeouts, rate limits) — retries should resolve it; check backoff and concurrency.
@@ -51,7 +53,7 @@ With the local binding (`@holqa/local`), inspect delivery state directly: `env.q
    - *Duplicate side effects* — handler is not idempotent → see `add-queue-consumer`.
    - *Missing capability* — binding cannot satisfy a requirement → see `validate-infrastructure-bindings`.
 4. **Fix and test** with the failing payload as a fixture (`testing-event-driven-apps`).
-5. **Replay dead-lettered messages** only after the fix is deployed and only if the handler is idempotent. Replay is a deliberate, reviewed action.
+5. **Replay dead-lettered messages** only after the fix is deployed and only if the handler is idempotent. Locally, `env.queues.redrive(queueId)` or `createTestApp(...).redrive(queueId)` does it; replay elsewhere is a deliberate, reviewed action.
 
 ## Pitfalls
 

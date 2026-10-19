@@ -8,7 +8,7 @@ metadata:
 
 # Adding a queue consumer
 
-> **Preview — not yet published.** `queue(...)`, `resources.x.send` and `resources.x.consume` are implemented in the Holqa repository (`@holqa/sdk`, unpublished), and `@holqa/runtime-bun` delivers messages with retries, backoff and dead-lettering from a binding such as `@holqa/local`. `holqa queue send` is a **proposed** command and reports `HOLQA_CLI_NOT_IMPLEMENTED`.
+> **Preview — not yet published.** `queue(...)`, `resources.x.send` and `resources.x.consume` are implemented in the Holqa repository (`@holqa/sdk`, unpublished), and `@holqa/runtime-bun` delivers messages with retries, backoff and dead-lettering from a binding such as `@holqa/local`. `holqa queue send` and `holqa dev` are implemented in the repository too.
 
 ## When to use
 
@@ -20,7 +20,7 @@ A queue has **one** competing consumer. If several independent subscribers must 
 
 ## Works today
 
-In the Holqa repository: declaring queues (`delivery: { maxAttempts, deadLetter, backoff }`), `send(message, { delaySeconds })` (resolves to `{ messageId }`), consumers with `concurrency`, and local delivery through `@holqa/local` with inspection of messages and dead letters (`queues.messages`, `queues.deadLetters`, `queues.redrive`, `queues.duplicate`). Queue and consumer IDs must match `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$` (at most 63 characters). `holqa queue send --json` reports `HOLQA_CLI_NOT_IMPLEMENTED`. See the [runtime reference](../../docs/reference/runtime.md#queue-delivery).
+In the Holqa repository: declaring queues (`delivery: { maxAttempts, deadLetter, backoff }`), `send(message, { delaySeconds })` (resolves to `{ messageId }`), consumers with `concurrency`, and local delivery through `@holqa/local` with inspection of messages and dead letters (`queues.messages`, `queues.deadLetters`, `queues.redrive`, `queues.duplicate`). Queue and consumer IDs must match `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$` (at most 63 characters). `holqa queue send <queue> --data '<json>' --json` sends a validated message to the local queue. See the [runtime reference](../../docs/reference/runtime.md#queue-delivery).
 
 ## Workflow
 
@@ -29,7 +29,7 @@ In the Holqa repository: declaring queues (`delivery: { maxAttempts, deadLetter,
 3. **Create the consumer** in its own `*.handler.ts` file with a stable `id` and the delivery context.
 4. **Make it idempotent.** Record a deduplication key in the same transaction as the side effect.
 5. **Decide on failures.** Throw to retry; let poison messages reach the dead-letter queue after `maxAttempts`.
-6. **Test duplicates and retries** (see `testing-event-driven-apps`) with `@holqa/local` and a `ManualClock`; `holqa queue send` is proposed.
+6. **Test duplicates and retries** (see `testing-event-driven-apps`) with `@holqa/local` and a `ManualClock`; or send one by hand with `holqa queue send <queue> --data '<json>'` while `holqa dev` runs.
 
 ```ts
 // src/orders/process-order.handler.ts — the `sql` client is illustrative

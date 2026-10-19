@@ -13,7 +13,7 @@ import { DeliveryWorker } from "@/delivery/delivery-worker";
 import { StructuredLogger } from "@/logging/log";
 
 /** A successful outcome. */
-const succeeded: InvocationOutcome = { ok: true, value: undefined, invocationId: "inv", correlationId: "c", handlerId: "h", durationMs: 0 };
+const succeeded: InvocationOutcome = { ok: true, value: undefined, invocationId: "inv", correlationId: "c", handlerId: "h", durationMs: 0, emitted: [] };
 
 /**
  * Creates a worker over a source with a fixed policy.

@@ -14,6 +14,7 @@ import {
 } from "bun:test";
 
 import { Dispatcher } from "@/dispatch/dispatcher";
+import { InvocationTracker } from "@/dispatch/invocation-tracker";
 import { StructuredLogger } from "@/logging/log";
 import { RuntimeScope } from "@/runtime/application-scope";
 
@@ -39,7 +40,9 @@ function dispatcherFor(handle: (context: { readonly signal: AbortSignal }) => Pr
     createId: sequentialIds(),
     now: () => 0,
     scope: new RuntimeScope(logger).scope,
-    accepting: () => true
+    accepting: () => true,
+    tracker: new InvocationTracker(),
+    sources: new Map()
   });
 }
 

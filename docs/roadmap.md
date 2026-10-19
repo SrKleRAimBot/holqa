@@ -12,7 +12,7 @@ This roadmap distinguishes the current bootstrap state from future implementatio
 | M0 | Foundation and architecture validation | Complete (see [M0](milestones/m0/index.md)) |
 | 1 | Core resource model and SDK | In progress |
 | 2 | Compiler | In progress (manifest, discovery, validation, `inspect` and `build --manifest` **Implemented**) |
-| 3 | Bun runtime and local development | In progress (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, storage and schedule delivery and `@holqa/local` drivers **Implemented**) |
+| 3 | Bun runtime and local development | In progress (runtime, `@holqa/local` drivers, `holqa dev`, the operation commands and `createTestApp` **Implemented**; hot-swapping and worker isolation Planned) |
 | 4 | Clients and integrations | Planned |
 | 5 | Providers and bindings | Planned |
 | Future | Extended triggers and tooling | Planned |
@@ -139,19 +139,24 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | Queue, object event and schedule transports on the dispatcher: leased at-least-once delivery, retries with declared backoff, dead-lettering, bounded consumer concurrency, overlap policies, graceful shutdown ([runtime reference](reference/runtime.md), [ADR 0024](architecture/decisions/0024-event-delivery-sources-and-local-drivers.md)) | **Implemented** |
 | `@holqa/local`: SQLite-backed queues and event state, filesystem object storage with events and development signed URLs, a scheduler driven by an injectable clock, inspection and failure simulation ([local environment](reference/local.md)) | **Implemented** |
 | An event-driven application running end to end locally (HTTP upload, object event, queue consumer with retries and dead-lettering, scheduled cleanup), verified by [`examples/document-processing`](../examples/document-processing/README.md) | **Implemented** |
+| `holqa dev`: a development supervisor with a stable address, a generation process per reload started in two phases, change classification (`implementation`, `environment`, `handlers`, `resources`), contract diagnostics on schema changes, and a session lock ([ADR 0025](architecture/decisions/0025-dev-supervisor-and-process-generations.md), [local development guide](guides/local-development.md)) | **Implemented** |
+| `holqa invoke`, `holqa queue send`, `holqa storage put`, `holqa cron run`, `holqa state` and `holqa doctor`, with `--json` output and stable exit codes, running in the dev session when there is one ([CLI reference](reference/cli.md)) | **Implemented** |
+| Trace correlation: `correlationId` and `causationId` carried through queue messages and object events, emitted messages and objects in outcomes and logs, handler source locations in failure logs ([runtime reference](reference/runtime.md)) | **Implemented** |
+| `@holqa/testing`: `createTestApp` with isolated local state, a virtual clock, event flushing, failure injection, duplicate delivery and disposal | **Implemented** |
+| A local event-processing application run with `holqa dev` and tested end to end with controlled failures, verified by [`examples/order-pipeline`](../examples/order-pipeline/README.md) | **Implemented** |
 
 ### Goals
 
-- `@holqa/runtime-bun`: worker or process isolation.
-- `holqa dev` with fast backend reloads and structured logs.
-- `holqa invoke`, `holqa queue send`, `holqa storage put`, `holqa cron run` for manual triggering.
-- `@holqa/testing`: deterministic integration testing helpers on top of `@holqa/local` (the local environment already simulates duplicate delivery, retries and failures).
+- `@holqa/runtime-bun`: worker isolation for production runtimes.
+- Module-level hot-swapping (through Bun's reload capabilities or a Vite module runner) that preserves module lifecycles and disposes of old resources; process restarts remain the fallback.
+- A graphical dashboard for local state and traces, if it adds value beyond `holqa state` and the structured logs.
 
 ### Exit criteria
 
 - An example application runs end to end locally with HTTP, a queue consumer, and a schedule. **Met** by `examples/document-processing`.
 - Local emulators document their delivery and concurrency semantics and do not promise stronger guarantees than production drivers are expected to offer. **Met** for `@holqa/local` ([local environment](reference/local.md)).
 - Runtime validation runs at every trust boundary (incoming HTTP, queue messages, storage events). **Met**.
+- A developer can clone an example, install dependencies, run `holqa dev` and exercise the application without infrastructure credentials; a changed handler serves the next execution, a schema change reports contract diagnostics, and repeated restarts leave one generation process and one consumer per queue. **Met** by `examples/order-pipeline` and the CLI's dev session tests.
 
 ## Phase 4: Clients and integrations
 
@@ -183,7 +188,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 - Environment-specific bindings.
 - One or two initial runtime drivers (for example an S3-compatible storage driver and a self-hostable queue) chosen to validate the abstraction, not to favor a vendor.
 - A first provisioning provider that produces a reviewable plan and never deletes physical infrastructure implicitly.
-- `holqa doctor` for binding and environment validation.
+- Extend `holqa doctor` (**Implemented** for the local binding) to validate bindings for external services.
 
 ### Exit criteria
 

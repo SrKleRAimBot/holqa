@@ -124,6 +124,16 @@ export class ManualClock implements Clock {
   }
 
   /**
+   * Returns when the earliest pending timer is due, so a test can move time
+   * exactly to the next piece of scheduled work.
+   *
+   * @returns Epoch milliseconds, or `undefined` when no timer is pending.
+   */
+  nextTimerDue(): number | undefined {
+    return this.nextTimer()?.due;
+  }
+
+  /**
    * Returns the number of pending timers.
    *
    * @returns How many timers have not fired or been cancelled.

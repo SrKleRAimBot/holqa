@@ -18,6 +18,10 @@ import {
 import { reportDiagnostics } from "@/commands/analysis-command";
 import { buildCommand } from "@/commands/build";
 import { inspectCommand } from "@/commands/inspect";
+import {
+  localCommand,
+  matchLocalCommand
+} from "@/commands/local-commands";
 import { exitCodes } from "@/exit-codes";
 
 export { exitCodes } from "@/exit-codes";
@@ -29,14 +33,17 @@ export type { CliIo } from "@/io";
  *
  * Supported: `--help`/`-h` (or no arguments), `--version`/`-v`,
  * `holqa inspect [--app <path>]`, `holqa build --manifest [--app <path>] [--out-dir <dir>]`,
- * and `--json` anywhere, which switches output to machine-readable JSON.
+ * the local commands (`dev`, `invoke`, `queue send`, `storage put`,
+ * `cron run`, `state`, `doctor`), and `--json` anywhere, which switches
+ * output to machine-readable JSON (JSON lines for `holqa dev`).
  * Errors are reported as diagnostics: `{ "diagnostics": [...] }` on standard
  * error with `--json`. Proposed commands report `HOLQA_CLI_NOT_IMPLEMENTED`.
  *
  * `inspect` and `build` evaluate the application's modules through
  * `host.analyze`, which by default runs them in a separate Bun process with an
- * allowlisted environment (see `createProcessHost`). Apart from the host and
- * `io`, the function has no side effects.
+ * allowlisted environment (see `createProcessHost`). The local commands run
+ * the application itself through the host's `dev`, `operate` and `doctor`.
+ * Apart from the host and `io`, the function has no side effects.
  *
  * @param argv - Arguments after the executable and script name.
  * @param io - Output streams.
@@ -78,6 +85,10 @@ export async function runCli(argv: readonly string[], io: CliIo, version: string
     }
     return buildCommand(host ?? createProcessHost(), io, json, { app, outDir: options.values.get("out-dir") });
   }
+
+  const local = matchLocalCommand(args);
+  if (local !== undefined)
+    return localCommand(host ?? createProcessHost(), io, json, local.name, local.rest);
 
   const positionals = args.filter(argument => !argument.startsWith("-"));
   const proposed = findProposedCommand(positionals);
@@ -144,18 +155,30 @@ function renderHelp(version: string): string {
     "Usage: holqa [--help] [--version] [--json]",
     "       holqa inspect [--app <path>] [--json]",
     "       holqa build --manifest [--app <path>] [--out-dir <dir>] [--json]",
+    "       holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--json]",
+    "       holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa storage put <bucket> <file> [--key <key>] [--content-type <type>] [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa cron run <schedule> [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa state [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa doctor [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--json]",
     "",
     "Options:",
-    "  -h, --help        Show this help.",
-    "  -v, --version     Print the CLI version.",
-    "  --json            Emit machine-readable JSON output.",
-    "  --app <path>      The application module (default: infra.ts).",
-    "  --out-dir <dir>   Where build writes its output (default: .holqa/build next to the application module).",
+    "  -h, --help          Show this help.",
+    "  -v, --version       Print the CLI version.",
+    "  --json              Emit machine-readable JSON output (JSON lines for dev).",
+    "  --app <path>        The application module (default: infra.ts).",
+    "  --out-dir <dir>     Where build writes its output (default: .holqa/build next to the application module).",
+    "  --state-dir <dir>   The local state directory (default: .holqa/local next to the application module).",
+    "  --port <port>       The dev server's port (default: 3000; 0 picks a free one).",
+    "  --host <host>       The dev server's interface (default: 127.0.0.1).",
     "",
     "Commands:",
     list(implementedCommands),
     "",
     "inspect and build evaluate the application's modules, which runs their code.",
+    "dev and the operation commands run the application with your environment; operations",
+    "go to the running dev session when there is one.",
     "",
     "Proposed commands (not implemented yet):",
     list(proposedCommands)

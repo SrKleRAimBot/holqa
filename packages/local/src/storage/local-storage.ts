@@ -1,6 +1,7 @@
 import type {
   BucketAccess,
   BucketDriver,
+  DeliveryTrace,
   ListObjectsOptions,
   ObjectEvent,
   ObjectEventSource,
@@ -45,11 +46,15 @@ import {
 /** One object event, as inspection reports it. */
 export interface LocalObjectEvent {
   readonly event: ObjectEvent;
+  /** The trace of the invocation that changed the object, when one did and a subscription received the event. */
+  readonly trace?: DeliveryTrace;
   /** The event's delivery to each subscribed handler. */
   readonly deliveries: ReadonlyArray<{
     readonly subscription: string;
     readonly state: DeliveryState;
     readonly attempts: number;
+    /** When the delivery is due again or its lease ends (ISO 8601); for settled deliveries, the last change. */
+    readonly visibleAt: string;
     readonly lastError?: DeliveryError;
   }>;
 }
@@ -60,10 +65,22 @@ export interface LocalObjectEvent {
 export interface LocalStorage {
   /** Lists a bucket's events, oldest first, with each subscription's delivery state. */
   readonly events: (bucketId: string) => LocalObjectEvent[];
+  /** Lists a bucket's stored objects in key order (UTF-8 bytes), optionally only keys with a prefix. */
+  readonly objects: (bucketId: string, prefix?: string) => ObjectMetadata[];
   /** Makes dead-lettered events of one subscription due again; all of them when `eventId` is absent. Returns how many. */
   readonly redriveEvents: (bucketId: string, subscription: string, eventId?: string) => number;
   /** Delivers a known event once more to one subscription, with the same event identifier. */
   readonly duplicateEvent: (bucketId: string, subscription: string, eventId: string) => boolean;
+  /**
+   * Removes a bucket's subscriptions that are not listed, so that no further
+   * events are recorded for handlers that no longer exist (for example after a
+   * handler was renamed during development). Deliveries already recorded for
+   * them are kept. A removed subscription that subscribes again receives only
+   * later events.
+   *
+   * @returns The identifiers of the removed subscriptions, sorted.
+   */
+  readonly retainSubscriptions: (bucketId: string, subscriptions: readonly string[]) => string[];
   /**
    * Serves signed URLs (and unsigned reads of `public-read` buckets) issued by
    * this environment: `GET`, `HEAD` and `PUT` under the signed URL base path.
@@ -155,9 +172,10 @@ export function createLocalStorage(settings: LocalStorageSettings): {
    * @param bucketId - The bucket's logical identifier.
    * @param type - What happened.
    * @param object - The object the event reports on.
+   * @param trace - The trace of the invocation that changed the object, stored with each delivery.
    * @returns The channels that received a delivery.
    */
-  const emit = (bucketId: string, type: ObjectEventType, object: ObjectEvent["object"]): string[] => {
+  const emit = (bucketId: string, type: ObjectEventType, object: ObjectEvent["object"], trace: DeliveryTrace | undefined): string[] => {
     const time = clock.now();
     const event: ObjectEvent = { format: objectEventFormat, id: createId(), type, bucket: bucketId, time: new Date(time).toISOString(), object };
     const body = JSON.stringify(event);
@@ -170,7 +188,7 @@ export function createLocalStorage(settings: LocalStorageSettings): {
       if (!types.includes(type) || !object.key.startsWith(subscription.prefix))
         continue;
       const channel = eventChannel(bucketId, subscription.subscription);
-      store.add(channel, event.id, body);
+      store.add(channel, event.id, body, 0, trace);
       channels.push(channel);
     }
     return channels;
@@ -183,9 +201,10 @@ export function createLocalStorage(settings: LocalStorageSettings): {
    * @param key - A validated key.
    * @param body - The bytes.
    * @param options - The content type.
+   * @param trace - The trace of the invocation that writes the object, if any.
    * @returns The stored object's metadata.
    */
-  const put = async (bucketId: string, key: string, body: Uint8Array, options: PutObjectOptions): Promise<ObjectMetadata> => {
+  const put = async (bucketId: string, key: string, body: Uint8Array, options: PutObjectOptions, trace?: DeliveryTrace): Promise<ObjectMetadata> => {
     const folder = bucketDirectory(bucketId);
     mkdirSync(folder, { recursive: true });
     const etag = createHash("sha256").update(body).digest("hex");
@@ -201,7 +220,7 @@ export function createLocalStorage(settings: LocalStorageSettings): {
         previous = row(bucketId, key)?.blob;
         database.query("INSERT INTO objects (bucket, key, size, content_type, etag, last_modified, blob) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (bucket, key) DO UPDATE SET size = excluded.size, content_type = excluded.content_type, etag = excluded.etag, last_modified = excluded.last_modified, blob = excluded.blob")
           .run(bucketId, key, body.length, options.contentType ?? null, etag, lastModified, blob);
-        return emit(bucketId, "object.created", { key, size: body.length, ...options.contentType === undefined ? {} : { contentType: options.contentType }, etag });
+        return emit(bucketId, "object.created", { key, size: body.length, ...options.contentType === undefined ? {} : { contentType: options.contentType }, etag }, trace);
       })();
     } catch (error) {
       rmSync(join(folder, blob), { force: true });
@@ -301,19 +320,19 @@ export function createLocalStorage(settings: LocalStorageSettings): {
 
   return {
     driver: resource => Object.freeze<BucketDriver>({
-      put: async (key, body, options) => put(resource.id, key, body, options),
+      put: async (key, body, options, context) => put(resource.id, key, body, options, context?.trace),
       get: async key => get(resource.id, key),
       head: async (key) => {
         const found = row(resource.id, key);
         return found === null ? undefined : metadataOf(found);
       },
-      delete: async (key) => {
+      delete: async (key, context) => {
         const result = database.transaction(() => {
           const found = row(resource.id, key);
           if (found === null)
             return undefined;
           database.query("DELETE FROM objects WHERE bucket = ? AND key = ?").run(resource.id, key);
-          return { blob: found.blob, channels: emit(resource.id, "object.deleted", { key }) };
+          return { blob: found.blob, channels: emit(resource.id, "object.deleted", { key }, context?.trace) };
         })();
         if (result === undefined)
           return false;
@@ -337,18 +356,35 @@ export function createLocalStorage(settings: LocalStorageSettings): {
         const events = database.query<{ body: string }, [string]>("SELECT body FROM object_events WHERE bucket = ? ORDER BY seq").all(bucketId).map(event => readObjectEvent(JSON.parse(event.body), `stored object event of bucket "${bucketId}"`));
         const subscriptions = database.query<{ subscription: string }, [string]>("SELECT subscription FROM event_subscriptions WHERE bucket = ? ORDER BY subscription").all(bucketId);
         const deliveries = subscriptions.flatMap(({ subscription }) => store.list(eventChannel(bucketId, subscription)).map(delivery => ({ subscription, delivery })));
-        return events.map(event => Object.freeze({
-          event,
-          deliveries: deliveries.filter(({ delivery }) => delivery.id === event.id).map(({ subscription, delivery }) => Object.freeze({
-            subscription,
-            state: delivery.state,
-            attempts: delivery.attempts,
-            ...delivery.lastError === undefined ? {} : { lastError: delivery.lastError }
-          }))
-        }));
+        return events.map((event) => {
+          const own = deliveries.filter(({ delivery }) => delivery.id === event.id);
+          const trace = own.find(({ delivery }) => delivery.trace !== undefined)?.delivery.trace;
+          return Object.freeze({
+            event,
+            ...trace === undefined ? {} : { trace },
+            deliveries: own.map(({ subscription, delivery }) => Object.freeze({
+              subscription,
+              state: delivery.state,
+              attempts: delivery.attempts,
+              visibleAt: new Date(delivery.visibleAt).toISOString(),
+              ...delivery.lastError === undefined ? {} : { lastError: delivery.lastError }
+            }))
+          });
+        });
       },
+      objects: (bucketId: string, prefix = "") => database.query<ObjectRow, [string]>("SELECT key, size, content_type, etag, last_modified, blob FROM objects WHERE bucket = ? ORDER BY key")
+        .all(bucketId)
+        .filter(object => object.key.startsWith(prefix))
+        .map(metadataOf),
       redriveEvents: (bucketId: string, subscription: string, eventId?: string) => store.redrive(eventChannel(bucketId, subscription), eventId),
       duplicateEvent: (bucketId: string, subscription: string, eventId: string) => store.duplicate(eventChannel(bucketId, subscription), eventId),
+      retainSubscriptions: (bucketId: string, subscriptions: readonly string[]) => database.transaction(() => {
+        const keep = new Set(subscriptions);
+        const stale = database.query<{ subscription: string }, [string]>("SELECT subscription FROM event_subscriptions WHERE bucket = ? ORDER BY subscription").all(bucketId).map(row => row.subscription).filter(subscription => !keep.has(subscription));
+        for (const subscription of stale)
+          database.query("DELETE FROM event_subscriptions WHERE bucket = ? AND subscription = ?").run(bucketId, subscription);
+        return stale;
+      })(),
       fetch: serveSigned,
       handles: (request: Request) => new URL(request.url).pathname.startsWith(`${basePath}/`)
     })

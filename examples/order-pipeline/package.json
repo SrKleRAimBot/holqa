@@ -1,0 +1,29 @@
+{
+  "name": "@holqa/example-order-pipeline",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The local development example: an order pipeline (HTTP, a queue with retries and dead-lettering, uploads with object events, an hourly schedule) run with holqa dev and tested with createTestApp.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "start": "holqa dev --app app/infra.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@holqa/cli": "workspace:*",
+    "@holqa/core": "workspace:*",
+    "@holqa/sdk": "workspace:*",
+    "@holqa/zod": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@holqa/local": "workspace:*",
+    "@holqa/runtime-bun": "workspace:*",
+    "@holqa/testing": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

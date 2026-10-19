@@ -56,6 +56,22 @@ async function send(env: LocalEnvironment, name: string, delaySeconds = 0): Prom
 }
 
 describe("local queues", () => {
+  it("keeps the sender's trace with the message, its redeliveries and its duplicates", async () => {
+    const { env, source } = await setup();
+    const trace = { correlationId: "req-1", causationId: "inv-1" };
+    const { messageId } = await env.binding.drivers.queue!(jobs).send({ format: messageEnvelopeFormat, schemaVersion: 1, payload: { name: "traced" } }, {}, { trace });
+    const [first] = await source.receive({ max: 1, leaseMs: 1_000 });
+    expect(first).toMatchObject({ id: messageId, trace });
+    expect(await source.acknowledge(first!.receipt)).toBe(true);
+    expect(env.queues.duplicate("jobs", messageId)).toBe(true);
+    const [copy] = await source.receive({ max: 1, leaseMs: 1_000 });
+    expect(copy).toMatchObject({ id: messageId, trace });
+    expect(env.queues.messages("jobs").map(message => message.trace)).toEqual([trace, trace]);
+    await send(env, "untraced");
+    const [untraced] = await source.receive({ max: 1, leaseMs: 1_000 });
+    expect(untraced!.trace).toBeUndefined();
+  });
+
   it("stores the envelope, reports each message's state and filters by state", async () => {
     const { env, clock, source } = await setup();
     expect(source.defaultMaxAttempts).toBe(7);

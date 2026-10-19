@@ -10,6 +10,11 @@ export type {
   InvocationSuccess
 } from "@/dispatch/dispatcher";
 export type { InvocationFailure } from "@/dispatch/failure";
+export type {
+  EmittedEvent,
+  EmittedObjectChange,
+  EmittedQueueMessage
+} from "@/dispatch/invocation-tracker";
 export type { CorsOptions } from "@/http/cors";
 export { correlationHeader } from "@/http/http-handler";
 export { loadCompiledApplication } from "@/load/load-compiled-application";

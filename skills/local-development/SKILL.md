@@ -1,6 +1,6 @@
 ---
 name: local-development
-description: Runs a Holqa application locally without cloud credentials — Bun-based handler execution, HTTP and RPC routing, emulated queues, storage and schedules, event inspection, and Vite HMR on a single origin — and triggers events manually. Use when starting the dev server, reproducing a bug locally, or wiring a Vite frontend to the backend.
+description: Runs a Holqa application locally without cloud credentials with holqa dev — Bun-based handler execution, HTTP and RPC routing, emulated queues, storage and schedules, reloads on file changes — and triggers events manually with holqa invoke, queue send, storage put and cron run. Use when starting the dev server, reproducing a bug locally, or inspecting local queue, storage and schedule state.
 license: Apache-2.0
 metadata:
   status: preview
@@ -8,79 +8,46 @@ metadata:
 
 # Running local development
 
-> **Preview — not yet available.** `holqa dev`, `invoke`, `queue send`, `storage put` and `cron run` are **proposed** commands. Today each one exits with code 1 and reports `HOLQA_CLI_NOT_IMPLEMENTED`. `holqa inspect` and `holqa build --manifest` are implemented. In the Holqa repository (unpublished), `@holqa/runtime-bun` runs a compiled application and `@holqa/local` provides local queues, object storage and a scheduler, so the whole application runs locally from a script.
+> **Preview — not yet published.** `holqa dev`, `invoke`, `queue send`, `storage put`, `cron run`, `state` and `doctor` are **implemented** in the Holqa repository (`@holqa/cli`, unpublished); their options may change. Module-level hot-swapping and the Vite integration are **planned**: `holqa dev` reloads by restarting the application process, and the frontend is not served yet.
 
 ## When to use
 
-- Starting the backend and frontend together for development.
-- Triggering a queue message, storage event or schedule by hand.
+- Running the backend locally with emulated queues, object storage and schedules.
+- Triggering a queue message, storage event, schedule or handler by hand.
 - Inspecting what the local runtime received and how handlers responded.
 
-## Works today
+## Workflow
 
-From a checkout of the Holqa repository after `pnpm install && pnpm build`:
+From an application directory in the Holqa repository (for example [`examples/order-pipeline`](../../examples/order-pipeline/README.md)), after `pnpm install && pnpm build`:
 
-```sh
-bun packages/cli/dist/bin.js --help          # shows the proposed commands below
-bun packages/cli/dist/bin.js dev --json      # exit 1
-# stderr: {"diagnostics":[{"code":"HOLQA_CLI_NOT_IMPLEMENTED","severity":"error",...}]}
-bun packages/cli/dist/bin.js deploy          # exit 2, HOLQA_CLI_UNKNOWN_COMMAND
-```
-
-Use the exit code and the `code` field, not the message text, when scripting against the CLI.
-
-The local drivers work today from a script (see [`examples/document-processing`](../../examples/document-processing/README.md) and the [local environment reference](../../docs/reference/local.md)):
-
-```ts
-import { createLocalEnvironment } from "@holqa/local";
-import { createRuntime, loadCompiledApplication } from "@holqa/runtime-bun";
-
-const compiled = await loadCompiledApplication({ root: import.meta.dir });
-const local = await createLocalEnvironment({ app: compiled.app, directory: ".holqa/local" });
-const runtime = createRuntime({ ...compiled, binding: local.binding });
-await runtime.start();
-// Inspect: local.queues.messages("order-processing"), local.queues.deadLetters(...),
-// local.storage.events("uploads"), local.scheduler.runs("nightly"); trigger: local.scheduler.trigger("nightly").
-```
-
-## Planned workflow
-
-1. **Start everything:** `holqa dev`. It is planned to discover `infra.ts`, start Bun-based handler execution, emulate queues, storage (filesystem-backed) and schedules, and mount the Vite dev server so the frontend and API share one origin.
-2. **Configure local values** for `secret` and `variable` entries through local environment files that are never committed.
-3. **Inspect the graph:** `holqa inspect --json` (implemented) lists resources, handlers, configuration and required capabilities. Routes and procedures appear as `http.route` and `http.procedure` handlers.
-4. **Trigger events manually:**
+1. **Check the project:** `holqa doctor --app app/infra.ts` verifies Bun, the application, its configuration and capabilities, the local state and the dev port. Exit `1` means a check failed.
+2. **Start everything:** `holqa dev --app app/infra.ts` (default port 3000; `--port 0` picks a free one). It analyzes the application, starts it with the local drivers, prints resources, handlers, endpoints and the next schedule runs, and streams structured logs. State is kept in `.holqa/local` next to `infra.ts` and survives restarts.
+3. **Configure local values** for `secret` and `variable` entries in a `.env` file next to `infra.ts`, never committed. Changing it restarts the application.
+4. **Trigger events manually** (in another terminal; they run inside the dev session when it is running):
 
    ```sh
-   holqa queue send order-processing '{"orderId":"3f0c…","priority":"urgent"}'
-   holqa storage put customer-uploads incoming/test.png ./fixtures/test.png
-   holqa cron run daily-cleanup
-   holqa invoke orders.process --event ./fixtures/order-event.json
+   holqa invoke orders.process --input '{"orderId":"123"}' --app app/infra.ts
+   holqa queue send orders --data '{"orderId":"123"}' --app app/infra.ts
+   holqa storage put uploads ./sample.pdf --app app/infra.ts
+   holqa cron run cleanup --app app/infra.ts
    ```
 
-5. **Watch structured logs and diagnostics**; use `--json` when another tool or agent consumes the output.
-6. **Edit code.** Backend modules are planned to reload without full restarts; the frontend uses Vite HMR.
-
-Vite configuration is planned to use a plugin rather than a separate dev server (illustrative):
-
-```ts
-// web/vite.config.ts — illustrative; plugin name is a placeholder
-import { holqa } from "@holqa/vite";
-import { defineConfig } from "vite";
-
-export default defineConfig({ plugins: [holqa({ app: "../infra.ts" })] });
-```
+5. **Inspect local state:** `holqa state --app app/infra.ts` lists queue messages (state, attempts, last error), objects, object events with each handler's delivery, and schedule runs.
+6. **Edit code.** A handler change restarts the application and serves the next execution; a schema change also reports contract diagnostics such as `HOLQA_SCHEMA_CHANGE_BREAKING`. A change that breaks the application reports `HOLQA_RELOAD_FAILED` and the previous version keeps serving.
+7. Use `--json` everywhere when another tool or agent consumes the output: one JSON document per command, and one JSON event per line for `holqa dev --json`.
 
 ## Pitfalls
 
-- **Trusting local guarantees.** The local runtime must not provide stronger delivery or ordering than production. Code that passes only because local delivery happened to be exactly-once and in order is still wrong.
-- **Real credentials locally.** Local development is meant to work without cloud credentials. Do not point local runs at production resources.
-- **Committing local secrets.** Keep local env files out of version control.
-- **Parsing human output.** Messages may change; codes and `--json` output are the stable contract.
-- **Testing only the happy path.** Use manual triggers to send duplicates and malformed messages too.
+- **Trusting local guarantees.** Local delivery is at least once and unordered, like production. Code that passes only because a message happened to arrive once is still wrong; use `createTestApp(...).duplicate` to check.
+- **Real credentials locally.** Local development needs no cloud credentials. Do not point local runs at production resources.
+- **Committing local secrets.** Keep `.env` files out of version control.
+- **Parsing human output.** Messages may change; diagnostic codes, exit codes and `--json` output are the stable contract.
+- **Module state across invocations.** `holqa invoke` without a running dev session runs in a new process, so in-memory state of the dev session is not visible to it. Keep state in resources.
+- **Testing only the happy path.** Send malformed messages and duplicates too.
 
 ## Verification checklist
 
-- [ ] You stated clearly whether a command was actually run or is proposed.
+- [ ] You stated clearly whether a command was actually run.
 - [ ] Local configuration contains no production credentials and is ignored by version control.
 - [ ] Each handler was exercised at least once through its trigger (HTTP, queue, storage, schedule).
 - [ ] Duplicate and failing deliveries were tried, not only successful ones.

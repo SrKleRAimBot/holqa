@@ -299,7 +299,7 @@ describe("runtime lifecycle", () => {
     await runtime.fetch(new Request("http://localhost/api/hello", { headers: { "x-correlation-id": "req-42" } }));
     await runtime.stop();
     expect(entries.map(entry => entry.message)).toEqual(["runtime started", "greeting", "invocation completed", "runtime stopped"]);
-    expect(entries[1]).toEqual({ level: "info", time: "1970-01-01T00:00:00.000Z", message: "greeting", application: "shop", handlerId: "hello", invocationId: "inv-1", correlationId: "req-42", method: "GET", path: "/api/hello", name: "ada" });
+    expect(entries[1]).toEqual({ level: "info", time: "1970-01-01T00:00:00.000Z", message: "greeting", application: "shop", handlerId: "hello", invocationId: "inv-1", correlationId: "req-42", triggerKind: "http.route", resourceId: "api", method: "GET", path: "/api/hello", name: "ada" });
     expect(entries[2]).toMatchObject({ outcome: "ok", handlerId: "hello", invocationId: "inv-1" });
   });
 });

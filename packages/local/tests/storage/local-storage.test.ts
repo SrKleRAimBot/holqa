@@ -114,6 +114,34 @@ describe("local object storage", () => {
     ]);
   });
 
+  it("records the writer's trace with each event delivery and lists stored objects for inspection", async () => {
+    const { env, bucket } = await setup();
+    const source = env.binding.sources!.bucket!(files);
+    const subscription = await source.subscribe({ id: "files.any", types: ["object.created", "object.deleted"] });
+    const trace = { correlationId: "req-1", causationId: "inv-1" };
+    await bucket.put("b.txt", encoder.encode("b"), { contentType: "text/plain" }, { trace });
+    await bucket.put("a.txt", encoder.encode("a"), {});
+    expect(await bucket.delete("b.txt", { trace: { correlationId: "req-2" } })).toBe(true);
+    const deliveries = await subscription.receive({ max: 10, leaseMs: 1_000 });
+    expect(deliveries.map(delivery => delivery.trace)).toEqual([trace, undefined, { correlationId: "req-2" }]);
+    expect(env.storage.events("files").map(event => event.trace)).toEqual([trace, undefined, { correlationId: "req-2" }]);
+    await bucket.put("docs/c.txt", encoder.encode("c"), {});
+    expect(env.storage.objects("files").map(object => object.key)).toEqual(["a.txt", "docs/c.txt"]);
+    expect(env.storage.objects("files", "docs/")).toEqual([expect.objectContaining({ key: "docs/c.txt", size: 1 })]);
+  });
+
+  it("removes subscriptions of handlers that no longer exist, so they stop collecting events", async () => {
+    const { env, bucket } = await setup();
+    const source = env.binding.sources!.bucket!(files);
+    await source.subscribe({ id: "files.current", types: ["object.created"] });
+    await source.subscribe({ id: "files.renamed-away", types: ["object.created"] });
+    await bucket.put("a.txt", encoder.encode("a"), {});
+    expect(env.storage.retainSubscriptions("files", ["files.current"])).toEqual(["files.renamed-away"]);
+    expect(env.storage.retainSubscriptions("files", ["files.current"])).toEqual([]);
+    await bucket.put("b.txt", encoder.encode("b"), {});
+    expect(env.storage.events("files").map(({ event, deliveries }) => `${event.object.key}:${deliveries.map(delivery => delivery.subscription).join("+")}`)).toEqual(["a.txt:files.current", "b.txt:files.current"]);
+  });
+
   it("serves signed downloads and uploads until they expire, and emits events for uploads", async () => {
     const { env, bucket, clock } = await setup();
     await bucket.put("report.txt", encoder.encode("secret"), { contentType: "text/plain" });

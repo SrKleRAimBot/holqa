@@ -4,7 +4,7 @@
 - **Date:** 2026-10-17
 - **Deciders:** Holqa maintainers
 
-> **Implementation status:** Accepted design, validated by the disposable [Bun runtime lifecycle experiment](../../../experiments/runtime-bun/README.md) on Bun 1.3.13. `@holqa/runtime-bun` is implemented for a single in-process application instance per runtime ([ADR 0023](0023-common-invocation-engine-and-http-rpc-execution.md)); generations, reload, `@holqa/local` and `holqa dev` are not implemented.
+> **Implementation status:** Accepted design, validated by the disposable [Bun runtime lifecycle experiment](../../../experiments/runtime-bun/README.md) on Bun 1.3.13. `@holqa/runtime-bun` is implemented for a single in-process application instance per runtime ([ADR 0023](0023-common-invocation-engine-and-http-rpc-execution.md)). `holqa dev` implements generations as one process per generation, as proposed in [ADR 0025](0025-dev-supervisor-and-process-generations.md), which refines decision 7; Worker generations are not implemented.
 
 ## Context
 

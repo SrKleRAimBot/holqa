@@ -1,6 +1,6 @@
 # Runtime
 
-> **Status:** **Implemented** in `@holqa/runtime-bun` (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, `Bun.serve` adapter), `@holqa/sdk` (`route`, `procedure`, `reply`, `middleware`, `scoped`, queue, bucket and schedule operations) and `@holqa/core` (wire contracts, delivery sources, cron evaluation). Worker isolation and reload are **Planned**. All packages are private and unpublished.
+> **Status:** **Implemented** in `@holqa/runtime-bun` (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, `Bun.serve` adapter), `@holqa/sdk` (`route`, `procedure`, `reply`, `middleware`, `scoped`, queue, bucket and schedule operations) and `@holqa/core` (wire contracts, delivery sources, cron evaluation). Reloads are **Implemented** by `holqa dev` as process restarts, one process per generation ([ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md), [CLI reference](cli.md)); in-process module reloading and worker isolation are **Planned**. All packages are private and unpublished.
 
 This page specifies how a Holqa application executes: the invocation lifecycle shared by every trigger, the HTTP route contract, the `holqa.rpc/1` protocol, middleware ordering, and how queue messages, object events and scheduled runs are delivered. The design is recorded in [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) and [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md). The local binding that delivers them on one machine is described in the [local environment reference](local.md).
 
@@ -32,6 +32,7 @@ stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 | --- | --- | --- |
 | `app` | required | The application: the default export of `infra.ts`. |
 | `handlers` | required | Handler registrations. The same registration listed twice counts once. |
+| `handlerSources` | none | Where each handler is implemented, `<module>#<export>` relative to the application root, by handler identifier; logged as `source` with failed invocations. `loadCompiledApplication` returns it, so `createRuntime({ ...compiled })` passes it on. |
 | `binding` | environment binding | The binding: drivers, sources and configuration. The default serves `http.api` only and reads configuration from `env`; it advertises no queue, bucket or schedule capability, so such applications fail to start with `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`. Use `createLocalEnvironment(...).binding` from `@holqa/local` to run them locally. |
 | `delivery.concurrency` | `4` | In-flight messages per queue consumer that declares no `concurrency`. |
 | `delivery.leaseMs` | `limits.timeoutMs` + 5 000 (300 000 when `limits.timeoutMs` is `Infinity`) | How long a received message or event stays leased. When the binding's source can extend leases, the runtime renews them every half lease while the handler runs; otherwise the lease must outlast the invocation time limit, or a slow handler's delivery runs again concurrently. |
@@ -90,8 +91,8 @@ if (!outcome.ok)
 
 | Rule | Behaviour |
 | --- | --- |
-| Identity | Every invocation gets a unique `invocationId`; `correlationId` groups related invocations and defaults to it. Both are in the handler's context, every log entry and the `x-correlation-id` response header. |
-| Outcome | `invoke` never rejects. It resolves to `{ ok: true, value }` or `{ ok: false, failure }`, both with `invocationId`, `correlationId`, `handlerId` and `durationMs`. |
+| Identity | Every invocation gets a unique `invocationId`; `correlationId` groups related invocations (a trace) and defaults to it. Both are in the handler's context, every log entry and the `x-correlation-id` response header. `causationId` (optional in `InvocationRequest`) names the invocation that caused this one and is logged; see [traces](#traces). |
+| Outcome | `invoke` never rejects. It resolves to `{ ok: true, value }` or `{ ok: false, failure }`, both with `invocationId`, `correlationId`, `handlerId`, `durationMs` and `emitted`: the messages the handler sent and objects it changed before the outcome (`EmittedEvent`: `{ type: "queue.message", resourceId, messageId }` or `{ type: "object.created" \| "object.deleted", resourceId, key }`), in order, empty when the handler did not run. A send that failed, and a delete of an object that did not exist, are not listed. |
 | Concurrency | A FIFO gate of `limits.concurrency` slots with a wait queue of `limits.queue`. A queue consumer's own `concurrency` is a second gate, acquired first, so invocations waiting for it hold no environment-wide slot. A full queue answers `HOLQA_RUNTIME_OVERLOADED` at once. |
 | Metadata | Trusted, but checked against the trigger kind: a queue consumer needs `{ attempt, messageId, schemaVersion? }`, an object event handler `{ eventId, eventTime, attempt }`, a schedule handler `{ scheduledTime, runId?, trigger? }`; otherwise `HOLQA_INPUT_INVALID`. |
 | Time limit | Measured from dispatch, including waiting. When it passes, the invocation's `signal` aborts and the caller receives `HOLQA_INVOCATION_TIMEOUT`. |
@@ -118,7 +119,7 @@ const pool = await scope.use(database);
 
 Concurrent first uses share one creation, a failed creation is not cached, and `use` fails with `HOLQA_RUNTIME_NOT_RUNNING` once in-flight work has drained during a stop; a value whose creation finishes after that is disposed of at once. Two runtimes never share scoped values. Invocation state belongs in the handler's locals or the middleware context, which is built per invocation and frozen; module-level variables are shared by every invocation of the process and are not part of this contract.
 
-An application instance can be bound to one runtime at a time: starting a second runtime on the same instance fails with `HOLQA_RUNTIME_ALREADY_BOUND`. Running applications in separate workers or processes, each with its own instance, is **Planned** ([ADR 0015](../architecture/decisions/0015-runtime-generations-and-reload.md)); the runtime API takes everything it needs as explicit options so that a deployment adapter can create one runtime per isolated environment.
+An application instance can be bound to one runtime at a time: starting a second runtime on the same instance fails with `HOLQA_RUNTIME_ALREADY_BOUND`. `holqa dev` runs each generation of an application in its own process with its own instance ([ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md)); running applications in separate workers is **Planned** ([ADR 0015](../architecture/decisions/0015-runtime-generations-and-reload.md)); the runtime API takes everything it needs as explicit options so that a deployment adapter can create one runtime per isolated environment.
 
 ### Configuration
 
@@ -126,7 +127,11 @@ The default binding validates every configuration entry at `start()`: the enviro
 
 ### Logs
 
-Entries are JSON objects with `level`, `time` and `message`, then context fields (`application`, `handlerId`, `invocationId`, `correlationId`, and `method` and `path` for HTTP), then the fields a handler passes to `log.info/warn/error`. Fields cannot replace `level`, `time` or `message`. The runtime writes `runtime started`, `invocation completed` (`outcome`, `durationMs`), `invocation failed` (`code`, `durationMs`, and `error` with name, message, stack and diagnostics; level `error` for server errors), `request rejected` (unmatched requests), and `runtime stopped`. Request and response bodies are never logged.
+Entries are JSON objects with `level`, `time` and `message`, then context fields (`application`, `handlerId`, `invocationId`, `correlationId`, `triggerKind` and `resourceId` of the handler's trigger, `causationId` when the invocation has a cause, `method` and `path` for HTTP, and `deliveryId` and `attempt` for queue messages and object events, `runId` for scheduled runs), then the fields a handler passes to `log.info/warn/error`. Fields cannot replace `level`, `time` or `message`; a handler field with the same name as a context field replaces it in that entry. The runtime writes `runtime started`, `invocation completed` (`outcome`, `durationMs`, and `emitted` when the handler emitted anything), `invocation failed` (`code`, `durationMs`, `emitted`, `source` when `handlerSources` names the handler, and `error` with name, message, stack and diagnostics; level `error` for server errors), `request rejected` (unmatched requests), and `runtime stopped`. Request and response bodies are never logged.
+
+### Traces
+
+A trace is every invocation that shares one `correlationId`. When handler code sends a message or writes or deletes an object, the runtime passes the running invocation's trace to the driver as `DriverOperationContext.trace` (`{ correlationId, causationId }`, where `causationId` is the sending invocation's `invocationId`) and records the operation in `emitted`. A binding that stores the trace returns it with each resulting delivery (`LeasedDelivery.trace`); the queue or object event invocation then uses the delivery's `correlationId` and logs its `causationId`. Without a trace (a binding that does not store one, or a message sent outside an invocation) the delivery's `correlationId` is the message or event identifier, as before. Scheduled runs use their `runId`. The runtime finds the running invocation with `AsyncLocalStorage`, so operations that handler code starts are attributed to it even when they finish later; work a handler leaves running after its outcome is not listed in `emitted`. The trace is not part of the `holqa.message/1` envelope or of any resource contract.
 
 ## HTTP routes
 
@@ -406,13 +411,13 @@ The time zone, daylight-saving and missed-run rules below are what every schedul
 
 ## Compiled applications
 
-`loadCompiledApplication({ root, buildDir? })` reads `manifest.json` and `entrypoints.json` written by `holqa build --manifest`, imports the application module and each handler module, and returns `{ app, handlers, manifestFingerprint }` for `createRuntime`. It fails with `HOLQA_APP_NOT_FOUND` without build output, `HOLQA_MANIFEST_INVALID` for malformed output (including module paths outside the root), `HOLQA_MANIFEST_VERSION_UNSUPPORTED` for another manifest version, `HOLQA_APP_INVALID` when the application module's default export is not an application, `HOLQA_MODULE_EVALUATION_FAILED` when a module throws, and `HOLQA_BUILD_STALE` when the entry point map belongs to another manifest or the application name, resources (kind, identifier, settings, requirements), configuration entries, handler exports or triggers changed since the build. Schema changes and handler modules added after the build are not detected; rebuild after changing either.
+`loadCompiledApplication({ root, buildDir? })` reads `manifest.json` and `entrypoints.json` written by `holqa build --manifest`, imports the application module and each handler module, and returns `{ app, handlers, manifestFingerprint, handlerSources }` for `createRuntime`. It fails with `HOLQA_APP_NOT_FOUND` without build output, `HOLQA_MANIFEST_INVALID` for malformed output (including module paths outside the root), `HOLQA_MANIFEST_VERSION_UNSUPPORTED` for another manifest version, `HOLQA_APP_INVALID` when the application module's default export is not an application, `HOLQA_MODULE_EVALUATION_FAILED` when a module throws, and `HOLQA_BUILD_STALE` when the entry point map belongs to another manifest or the application name, resources (kind, identifier, settings, requirements), configuration entries, handler exports or triggers changed since the build. Schema changes and handler modules added after the build are not detected; rebuild after changing either.
 
 Loading evaluates the application's code in the current process with its permissions. It is not a sandbox; load only build output you trust.
 
 ## Bun and other runtimes
 
-`createRuntime` and `runtime.fetch` use Web-standard APIs (`Request`, `Response`, `URL`, `AbortController`, `crypto.randomUUID`, timers) plus the global `process.env` as the default environment. `serve` uses `Bun.serve`, and `loadCompiledApplication` uses `Bun.file`, `node:path` and `node:url`; both need Bun 1.3.13 or later. `serve` binds `127.0.0.1` by default, limits request bodies to 1 MiB (Bun answers larger ones with `413`), and does not use `stop(false)`, which on Bun 1.3.13 leaves keep-alive connections open.
+`createRuntime` and `runtime.fetch` use Web-standard APIs (`Request`, `Response`, `URL`, `AbortController`, `crypto.randomUUID`, timers) plus the global `process.env` as the default environment, and `AsyncLocalStorage` from `node:async_hooks` (available in Bun and Node) to attribute resource operations to invocations. `serve` uses `Bun.serve`, and `loadCompiledApplication` uses `Bun.file`, `node:path` and `node:url`; both need Bun 1.3.13 or later. `serve` binds `127.0.0.1` by default, limits request bodies to 1 MiB (Bun answers larger ones with `413`), and does not use `stop(false)`, which on Bun 1.3.13 leaves keep-alive connections open.
 
 ## Not implemented
 
@@ -420,7 +425,8 @@ Loading evaluates the application's code in the current process with its permiss
 | --- | --- |
 | Bindings for external queue, storage and scheduling services | Planned |
 | Topics with independent subscriptions (fan-out) | Planned |
-| Worker or process isolation per application, reload, `holqa dev` | Planned |
+| Reload by process restart (`holqa dev`) | **Implemented** in `@holqa/cli` ([ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md)) |
+| In-process module reloading, worker isolation per application | Planned |
 | Middleware for background triggers | Planned |
 | CORS and body limits declared in the application | Proposed |
 | OpenAPI documents, generated clients | Planned |

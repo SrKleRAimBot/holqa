@@ -38,9 +38,13 @@ import {
 import {
   defineApp,
   http,
-  queue
+  queue,
+  schedule
 } from "@holqa/sdk";
-import { assertType } from "@holqa/testing";
+import {
+  assertType,
+  createTestApp
+} from "@holqa/testing";
 import { zodAdapter } from "@holqa/zod";
 import {
   describe,
@@ -157,5 +161,17 @@ export type SmokeAssertion = Expect<Equal<ReturnType<typeof parseResourceId>["ok
 describe("@holqa/testing public exports", () => {
   it("exposes type assertions with no run-time effect", () => {
     expect(assertType<string>("smoke")).toBeUndefined();
+  });
+
+  it("runs an SDK application in a test app with a virtual clock", async () => {
+    const app = defineApp({ name: "smoke-test-app", handlers: [], resources: { tick: schedule({ id: "tick", cron: "*/5 * * * *", timezone: "UTC", overlap: "skip" }) } });
+    let runs = 0;
+    const handler = app.resources.tick.handle({ id: "tick.run", handler: async () => {
+      runs += 1;
+    } });
+    const test = await createTestApp({ app, handlers: [handler], startTime: "2026-10-18T09:00:00.000Z" });
+    await test.advance(15 * 60_000);
+    expect(runs).toBe(3);
+    await test.dispose();
   });
 });

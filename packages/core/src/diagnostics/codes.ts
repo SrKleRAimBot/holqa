@@ -121,7 +121,19 @@ export const diagnosticCodes = {
   /** A delivery was received more often than its attempts allow without being settled, for example because its leases kept expiring. */
   deliveryAttemptsExhausted: "HOLQA_DELIVERY_ATTEMPTS_EXHAUSTED",
   /** A scheduled run was skipped because the previous run was still in progress and the schedule's overlap policy is `skip`. */
-  scheduleRunSkipped: "HOLQA_SCHEDULE_RUN_SKIPPED"
+  scheduleRunSkipped: "HOLQA_SCHEDULE_RUN_SKIPPED",
+  /** A development reload failed (the application no longer analyzes, builds or starts); the previous generation keeps serving. */
+  reloadFailed: "HOLQA_RELOAD_FAILED",
+  /** Another development session already runs the same application or uses the same local state directory. */
+  devSessionActive: "HOLQA_DEV_SESSION_ACTIVE",
+  /** The development supervisor could not start, for example because its port is in use. */
+  devStartFailed: "HOLQA_DEV_START_FAILED",
+  /** A file named on the command line does not exist or cannot be read. */
+  fileUnreadable: "HOLQA_FILE_UNREADABLE",
+  /** A `holqa doctor` check found a problem with the project or the local environment. */
+  doctorCheckFailed: "HOLQA_DOCTOR_CHECK_FAILED",
+  /** A local operation of the CLI (invoke, queue send, storage put, cron run, state) failed unexpectedly, for example because the process running the application exited. */
+  localOperationFailed: "HOLQA_LOCAL_OPERATION_FAILED"
 } as const;
 
 /**

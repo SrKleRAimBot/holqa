@@ -233,7 +233,8 @@ export class DeliveryWorker<Body> {
           handlerId,
           input: prepared.input,
           metadata: prepared.metadata,
-          correlationId: delivery.id,
+          correlationId: delivery.trace?.correlationId ?? delivery.id,
+          ...delivery.trace?.causationId === undefined ? {} : { causationId: delivery.trace.causationId },
           timeoutMs,
           logFields: { deliveryId: delivery.id, attempt: delivery.attempt }
         }));

@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.0",
   "private": true,
-  "description": "The Holqa command-line interface: help, version, inspect and build --manifest. Other workflow commands are planned.",
+  "description": "The Holqa command-line interface: inspect, build --manifest, dev (local development supervisor), invoke, queue send, storage put, cron run, state and doctor.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -40,7 +40,9 @@
   },
   "dependencies": {
     "@holqa/compiler": "workspace:*",
-    "@holqa/core": "workspace:*"
+    "@holqa/core": "workspace:*",
+    "@holqa/local": "workspace:*",
+    "@holqa/runtime-bun": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "catalog:",

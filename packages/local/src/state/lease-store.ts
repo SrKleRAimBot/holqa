@@ -1,6 +1,7 @@
 import type {
   DeliveryFailure,
   DeliverySource,
+  DeliveryTrace,
   LeasedDelivery,
   ReceiveRequest
 } from "@holqa/core";
@@ -31,6 +32,8 @@ export interface StoredDelivery {
   readonly createdAt: number;
   readonly updatedAt: number;
   readonly lastError?: DeliveryError;
+  /** Where the delivery came from, when its sender recorded a trace. */
+  readonly trace?: DeliveryTrace;
 }
 
 /** A row of the `deliveries` table. */
@@ -47,6 +50,8 @@ interface DeliveryRow {
   readonly last_error_code: string | null;
   readonly last_error_message: string | null;
   readonly last_invocation_id: string | null;
+  readonly correlation_id: string | null;
+  readonly causation_id: string | null;
 }
 
 /** Settings of a {@link LeaseStore}. */
@@ -94,11 +99,12 @@ export class LeaseStore {
    * @param id - The delivery's identity (message or event identifier).
    * @param body - The JSON text delivered.
    * @param delayMs - How long until it is due.
+   * @param trace - Where the delivery came from; returned with every lease.
    */
-  add(channel: string, id: string, body: string, delayMs = 0): void {
+  add(channel: string, id: string, body: string, delayMs = 0, trace?: DeliveryTrace): void {
     const now = this.options.clock.now();
-    this.options.database.query("INSERT INTO deliveries (channel, delivery_id, body, state, attempts, visible_at, created_at, updated_at) VALUES (?, ?, ?, 'ready', 0, ?, ?, ?)")
-      .run(channel, id, body, now + Math.max(0, delayMs), now, now);
+    this.options.database.query("INSERT INTO deliveries (channel, delivery_id, body, state, attempts, visible_at, created_at, updated_at, correlation_id, causation_id) VALUES (?, ?, ?, 'ready', 0, ?, ?, ?, ?, ?)")
+      .run(channel, id, body, now + Math.max(0, delayMs), now, now, trace?.correlationId ?? null, trace?.causationId ?? null);
   }
 
   /**
@@ -181,10 +187,10 @@ export class LeaseStore {
    * @returns `true` when a delivery with that identity was found and copied.
    */
   duplicate(channel: string, id: string): boolean {
-    const row = this.options.database.query<{ body: string }, [string, string]>("SELECT body FROM deliveries WHERE channel = ? AND delivery_id = ? ORDER BY seq LIMIT 1").get(channel, id);
+    const row = this.options.database.query<DeliveryRow, [string, string]>("SELECT * FROM deliveries WHERE channel = ? AND delivery_id = ? ORDER BY seq LIMIT 1").get(channel, id);
     if (row === null)
       return false;
-    this.add(channel, id, row.body);
+    this.add(channel, id, row.body, 0, traceOf(row));
     this.notify(channel);
     return true;
   }
@@ -241,7 +247,8 @@ export class LeaseStore {
         const token = createId();
         database.query("UPDATE deliveries SET state = 'leased', attempts = attempts + 1, lease_token = ?, visible_at = ?, updated_at = ? WHERE seq = ?")
           .run(token, now + Math.max(1, request.leaseMs), now, row.seq);
-        return [{ receipt: `${row.seq}:${token}`, id: row.delivery_id, attempt: row.attempts + 1, body }];
+        const trace = traceOf(row);
+        return [{ receipt: `${row.seq}:${token}`, id: row.delivery_id, attempt: row.attempts + 1, body, ...trace === undefined ? {} : { trace } }];
       });
     })();
     return leased;
@@ -324,6 +331,18 @@ function failureFields(failure: DeliveryFailure): Readonly<Record<string, string
 }
 
 /**
+ * Reads the trace stored with a delivery.
+ *
+ * @param row - A row read from the state database.
+ * @returns The trace, or `undefined` when the sender recorded none.
+ */
+function traceOf(row: DeliveryRow): DeliveryTrace | undefined {
+  if (row.correlation_id === null)
+    return undefined;
+  return Object.freeze({ correlationId: row.correlation_id, ...row.causation_id === null ? {} : { causationId: row.causation_id } });
+}
+
+/**
  * Converts a database row into its inspection form.
  *
  * @param row - A row read from the state database.
@@ -341,6 +360,7 @@ function toStoredDelivery(row: DeliveryRow): StoredDelivery {
     updatedAt: row.updated_at,
     ...row.last_error_code === null
       ? {}
-      : { lastError: Object.freeze({ code: row.last_error_code, message: row.last_error_message ?? "", ...row.last_invocation_id === null ? {} : { invocationId: row.last_invocation_id } }) }
+      : { lastError: Object.freeze({ code: row.last_error_code, message: row.last_error_message ?? "", ...row.last_invocation_id === null ? {} : { invocationId: row.last_invocation_id } }) },
+    ...row.correlation_id === null ? {} : { trace: traceOf(row)! }
   });
 }

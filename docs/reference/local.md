@@ -1,6 +1,6 @@
 # Local environment
 
-> **Status:** **Implemented** in `@holqa/local` (private, unpublished). `holqa dev` and the other local CLI commands are **Proposed** and not implemented; today the environment is created in code.
+> **Status:** **Implemented** in `@holqa/local` (private, unpublished). `holqa dev` and the operation commands (`invoke`, `queue send`, `storage put`, `cron run`, `state`) run applications on it ([CLI reference](cli.md)), and `createTestApp` in `@holqa/testing` runs it in tests ([local development guide](../guides/local-development.md)); it can also be created in code, as below.
 
 `@holqa/local` is a runtime binding that fulfils an application's queues, buckets and schedules on one machine, without cloud credentials. It implements the same driver and source contracts as any other binding ([ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md)), so handler code does not change between local runs and other bindings. The delivery policy (retries, backoff, dead-lettering, concurrency) is applied by `@holqa/runtime-bun` and is the same for every binding ([runtime reference](runtime.md#queue-delivery)).
 
@@ -55,9 +55,10 @@ A declaration that needs more fails when the runtime starts: `HOLQA_RUNTIME_STAR
 | Leases | A received message is leased for the runtime's `delivery.leaseMs` of clock time. A runtime that crashes or hangs loses its leases when they expire, and the message becomes due again with a higher attempt. A settlement after the message was leased again has no effect. |
 | Duplicates and order | Duplicates happen after an expired lease and can be forced with `queues.duplicate`. Order is best effort (oldest due first), not guaranteed: retries and delays reorder messages. |
 | Objects | Bytes are written to a temporary file, renamed into place under a name derived from a hash of the key, and then switched in the metadata in one transaction, so readers never see a partly written object and keys never become file system paths. The `etag` is the SHA-256 of the content. |
-| Events | Written in the same transaction as the metadata change, as one delivery per matching subscription, and due at once. Notifications from storage services are asynchronous and can arrive late; do not rely on an event being delivered before a later request reads the object. A subscription keeps receiving events while its runtime is stopped and catches up when it starts again. Subscription rows of removed handlers are not cleaned up yet. |
+| Events | Written in the same transaction as the metadata change, as one delivery per matching subscription, and due at once. Notifications from storage services are asynchronous and can arrive late; do not rely on an event being delivered before a later request reads the object. A subscription keeps receiving events while its runtime is stopped and catches up when it starts again. `storage.retainSubscriptions` removes the subscriptions of handlers that no longer exist, and every `holqa dev` generation calls it when it starts; deliveries already recorded for a removed subscription are kept. An environment created in code keeps subscriptions until they are removed this way. |
 | Leases | Sources implement `extend`, so the runtime renews leases while a handler runs. |
 | Scheduler | Driven by the environment's clock. Each run is reported once, which is stronger than many scheduler services. Runs due while no runtime is subscribed are not backfilled; after a late wake-up the latest due run starts and the earlier ones are recorded as `missed` (at most 10 000 occurrences are examined per wake-up). Cron and daylight-saving rules are those of the [runtime reference](runtime.md#scheduled-runs). |
+| Traces | When the runtime passes a trace with a send, write or delete (`DriverOperationContext.trace`: the sending invocation's `correlationId` and, as `causationId`, its `invocationId`), the trace is stored with each resulting delivery, kept by redeliveries and duplicates, and returned as `LeasedDelivery.trace`, so the receiving invocation joins the trace. Operations without a trace (signed uploads, the CLI's `queue send`) store none. |
 | Not simulated | Network partitions, throttling, service outages and storage quotas. |
 
 ## Signed URLs
@@ -80,12 +81,14 @@ Bindings for external storage services validate their own signatures and documen
 
 | API | What it does |
 | --- | --- |
-| `queues.messages(queueId, states?)` | Lists messages with `messageId`, `state` (`ready`, `delayed`, `in-flight`, `acknowledged`, `dead-lettered`), `attempts`, `schemaVersion`, `payload`, times and the last failure. |
+| `queues.messages(queueId, states?)` | Lists messages with `messageId`, `state` (`ready`, `delayed`, `in-flight`, `acknowledged`, `dead-lettered`), `attempts`, `schemaVersion`, `payload`, times, the last failure and the sender's `trace`, when one was recorded. |
 | `queues.deadLetters(queueId)` | Lists dead-lettered messages. |
 | `queues.redrive(queueId, messageId?)` | Makes dead-lettered messages due again with a fresh attempt count. |
 | `queues.duplicate(queueId, messageId)` | Delivers a known message once more, with the same message identifier. |
 | `queues.purge(queueId)` | Deletes every message that is not in flight. |
-| `storage.events(bucketId)` | Lists events with each subscription's delivery state and last failure. |
+| `storage.events(bucketId)` | Lists events with their `trace` (when the writing invocation recorded one and a subscription received the event) and each subscription's delivery `state`, `attempts`, `visibleAt` (when it is due again or its lease ends) and last failure. |
+| `storage.objects(bucketId, prefix?)` | Lists stored objects' metadata in key order (UTF-8 bytes). |
+| `storage.retainSubscriptions(bucketId, subscriptions)` | Removes the bucket's subscriptions that are not listed, so no further events are recorded for them, and returns the removed identifiers. |
 | `storage.redriveEvents(bucketId, subscription, eventId?)`, `storage.duplicateEvent(bucketId, subscription, eventId)` | The same for object events, per subscription. |
 | `scheduler.trigger(scheduleId)` | Starts a manual run through the runtime and resolves with its record. Fails with `HOLQA_RUNTIME_NOT_RUNNING` when no runtime receives the schedule. |
 | `scheduler.runs(scheduleId, limit?)`, `scheduler.nextRun(scheduleId)` | Recorded runs (`running`, `succeeded`, `failed`, `skipped`, `missed`), newest first, and the next cron run. |
@@ -109,15 +112,23 @@ await local.settle();
 expect(local.queues.deadLetters("document-jobs")).toEqual([]);
 ```
 
-`ManualClock.advance(ms)` moves time continuously: every timer due within the period fires at its own time, in order. `ManualClock.jump(ms)` moves time in one step and then fires due timers late, as after a suspended process, which is how missed schedule runs are produced. Handler time limits still use real time.
+`ManualClock.advance(ms)` moves time continuously: every timer due within the period fires at its own time, in order. `ManualClock.jump(ms)` moves time in one step and then fires due timers late, as after a suspended process, which is how missed schedule runs are produced. `ManualClock.nextTimerDue()` returns when the earliest pending timer is due, so a test can step from timer to timer and settle in between. Handler time limits still use real time.
+
+`createTestApp` in `@holqa/testing` packages this pattern (`flush`, `advance`, `drain`, failure injection, duplicates, inspection and invocation records); see the [local development guide](../guides/local-development.md).
+
+### Invoking background handlers directly
+
+`manualTriggerMetadata(app, definition, { now, createId, attempt?, messageId?, eventId? })` builds the trusted metadata `runtime.invoke` requires for one invocation of a background handler, as if its trigger had fired: a first delivery of a new message (with the queue's `schemaVersion`), a first delivery of a new object event at `now`, or a manual run (`trigger: "manual"`) scheduled at `now`. Nothing is stored, so the invocation does not appear in queue, event or schedule history. HTTP handlers are refused with `HOLQA_OPERATION_INVALID`, because they are invoked with a request; so is an attempt that is not a positive integer. `holqa invoke` and `createTestApp().invoke` use it.
 
 ## State format
 
-The state directory has format version 1 (`stateVersion`). Opening a directory written by a newer format fails with `HOLQA_LOCAL_STATE_UNSUPPORTED`. The format is not a public contract: it can change before 1.0, and inspection should go through the APIs above.
+The state directory has format version 2 (`stateVersion`), which adds the sender's trace to deliveries. A format 1 directory is upgraded in place when it is opened; its existing deliveries have no trace. Opening a directory written by a newer format fails with `HOLQA_LOCAL_STATE_UNSUPPORTED`; after an upgrade, older versions of the local drivers therefore refuse the directory. The format is not a public contract: it can change before 1.0, and inspection should go through the APIs above.
 
 ## Related
 
 - [Runtime reference](runtime.md)
 - [Local development](../concepts/local-development.md)
+- [Local development guide](../guides/local-development.md)
+- [CLI reference](cli.md)
 - [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md)
 - [Document processing example](../../examples/document-processing/README.md)

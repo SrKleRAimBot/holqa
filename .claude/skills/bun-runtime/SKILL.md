@@ -95,7 +95,7 @@ Use `port: 0` in tests to avoid port collisions; always stop servers in `finally
 ### 6. Module loading, lifecycle, and reload
 
 - Modules are evaluated once and cached per process. Module-level state (registries, connections, timers) survives for the life of the process; avoid hidden global mutable state.
-- `bun --watch` restarts the whole process on change. `bun --hot` re-evaluates changed modules in place and **keeps** global state, so stale servers, intervals, or registries can leak. Any future Holqa backend reload design must clean up resources explicitly; this is **Planned**, and neither flag is part of Holqa's contract.
+- `bun --watch` restarts the whole process on change. `bun --hot` re-evaluates changed modules in place and **keeps** global state, so stale servers, intervals, or registries can leak. `holqa dev` therefore reloads by starting a fresh generation process ([ADR 0025](../../../docs/architecture/decisions/0025-dev-supervisor-and-process-generations.md)); a future in-process hot-swap must clean up resources explicitly (**Planned**). Neither flag is part of Holqa's contract.
 - Top-level `await` works in ESM but delays importers; avoid it in library code.
 - Bun allows `require()` of ESM; Node 22 only partially does. Published packages are ESM-only, so do not rely on `require` interop in library code.
 

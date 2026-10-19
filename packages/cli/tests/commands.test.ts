@@ -11,16 +11,12 @@ import {
 } from "@/commands";
 
 describe("findProposedCommand", () => {
-  it("matches single-word commands", () => {
-    expect(findProposedCommand(["dev"])?.name).toBe("dev");
-  });
-
   it("matches multi-word commands and ignores trailing arguments", () => {
-    expect(findProposedCommand(["queue", "send", "orders"])?.name).toBe("queue send");
+    expect(findProposedCommand(["openapi", "generate", "api"])?.name).toBe("openapi generate");
   });
 
   it("returns undefined for partial or unknown commands", () => {
-    expect(findProposedCommand(["queue"])).toBeUndefined();
+    expect(findProposedCommand(["openapi"])).toBeUndefined();
     expect(findProposedCommand(["deploy"])).toBeUndefined();
     expect(findProposedCommand([])).toBeUndefined();
   });
@@ -31,8 +27,8 @@ describe("findProposedCommand", () => {
   });
 
   it("no longer lists implemented commands as proposed", () => {
-    expect(implementedCommands.map(command => command.name)).toEqual(["inspect", "build --manifest"]);
-    expect(findProposedCommand(["inspect"])).toBeUndefined();
-    expect(findProposedCommand(["build"])).toBeUndefined();
+    expect(implementedCommands.map(command => command.name)).toEqual(["inspect", "build --manifest", "dev", "invoke", "queue send", "storage put", "cron run", "state", "doctor"]);
+    for (const words of [["inspect"], ["build"], ["dev"], ["invoke"], ["queue", "send"], ["storage", "put"], ["cron", "run"], ["doctor"]])
+      expect(findProposedCommand(words)).toBeUndefined();
   });
 });

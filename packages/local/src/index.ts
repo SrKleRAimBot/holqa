@@ -6,6 +6,8 @@ export type {
   LocalEnvironmentOptions,
   SettleOptions
 } from "@/environment";
+export { manualTriggerMetadata } from "@/manual-trigger";
+export type { ManualTriggerOptions } from "@/manual-trigger";
 export type {
   LocalMessageState,
   LocalQueueMessage,
@@ -16,6 +18,10 @@ export type {
   LocalScheduler,
   LocalScheduleRun
 } from "@/schedule/local-scheduler";
-export { stateFileName, stateVersion } from "@/state/database";
+export {
+  readStateFormat,
+  stateFileName,
+  stateVersion
+} from "@/state/database";
 export type { DeliveryError, DeliveryState } from "@/state/lease-store";
 export type { LocalObjectEvent, LocalStorage } from "@/storage/local-storage";

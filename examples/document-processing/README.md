@@ -49,3 +49,11 @@ curl -X POST 127.0.0.1:3000/api/documents -H 'content-type: application/json' -d
 # PUT the file to the returned upload.url with the returned headers, then:
 curl 127.0.0.1:3000/api/documents/<documentId>
 ```
+
+The application also runs under the development supervisor, which rebuilds and restarts it when a file changes and keeps its local state in `app/.holqa/local` (see the [local development guide](../../docs/guides/local-development.md)):
+
+```bash
+cd examples/document-processing
+pnpm exec holqa dev --app app/infra.ts
+pnpm exec holqa state --app app/infra.ts   # in another terminal
+```

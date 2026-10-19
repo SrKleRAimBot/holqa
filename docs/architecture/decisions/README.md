@@ -33,7 +33,7 @@ Once an ADR is accepted, it is not rewritten. To change a decision, write a new 
 | [0012](0012-source-inferred-types-and-reply-helpers.md) | Source-inferred types and reply helpers | Accepted (inference implemented; `reply` not implemented) | 2026-10-17 |
 | [0013](0013-descriptor-protocol-in-core.md) | A descriptor protocol in `@holqa/core` | Accepted (implemented with the proposed layout of 0018) | 2026-10-17 |
 | [0014](0014-evaluation-based-manifest-extraction.md) | Evaluation-based manifest extraction | Accepted (implemented; decision 4 refined by proposed 0022) | 2026-10-17 |
-| [0015](0015-runtime-generations-and-reload.md) | Runtime generations and reload | Accepted (validated in M0, not implemented) | 2026-10-17 |
+| [0015](0015-runtime-generations-and-reload.md) | Runtime generations and reload | Accepted (validated in M0; decision 7 would be superseded in part by proposed 0025) | 2026-10-17 |
 | [0016](0016-schema-adapters-and-conversion-fidelity.md) | Schema adapters and conversion fidelity | Accepted (implemented for Zod; 0021 proposes refining decision 2) | 2026-10-17 |
 | [0017](0017-package-layers-after-m0.md) | Package layers after M0 | Accepted (existing rows enforced) | 2026-10-17 |
 | [0018](0018-typed-kind-registries-in-the-descriptor-protocol.md) | Typed kind registries in the descriptor protocol | Proposed (implemented) | 2026-10-17 |
@@ -43,6 +43,7 @@ Once an ADR is accepted, it is not rewritten. To change a decision, write a new 
 | [0022](0022-manifest-v1-and-entry-point-map.md) | Manifest version 1 and a separate entry point map | Proposed (implemented; decision 4 refined by proposed 0023) | 2026-10-18 |
 | [0023](0023-common-invocation-engine-and-http-rpc-execution.md) | A common invocation engine, with HTTP and RPC as its first transports | Proposed (implemented for HTTP and RPC) | 2026-10-18 |
 | [0024](0024-event-delivery-sources-and-local-drivers.md) | Event delivery through binding sources, with local drivers as the first binding | Proposed (implemented) | 2026-10-18 |
+| [0025](0025-dev-supervisor-and-process-generations.md) | A development supervisor with one process per generation | Proposed (implemented) | 2026-10-19 |
 
 ## Adding an ADR
 

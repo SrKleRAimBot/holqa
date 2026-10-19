@@ -27,7 +27,7 @@ In the Holqa repository: bucket declarations, the object operations above with p
 3. **Read and write from handlers** using the portable operations on the bucket handle.
 4. **React to events** with an object-created or object-deleted handler, filtered by prefix.
 5. **Validate object metadata** (size, content type, key) in the event handler before processing.
-6. **Exercise it locally** with `@holqa/local` (filesystem-backed); `holqa storage put` is proposed.
+6. **Exercise it locally** with `@holqa/local` (filesystem-backed); upload a file by hand with `holqa storage put <bucket> <file>` while `holqa dev` runs.
 
 ```ts
 // src/uploads/request-upload.handler.ts — `requireUser` is illustrative middleware

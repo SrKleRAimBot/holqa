@@ -1,6 +1,6 @@
 # Architecture overview
 
-> **Status:** Accepted design. The package boundaries and their enforcement are **Implemented**; `@holqa/core` (contracts and the descriptor protocol), `@holqa/sdk` (the application and resource model), `@holqa/testing` (type assertions), `@holqa/compiler` (canonical JSON, application compilation, graph validation and manifest version 1), `@holqa/runtime-bun` (invocation dispatcher, lifecycle, HTTP routes, RPC procedures, and queue, object event and schedule delivery), `@holqa/local` (local queue, storage and scheduler drivers) and `@holqa/cli` (help, version, `inspect` and `build --manifest`) contain implemented parts. All other layers are planned.
+> **Status:** Accepted design. The package boundaries and their enforcement are **Implemented**; `@holqa/core` (contracts and the descriptor protocol), `@holqa/sdk` (the application and resource model), `@holqa/testing` (type assertions and `createTestApp`), `@holqa/compiler` (canonical JSON, application compilation, graph validation and manifest version 1), `@holqa/runtime-bun` (invocation dispatcher, lifecycle, HTTP routes, RPC procedures, and queue, object event and schedule delivery), `@holqa/local` (local queue, storage and scheduler drivers) and `@holqa/cli` (help, version, `inspect`, `build --manifest`, the `holqa dev` supervisor and the local operation commands) contain implemented parts. All other layers are planned.
 
 This document describes Holqa's layers, how packages map to them, and how data flows from source code to a running application. For the reasoning behind individual decisions, see the [ADRs](decisions/README.md).
 
@@ -16,8 +16,8 @@ Holqa is organized into layers whose dependencies point **inward**, toward frame
 | **Compilation** | Analysis, resource graph, manifest IR, diagnostics, client generation. | `@holqa/compiler` | Yes, in its own source (no Bun or Node imports). |
 | **Execution** | Running handlers on Bun; invocation dispatcher and transports. | `@holqa/runtime-bun` (implemented: dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery) | No (Bun) |
 | **Local environment** | Local runtime drivers and emulators. | `@holqa/local` (implemented: SQLite-backed queues, filesystem buckets, clock-driven scheduler) | No |
-| **Testing** | Deterministic test utilities and fixtures. | `@holqa/testing` (type assertions implemented) | No |
-| **Tooling** | Developer CLI composing compiler, runtime, and local environment. | `@holqa/cli` | No (Bun) |
+| **Testing** | Deterministic test utilities and fixtures. | `@holqa/testing` (implemented: type assertions, `createTestApp`) | No |
+| **Tooling** | Developer CLI composing compiler, runtime, and local environment. | `@holqa/cli` (implemented: `inspect`, `build --manifest`, `dev`, `invoke`, `queue send`, `storage put`, `cron run`, `state`, `doctor`) | No (Bun) |
 | **Integrations** | Adapters for schema libraries, Effect, oRPC, TanStack Query, and others. | `packages/integrations/*` (`@holqa/zod` implemented; others planned) | Depends on integration |
 | **Bindings** | Production runtime drivers and provisioning providers. | Not yet scoped | No |
 
@@ -32,7 +32,7 @@ flowchart TB
   subgraph Execution["Execution and tooling"]
     runtime["@holqa/runtime-bun<br/>(HTTP, RPC, queues, events, schedules)"]
     local["@holqa/local<br/>local drivers"]
-    testing["@holqa/testing<br/>(partial)"]
+    testing["@holqa/testing"]
     cli["@holqa/cli"]
   end
   integrations["packages/integrations/*<br/>(planned)"]

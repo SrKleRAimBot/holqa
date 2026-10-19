@@ -102,6 +102,27 @@ it("brands successful values so plain strings are not assignable", () => {
 - For serialization, assert exact output. `canonicalJsonStringify` tests compare complete strings, because byte-identical output is the contract.
 - Clean up any files or processes a test creates. Prefer in-memory data over the file system.
 
+## Integration tests of applications
+
+Test an application's event-driven behaviour with `createTestApp` from `@holqa/testing` instead of a hand-built runtime and local environment. It gives each test its own state directory and a virtual clock, so retries, delays and schedules run without waiting for real time:
+
+```ts
+import { createTestApp } from "@holqa/testing";
+import app from "@/app/infra";
+import { processOrder } from "@/app/src/orders.handler";
+
+const test = await createTestApp({ app, handlers: [processOrder] });
+test.failNext("orders.process");            // the first attempt throws
+await test.send("orders", { orderId: "1" });
+await test.drain();                         // moves time to the retry and runs it
+expect(test.invocations({ handlerId: "orders.process" }).map(record => record.outcome)).toEqual(["failed", "ok"]);
+await test.dispose();
+```
+
+An application instance can be bound to one running test app at a time: dispose of it (for example in `afterEach`) before creating the next. `createTestApp` requires Bun. See the [`@holqa/testing` README](../../packages/testing/README.md) and the [order pipeline example](../../examples/order-pipeline/README.md).
+
+Tests that start real processes (the CLI's dev session tests, `examples/order-pipeline/tests/dev-session.test.ts`) write scratch copies of applications under the package's `.tmp/` directory, which is ignored by Git and ESLint, and remove them afterwards.
+
 ## No tests is a failure
 
 `bun test` exits non-zero when it finds no test files, so a package's `test` script fails rather than passing vacuously. Every package with a `test` script must contain at least one real test. Do not work around this with an empty placeholder test.
@@ -111,7 +132,7 @@ it("brands successful values so plain strings are not assignable", () => {
 [`examples/package-smoke`](../../examples/package-smoke/) tests the packages *as consumers see them*:
 
 - `tests/package-exports.test.ts` imports `@holqa/core` and `@holqa/compiler` through their `exports` and checks runtime behaviour and exported types.
-- `tests/published-artifacts.test.ts` checks that each package's `dist/` contains `.js` and `.d.ts` files with no unresolved `@/` imports ([ADR 0011](../architecture/decisions/0011-path-aliases-in-library-packages.md)), and runs the built `holqa` bin with Bun (`--help`, plus a proposed command that must report `HOLQA_CLI_NOT_IMPLEMENTED`).
+- `tests/published-artifacts.test.ts` checks that each package's `dist/` contains `.js` and `.d.ts` files with no unresolved `@/` imports ([ADR 0011](../architecture/decisions/0011-path-aliases-in-library-packages.md)), and runs the built `holqa` bin with Bun (`--help`, a usage error, and a proposed command that must report `HOLQA_CLI_NOT_IMPLEMENTED`), and runs an SDK application with `createTestApp`.
 
 It runs in `pnpm test` after the packages are built. When you add a package that produces build output, add it to these tests (see [development: adding a package](development.md#7-wire-it-into-verification-and-docs)).
 
