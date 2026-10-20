@@ -57,3 +57,45 @@ cd examples/document-processing
 pnpm exec holqa dev --app app/infra.ts
 pnpm exec holqa state --app app/infra.ts   # in another terminal
 ```
+
+## Three environments
+
+The same handlers run in three environments; only the binding configuration changes. The configurations are in
+[`app/environments.ts`](app/environments.ts); no handler mentions an infrastructure provider.
+
+| Environment | Binding | Compute | Queues | Files and object events | Schedules | Configuration | Telemetry |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| A: local | [`app/bindings.ts`](app/bindings.ts) | Local platform | Local | Local | Local | Environment | Local store |
+| B: external | [`app/bindings.external.ts`](app/bindings.external.ts) | Bun container (`container.host()`) | RabbitMQ | S3-compatible store; notifications through RabbitMQ | In the container (`container.schedules()`) | Environment | OTLP receiver |
+| C: mixed | `mixedBindings(...)` | Local platform | RabbitMQ | S3-compatible store; notifications through RabbitMQ | Local platform | Secret files, then environment | OTLP receiver |
+
+[`tests/environments.test.ts`](tests/environments.test.ts) checks A always. With `HOLQA_RABBITMQ_URL`, `HOLQA_S3_ENDPOINT`,
+`HOLQA_S3_ACCESS_KEY_ID`, `HOLQA_S3_SECRET_ACCESS_KEY` and `HOLQA_S3_EVENTS_TARGET` set (as in CI's provider job), it
+also provisions uniquely named infrastructure and processes a document end to end in B and C: upload through a
+presigned URL, the store's notification through RabbitMQ, the object event handler, the queue consumer and the result,
+with traces exported over OTLP. It removes what it created.
+
+### Environment B with Docker Compose
+
+[`compose.yaml`](compose.yaml) runs RabbitMQ, RustFS (publishing bucket notifications to RabbitMQ), an OpenTelemetry
+Collector, and the packaged application. From this directory, after `pnpm build` at the repository root:
+
+```bash
+cp .env.example .env                       # then choose your own values
+docker compose up -d rabbitmq object-store collector
+set -a; . ./.env; set +a
+export RABBITMQ_ADMIN_URL="amqp://$RABBITMQ_USER:$RABBITMQ_PASSWORD@localhost:25672"
+export S3_ADMIN_ACCESS_KEY_ID="$S3_ACCESS_KEY_ID" S3_ADMIN_SECRET_ACCESS_KEY="$S3_SECRET_ACCESS_KEY"
+pnpm exec holqa provision plan --app app/infra.ts    # reads only
+pnpm exec holqa provision apply --app app/infra.ts   # queues, exchange, bucket, notification rule
+pnpm exec holqa package --app app/infra.ts --bindings app/bindings.external.ts --out-dir .holqa/package/external
+docker compose up -d --build app
+docker compose --profile demo run --rm client      # uploads a document and waits until it is processed
+docker compose --profile demo down -v
+```
+
+[`app/provisioning.ts`](app/provisioning.ts) reaches the store on its published port; the application reaches it as
+`object-store:9000` inside the network, which is why the client runs there too. The application's credentials
+(`QUEUE_URL`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`) are references resolved from its environment; the binding
+manifest in the artifact lists their names only.
+

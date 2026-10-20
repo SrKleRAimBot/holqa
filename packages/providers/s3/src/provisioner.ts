@@ -36,6 +36,12 @@ export interface S3ProvisionerOptions {
   readonly sessionToken?: CredentialReference;
   /** The provisioner's name. Default `s3.provisioner`. */
   readonly name?: string;
+  /**
+   * Where provisioning reaches the store, when it differs from where the
+   * application does, for example from outside a container network. Default
+   * the runtime provider's endpoint.
+   */
+  readonly endpoint?: string;
   /** Only provision for the runtime providers with these names. Default every S3 provider. */
   readonly providers?: readonly string[];
   /**
@@ -148,6 +154,8 @@ export function provisioner(options: S3ProvisionerOptions): Provisioner {
   }
   if (options.sessionToken !== undefined && !isCredentialReference(options.sessionToken))
     problems.push("\"sessionToken\" must be a credential reference.");
+  if (options.endpoint !== undefined && !(typeof options.endpoint === "string" && URL.canParse(options.endpoint) && /^https?:$/.test(new URL(options.endpoint).protocol)))
+    problems.push("\"endpoint\" must be an absolute http or https URL.");
   if (options.notifications !== undefined && (typeof options.notifications.target !== "string" || options.notifications.target === ""))
     problems.push("\"notifications.target\" must be the store's notification target, for example an ARN.");
   if (problems.length > 0)
@@ -168,7 +176,7 @@ export function provisioner(options: S3ProvisionerOptions): Provisioner {
    * @returns A connection signed with the provisioning credentials.
    */
   const connectionOf = (context: ProvisioningContext, settings: BucketSettings): S3Connection => Object.freeze({
-    endpoint: new URL(settings.endpoint),
+    endpoint: new URL(options.endpoint ?? settings.endpoint),
     region: settings.region ?? "us-east-1",
     forcePathStyle: settings.forcePathStyle ?? true,
     credentials: {
@@ -204,7 +212,7 @@ export function provisioner(options: S3ProvisionerOptions): Provisioner {
     provisioningProtocol: provisioningProtocolVersion,
     provisioner: "holqa.s3.provisioner",
     name,
-    settings: Object.freeze({ ...options.notifications === undefined ? {} : { notifications: Object.freeze({ target: options.notifications.target, id: ruleId }) }, ...options.providers === undefined ? {} : { providers: Object.freeze([...options.providers]) } }),
+    settings: Object.freeze({ ...options.endpoint === undefined ? {} : { endpoint: options.endpoint }, ...options.notifications === undefined ? {} : { notifications: Object.freeze({ target: options.notifications.target, id: ruleId }) }, ...options.providers === undefined ? {} : { providers: Object.freeze([...options.providers]) } }),
     credentials: Object.freeze([options.accessKeyId, options.secretAccessKey, ...options.sessionToken === undefined ? [] : [options.sessionToken]]),
     supports: (provider: AnyBindingProvider, resource: ResourceDescriptor) => resource.kind === "bucket" && claimed(provider),
     plan: async (context: ProvisioningContext) => {

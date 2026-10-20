@@ -39,7 +39,7 @@ Only the following items carry the **Implemented** label. Everything else in the
 | `examples/schema-evolution` | End-to-end schema contract corpus with Zod |
 | `examples/manifest` | End-to-end compilation of SDK applications through the built CLI |
 | `examples/http-api` | An SDK application compiled by the built CLI and served by `@holqa/runtime-bun` |
-| `examples/document-processing` | An event-driven SDK application (uploads, object events, a queue consumer with retries and dead-lettering, a scheduled cleanup) compiled by the built CLI and run on `@holqa/local` |
+| `examples/document-processing` | An event-driven SDK application (uploads, object events, a queue consumer with retries and dead-lettering, a scheduled cleanup) compiled by the built CLI and run on `@holqa/local`; the same handlers bound in three environments (local; a Bun container on RabbitMQ and an S3-compatible store with OTLP telemetry; mixed providers with secret files), verified end to end against real RabbitMQ and RustFS, with a Docker Compose demonstration |
 | `examples/order-pipeline` | The local development example: run with `holqa dev`, tested end to end with `createTestApp` (controlled failures, retries, dead letters, duplicates, schedules) and through a real `holqa dev` session |
 | `examples/event-safety` | Event safety: `holqa inspect --cycles` through the built CLI, and depth limits, an allowed cycle and idempotency on `createTestApp` |
 | `examples/observability` | Observability: a correlated trace from an HTTP request through a queue to an object event, redacted logs, metrics, OTLP export to a stand-in receiver, and the telemetry commands of the built CLI |

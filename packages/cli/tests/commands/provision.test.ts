@@ -76,6 +76,7 @@ describe("holqa provision", () => {
     expect(refused.code).toBe(1);
     expect((JSON.parse(refused.stdout) as { readonly result: { readonly diagnostics: ReadonlyArray<{ readonly code: string }> } }).result.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_PROVISIONING_DESTRUCTIVE"]);
     expect(JSON.parse(await readFile(stateFile, "utf8"))).toEqual({ audit: "conflict" });
+    expect((await run(["provision", "apply"])).stdout).toContain("Nothing was applied.");
     expect((await run(["provision", "apply", "--allow-destructive"])).code).toBe(0);
     expect(JSON.parse(await readFile(stateFile, "utf8"))).toEqual({ audit: "ok", orders: "ok" });
   });

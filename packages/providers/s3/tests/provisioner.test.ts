@@ -57,6 +57,17 @@ describe("s3.provisioner", () => {
     expect(store.notifications.get("shop-files")).toContain("<Id>holqa</Id><Queue>arn:minio:sqs::primary:amqp</Queue>");
   });
 
+  it("reaches the store through its own endpoint when one is given", async () => {
+    const store = new MemoryS3();
+    const seen: string[] = [];
+    const provisioner = s3.provisioner({ endpoint: "http://admin.s3.test:9000", accessKeyId: credentialRef("S3_ADMIN_ACCESS_KEY_ID"), secretAccessKey: credentialRef("S3_ADMIN_SECRET_ACCESS_KEY"), fetch: async (request) => {
+      seen.push(new URL(request.url).origin);
+      return store.fetch(request);
+    } });
+    await provisioner.plan(contextOf(store));
+    expect([...new Set(seen)]).toEqual(["http://admin.s3.test:9000"]);
+  });
+
   it("warns instead of guessing when buckets have event handlers but no notification target is configured", async () => {
     const store = new MemoryS3();
     store.createBucket("shop-files");

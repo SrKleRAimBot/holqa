@@ -13,10 +13,15 @@
     "start": "holqa build --manifest --app app/infra.ts && bun app/server.ts"
   },
   "dependencies": {
+    "@holqa/bindings": "workspace:*",
     "@holqa/cli": "workspace:*",
+    "@holqa/container": "workspace:*",
     "@holqa/core": "workspace:*",
     "@holqa/local": "workspace:*",
+    "@holqa/opentelemetry": "workspace:*",
+    "@holqa/rabbitmq": "workspace:*",
     "@holqa/runtime-bun": "workspace:*",
+    "@holqa/s3": "workspace:*",
     "@holqa/sdk": "workspace:*",
     "@holqa/zod": "workspace:*",
     "zod": "catalog:"

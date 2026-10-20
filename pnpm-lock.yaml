@@ -269,18 +269,33 @@ importers:
 
   examples/document-processing:
     dependencies:
+      '@holqa/bindings':
+        specifier: workspace:*
+        version: link:../../packages/bindings
       '@holqa/cli':
         specifier: workspace:*
         version: link:../../packages/cli
+      '@holqa/container':
+        specifier: workspace:*
+        version: link:../../packages/container
       '@holqa/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@holqa/local':
         specifier: workspace:*
         version: link:../../packages/local
+      '@holqa/opentelemetry':
+        specifier: workspace:*
+        version: link:../../packages/integrations/opentelemetry
+      '@holqa/rabbitmq':
+        specifier: workspace:*
+        version: link:../../packages/providers/rabbitmq
       '@holqa/runtime-bun':
         specifier: workspace:*
         version: link:../../packages/runtime-bun
+      '@holqa/s3':
+        specifier: workspace:*
+        version: link:../../packages/providers/s3
       '@holqa/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
