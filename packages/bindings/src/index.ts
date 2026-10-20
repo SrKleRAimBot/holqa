@@ -28,6 +28,22 @@ export type {
 } from "@/inspect";
 export { bindingManifestFormat, createBindingManifest } from "@/manifest";
 export type { BindingManifest, ConnectorReport } from "@/manifest";
+export {
+  applyProvisioning,
+  defineProvisioning,
+  isProvisioningDefinition,
+  planProvisioning,
+  provisioningPlanFormat,
+  provisioningResultFormat
+} from "@/provisioning";
+export type {
+  ApplyProvisioningOptions,
+  ProvisioningDefinition,
+  ProvisioningOptions,
+  ProvisioningPlan,
+  ProvisioningResult,
+  UnprovisionedResource
+} from "@/provisioning";
 export { assertResolved, resolveBindings } from "@/resolve";
 export type {
   ExtensionSelection,

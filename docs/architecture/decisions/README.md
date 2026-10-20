@@ -52,6 +52,7 @@ Once an ADR is accepted, it is not rewritten. To change a decision, write a new 
 | [0031](0031-static-sites-as-a-resource-kind.md) | Static sites as a resource kind served through bindings | Proposed (implemented) | 2026-10-20 |
 | [0032](0032-typed-versioned-provider-extensions.md) | Typed, versioned provider extensions | Proposed (implemented) | 2026-10-20 |
 | [0033](0033-deployment-artifacts-and-binding-manifests.md) | Deployment artifacts, binding manifests and the container runtime | Proposed (implemented) | 2026-10-20 |
+| [0034](0034-provisioning-separate-from-runtime-bindings.md) | Provisioning separate from runtime bindings | Proposed (implemented) | 2026-10-20 |
 
 ## Adding an ADR
 

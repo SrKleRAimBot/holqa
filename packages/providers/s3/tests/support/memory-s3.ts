@@ -67,6 +67,8 @@ export class MemoryS3 {
   readonly buckets = new Map<string, Map<string, StoredObject>>();
   /** Notification queues by subscription, as provisioning would create them. */
   readonly subscriptions = new Map<string, { readonly bucket: string; readonly queue: Queued[] }>();
+  /** Notification configuration documents by bucket. */
+  readonly notifications = new Map<string, string>();
   /** Requests answered with this status next, for fault injection. */
   failNext: number | undefined;
   /** Whether notifications carry user metadata, as MinIO's and RustFS's do. */
@@ -133,11 +135,22 @@ export class MemoryS3 {
     const [, bucketName, ...rest] = url.pathname.split("/");
     const key = rest.map(segment => decodeURIComponent(segment)).join("/");
     const bucket = this.buckets.get(bucketName ?? "");
+    if (key === "" && request.method === "PUT" && !url.searchParams.has("notification")) {
+      if (bucket !== undefined)
+        return xmlError(409, "BucketAlreadyOwnedByYou");
+      this.createBucket(bucketName!);
+      return new Response(null, { status: 200 });
+    }
     if (bucket === undefined)
       return xmlError(404, "NoSuchBucket");
     if (key === "") {
       if (request.method === "HEAD")
         return new Response(null, { status: 200 });
+      if (url.searchParams.has("notification")) {
+        if (request.method === "PUT")
+          this.notifications.set(bucketName!, new TextDecoder().decode(body));
+        return new Response(request.method === "PUT" ? null : this.notifications.get(bucketName!) ?? "<NotificationConfiguration/>", { headers: { "content-type": "application/xml" } });
+      }
       return this.list(bucket, url);
     }
     switch (request.method) {

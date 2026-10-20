@@ -189,7 +189,13 @@ export const diagnosticCodes = {
   /** A deployment artifact is incomplete or altered, or does not match what runs: a file's hash differs, a manifest is missing or malformed, or the binding resolved at start differs from the packaged binding manifest. */
   artifactInvalid: "HOLQA_ARTIFACT_INVALID",
   /** A container setting read from the environment (port, interface, shutdown periods) is invalid. */
-  containerSettingsInvalid: "HOLQA_CONTAINER_SETTINGS_INVALID"
+  containerSettingsInvalid: "HOLQA_CONTAINER_SETTINGS_INVALID",
+  /** A provisioning configuration or provisioner is malformed, for example a provisioner of another protocol version or two provisioners claiming one resource. */
+  provisioningConfigInvalid: "HOLQA_PROVISIONING_CONFIG_INVALID",
+  /** A provisioner failed to inspect or change infrastructure. Infrastructure changed before the failure stays changed; the result lists what was applied. */
+  provisioningFailed: "HOLQA_PROVISIONING_FAILED",
+  /** A plan contains a destructive change (`replace` or `delete`) that was not explicitly authorized, so nothing was applied. */
+  provisioningDestructive: "HOLQA_PROVISIONING_DESTRUCTIVE"
 } as const;
 
 /**

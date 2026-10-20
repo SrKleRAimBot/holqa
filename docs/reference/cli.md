@@ -1,6 +1,6 @@
 # CLI reference
 
-> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect` (including `--cycles` and `--capabilities`), `holqa build --manifest`, `holqa bindings inspect`, `holqa bindings validate`, `holqa package`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`, `holqa state`, `holqa doctor` and the telemetry commands `holqa logs`, `holqa traces list`, `holqa traces inspect`, `holqa events inspect` and `holqa metrics`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
+> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect` (including `--cycles` and `--capabilities`), `holqa build --manifest`, `holqa bindings inspect`, `holqa bindings validate`, `holqa package`, `holqa provision plan`, `holqa provision apply`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`, `holqa state`, `holqa doctor` and the telemetry commands `holqa logs`, `holqa traces list`, `holqa traces inspect`, `holqa events inspect` and `holqa metrics`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
 
 The `holqa` binary is provided by `@holqa/cli` (`packages/cli`). It runs on Bun (`#!/usr/bin/env bun`; `engines.bun >= 1.3.13`). The package is private and not published, so the CLI is only available inside this repository.
 
@@ -22,6 +22,8 @@ holqa build --manifest [--app <path>] [--out-dir <dir>] [--json]
 holqa bindings inspect [--bindings <path>] [--app <path>] [--json]
 holqa bindings validate [--bindings <path>] [--app <path>] [--json]
 holqa package [--bindings <path>] [--app <path>] [--out-dir <dir>] [--json]
+holqa provision plan [--provisioning <path>] [--app <path>] [--json]
+holqa provision apply [--allow-destructive] [--provisioning <path>] [--app <path>] [--json]
 holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--bindings <path>] [--no-watch] [--no-hot] [--no-dashboard] [--json]
 holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]
 holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]
@@ -57,6 +59,8 @@ holqa metrics [--app <path>] [--state-dir <dir>] [--json]
 | `--cycles` | `inspect`: print the event dependency graph and its cycles instead of the summary. | — |
 | `--capabilities` | `inspect`: print every resource's required capabilities instead of the summary. Cannot be combined with `--cycles`. | — |
 | `--bindings <path>` | `dev`, `bindings inspect`, `bindings validate`, `package`, `inspect --capabilities`: the binding configuration module, relative to the working directory. Default for the `bindings` commands and `package`: `bindings.ts` in the application root; `inspect` uses one only when given. `--bindings` without `--capabilities` is a usage error. | — |
+| `--provisioning <path>` | `provision plan`, `provision apply`: the provisioning module, relative to the working directory. Default `provisioning.ts` in the application root. | — |
+| `--allow-destructive` | `provision apply`: also apply `replace` and `delete` changes. A usage error with `provision plan`. | `2` with `plan` |
 | `--follow` | `logs`: keep printing new entries until the process receives `SIGINT` or `SIGTERM`. | — |
 | `--handler <id>`, `--trace <trace-id>`, `--level <level>` | `logs`: only entries of one handler, of one trace, or at `debug`, `info`, `warn` or `error` and more severe. | — |
 | `--limit <n>` | `logs`, `traces list`: how many entries or traces, `1` to `10000`. Defaults 100 and 20. | — |
@@ -166,6 +170,12 @@ interface PackageJsonOutput {
   diagnostics: Diagnostic[]; // analysis and binding warnings
 }
 ```
+
+### `holqa provision plan` and `holqa provision apply`
+
+Analyze the application for its handlers, then load the provisioning module (`--provisioning`, default `provisioning.ts` next to the application module) in a **separate Bun process with the CLI's whole environment**, because provisioners resolve their administrative credentials from it; analysis keeps its allowlisted environment. See [provisioning](provisioning.md).
+
+`plan` only reads infrastructure and prints each change that is not `none` with a marker (`+` create, `~` update, `!` replace, `-` delete) and `[destructive]` where it applies, then the number unchanged, the resources not provisioned here and the problems. It exits with `1` when the plan has an error. `apply` plans again and applies; it applies nothing when the plan has an error or a destructive change without `--allow-destructive`, and exits with `1` then or when a change fails. With `--json`, one line: `{ plan }` for `plan`, `{ plan, result }` for `apply`, with the `holqa.provisioning-plan/1` and `holqa.provisioning-result/1` documents. A missing module fails with `HOLQA_FILE_UNREADABLE`; a module whose default export is not a provisioning configuration with `HOLQA_PROVISIONING_CONFIG_INVALID`.
 
 ### `holqa dev`
 

@@ -100,7 +100,10 @@ describe("diagnosticCodes", () => {
       extensionIncompatible: "HOLQA_EXTENSION_INCOMPATIBLE",
       packageFailed: "HOLQA_PACKAGE_FAILED",
       artifactInvalid: "HOLQA_ARTIFACT_INVALID",
-      containerSettingsInvalid: "HOLQA_CONTAINER_SETTINGS_INVALID"
+      containerSettingsInvalid: "HOLQA_CONTAINER_SETTINGS_INVALID",
+      provisioningConfigInvalid: "HOLQA_PROVISIONING_CONFIG_INVALID",
+      provisioningFailed: "HOLQA_PROVISIONING_FAILED",
+      provisioningDestructive: "HOLQA_PROVISIONING_DESTRUCTIVE"
     });
   });
 });

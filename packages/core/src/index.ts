@@ -63,6 +63,15 @@ export type {
   ProviderRole,
   ProviderTopology
 } from "@/binding/provider";
+export { provisioningProtocolVersion } from "@/binding/provisioning";
+export type {
+  AppliedChange,
+  PlannedChange,
+  Provisioner,
+  ProvisionerPlan,
+  ProvisioningAction,
+  ProvisioningContext
+} from "@/binding/provisioning";
 export { createBindingSlot, resourceBindingInfo } from "@/binding/runtime-binding";
 export type {
   BindingCapabilities,

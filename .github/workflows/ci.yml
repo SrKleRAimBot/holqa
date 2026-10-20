@@ -71,11 +71,19 @@ jobs:
         env:
           RUSTFS_ACCESS_KEY: holqatest
           RUSTFS_SECRET_KEY: holqa-test-secret
+          # Publishes bucket notifications to the RabbitMQ service (by its service name), for storage event tests.
+          RUSTFS_NOTIFY_ENABLE: "true"
+          RUSTFS_NOTIFY_AMQP_ENABLE_PRIMARY: on
+          RUSTFS_NOTIFY_AMQP_URL_PRIMARY: amqp://guest:guest@rabbitmq:5672
+          RUSTFS_NOTIFY_AMQP_EXCHANGE_PRIMARY: holqa.storage-events
+          RUSTFS_NOTIFY_AMQP_ROUTING_KEY_PRIMARY: storage
+          RUSTFS_NOTIFY_AMQP_PERSISTENT_PRIMARY: on
     env:
       HOLQA_RABBITMQ_URL: amqp://guest:guest@localhost:5672
       HOLQA_S3_ENDPOINT: http://localhost:9000
       HOLQA_S3_ACCESS_KEY_ID: holqatest
       HOLQA_S3_SECRET_ACCESS_KEY: holqa-test-secret
+      HOLQA_S3_EVENTS_TARGET: arn:rustfs:sqs::primary:amqp
     steps:
       - name: Check out repository
         uses: actions/checkout@v7

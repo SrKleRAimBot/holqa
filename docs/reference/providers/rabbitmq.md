@@ -22,6 +22,10 @@ export default defineBindings(app, {
 
 `rabbitmq.eventChannel({ url })` carries an object store's S3 event notifications to a storage provider such as `s3.buckets({ events: { channel } })`. Each subscription (one object event handler) reads its own queue `<queuePrefix><bucket>.<handler>` (default prefix `holqa.events.`), which provisioning binds to the exchange the store publishes to (`exchange`, default `holqa.storage-events`, recorded for inspection). Deliveries have the same leases, attempt counts, delay-queue retries (`delayedDelivery`, default `delay-queues`) and dead-letter queue (`deadLetter`, default `true`) as queue messages. Like the queue provider it never creates queues, exchanges or bindings: a missing queue fails with `HOLQA_BINDING_FAILED`.
 
+## Provisioning
+
+`rabbitmq.provisioner({ url: credentialRef("RABBITMQ_ADMIN_URL") })` creates the topology the queue provider and the event channel expect ([provisioning](../provisioning.md)): each queue's main, dead-letter and delay queues with their arguments, and for buckets with `rabbitmq.eventChannel` the notification exchange (`exchangeType`, default `fanout`) and one subscription queue topology per object event handler, bound with `routingKey` (default empty). `providers` limits it to runtime providers with those names, for deployments with several brokers. A queue or exchange that exists with other arguments or type is planned as a destructive `replace`. AMQP 0-9-1 cannot read bindings, so existing ones are planned as idempotent `update`s. The administrative URL is separate from the runtime's `QUEUE_URL`.
+
 ## Options
 
 | Option | Default | Meaning |

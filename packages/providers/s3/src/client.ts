@@ -170,6 +170,67 @@ export async function headBucket(connection: S3Connection, bucket: string): Prom
 }
 
 /**
+ * Reports whether a bucket exists, for provisioning plans.
+ *
+ * @param connection - The service, with provisioning credentials.
+ * @param bucket - The physical bucket name.
+ * @returns `true` when it exists and the credentials may see it.
+ * @throws {HolqaError} A classified failure for anything but found or not found.
+ */
+export async function bucketExists(connection: S3Connection, bucket: string): Promise<boolean> {
+  const response = await send(connection, { method: "HEAD", bucket }, `checking the bucket "${bucket}"`);
+  if (response.status === 404)
+    return false;
+  if (!response.ok)
+    throw await failure(connection, response, `checking the bucket "${bucket}"`);
+  return true;
+}
+
+/**
+ * Creates a bucket in the connection's region. A bucket the credentials
+ * already own is not an error. For provisioning only.
+ *
+ * @param connection - The service, with provisioning credentials.
+ * @param bucket - The physical bucket name.
+ * @throws {HolqaError} A classified failure, for example when another account owns the name.
+ */
+export async function createBucket(connection: S3Connection, bucket: string): Promise<void> {
+  const body = connection.region === "us-east-1" ? undefined : new TextEncoder().encode(`<CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><LocationConstraint>${connection.region}</LocationConstraint></CreateBucketConfiguration>`);
+  const response = await send(connection, { method: "PUT", bucket, ...body === undefined ? {} : { body, headers: { "content-type": "application/xml" } } }, `creating the bucket "${bucket}"`);
+  if (!response.ok && errorCode(await response.clone().text()) !== "BucketAlreadyOwnedByYou")
+    throw await failure(connection, response, `creating the bucket "${bucket}"`);
+}
+
+/**
+ * Reads a bucket's event notification configuration.
+ *
+ * @param connection - The service, with provisioning credentials.
+ * @param bucket - The physical bucket name.
+ * @returns The `NotificationConfiguration` XML document.
+ * @throws {HolqaError} A classified failure.
+ */
+export async function getBucketNotification(connection: S3Connection, bucket: string): Promise<string> {
+  const response = await send(connection, { method: "GET", bucket, query: { notification: "" } }, `reading the notification configuration of "${bucket}"`);
+  if (!response.ok)
+    throw await failure(connection, response, `reading the notification configuration of "${bucket}"`);
+  return response.text();
+}
+
+/**
+ * Replaces a bucket's event notification configuration. For provisioning only.
+ *
+ * @param connection - The service, with provisioning credentials.
+ * @param bucket - The physical bucket name.
+ * @param xml - The complete `NotificationConfiguration` document.
+ * @throws {HolqaError} A classified failure, for example an unknown notification target.
+ */
+export async function putBucketNotification(connection: S3Connection, bucket: string, xml: string): Promise<void> {
+  const response = await send(connection, { method: "PUT", bucket, query: { notification: "" }, headers: { "content-type": "application/xml" }, body: new TextEncoder().encode(xml) }, `writing the notification configuration of "${bucket}"`);
+  if (!response.ok)
+    throw await failure(connection, response, `writing the notification configuration of "${bucket}"`);
+}
+
+/**
  * Stores an object.
  *
  * @param connection - The service.

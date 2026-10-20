@@ -66,11 +66,28 @@ export interface AmqpTransport {
   readonly declare: (queue: string, args: AmqpQueueArguments) => Promise<void>;
   /** Deletes a queue. For provisioning only, after explicit authorization. */
   readonly remove: (queue: string) => Promise<void>;
+  /**
+   * Compares a queue with the arguments it needs, for provisioning plans:
+   * `missing`, `matches`, or `differs` (the broker refused a declaration with
+   * these arguments). Changes nothing.
+   */
+  readonly checkQueue?: (queue: string, args: AmqpQueueArguments) => Promise<"missing" | "matches" | "differs">;
+  /** Compares an exchange with the type it needs, like {@link AmqpTransport.checkQueue}. */
+  readonly checkExchange?: (exchange: string, type: AmqpExchangeType) => Promise<"missing" | "matches" | "differs">;
+  /** Declares a durable exchange. For provisioning only. */
+  readonly declareExchange?: (exchange: string, type: AmqpExchangeType) => Promise<void>;
+  /** Binds a queue to an exchange (idempotent). For provisioning only. */
+  readonly bindQueue?: (queue: string, exchange: string, routingKey: string) => Promise<void>;
+  /** Deletes an exchange. For provisioning only, after explicit authorization. */
+  readonly removeExchange?: (exchange: string) => Promise<void>;
   /** Increments whenever the connection is (re)established. */
   readonly generation: () => number;
   readonly connected: () => boolean;
   readonly close: () => Promise<void>;
 }
+
+/** The exchange types provisioning declares. */
+export type AmqpExchangeType = "fanout" | "direct" | "topic";
 
 /** Settings of {@link rabbitMqTransport}. */
 export interface RabbitMqTransportOptions {
@@ -181,6 +198,62 @@ export function rabbitMqTransport(url: string, options: RabbitMqTransportOptions
         await connection.queueDelete({ queue });
       } catch (error) {
         throw classifyAmqpError(options.binding, error, `deleting "${queue}"`);
+      }
+    },
+    checkQueue: async (queue: string, args: AmqpQueueArguments) => {
+      try {
+        await connection.queueDeclare({ queue, passive: true });
+      } catch (error) {
+        if ((error as { readonly code?: unknown }).code === "NOT_FOUND")
+          return "missing";
+        throw classifyAmqpError(options.binding, error, `inspecting "${queue}"`);
+      }
+      try {
+        // Declaring an existing queue with the same arguments changes nothing; other arguments are refused without a change.
+        await connection.queueDeclare({ queue, durable: true, arguments: { ...args } });
+        return "matches";
+      } catch (error) {
+        if ((error as { readonly code?: unknown }).code === "PRECONDITION_FAILED")
+          return "differs";
+        throw classifyAmqpError(options.binding, error, `inspecting "${queue}"`);
+      }
+    },
+    checkExchange: async (exchange: string, type: AmqpExchangeType) => {
+      try {
+        await connection.exchangeDeclare({ exchange, type, passive: true });
+      } catch (error) {
+        if ((error as { readonly code?: unknown }).code === "NOT_FOUND")
+          return "missing";
+        throw classifyAmqpError(options.binding, error, `inspecting the exchange "${exchange}"`);
+      }
+      try {
+        await connection.exchangeDeclare({ exchange, type, durable: true });
+        return "matches";
+      } catch (error) {
+        if ((error as { readonly code?: unknown }).code === "PRECONDITION_FAILED")
+          return "differs";
+        throw classifyAmqpError(options.binding, error, `inspecting the exchange "${exchange}"`);
+      }
+    },
+    declareExchange: async (exchange: string, type: AmqpExchangeType) => {
+      try {
+        await connection.exchangeDeclare({ exchange, type, durable: true });
+      } catch (error) {
+        throw classifyAmqpError(options.binding, error, `declaring the exchange "${exchange}"`);
+      }
+    },
+    bindQueue: async (queue: string, exchange: string, routingKey: string) => {
+      try {
+        await connection.queueBind({ queue, exchange, routingKey });
+      } catch (error) {
+        throw classifyAmqpError(options.binding, error, `binding "${queue}" to "${exchange}"`);
+      }
+    },
+    removeExchange: async (exchange: string) => {
+      try {
+        await connection.exchangeDelete({ exchange });
+      } catch (error) {
+        throw classifyAmqpError(options.binding, error, `deleting the exchange "${exchange}"`);
       }
     },
     generation: () => generation,
