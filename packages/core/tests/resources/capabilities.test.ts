@@ -30,6 +30,16 @@ describe("checkCapabilities", () => {
     ]);
   });
 
+  it("names the resource, binding and unmet requirement in the details", () => {
+    const diagnostics = checkCapabilities(queueDescriptor("orders", { maxAttempts: 10, deadLetter: true, backoff: { strategy: "fixed", delaySeconds: 600 } }), { queue: { delivery: ["at-least-once"], maxAttempts: 3, deadLetter: false, backoff: ["fixed"], maxDelaySeconds: 60 } }, "broker");
+    expect(diagnostics.map(diagnostic => diagnostic.details)).toEqual([
+      { resource: "orders", kind: "queue", binding: "broker", requirement: "queue.max-attempts" },
+      { resource: "orders", kind: "queue", binding: "broker", requirement: "queue.dead-letter" },
+      { resource: "orders", kind: "queue", binding: "broker", requirement: "queue.delay" }
+    ]);
+    expect(checkCapabilities(scheduleDescriptor("nightly"), {}, "edge")[0]!.details).toEqual({ resource: "nightly", kind: "schedule", binding: "edge", requirement: "schedule" });
+  });
+
   it("treats a kind without advertised capabilities as unsupported", () => {
     expect(checkCapabilities(scheduleDescriptor("nightly"), {}, "edge").map(diagnostic => diagnostic.message)).toEqual([
       "Binding \"edge\" does not support schedule resources, required by \"nightly\"."

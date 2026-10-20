@@ -8,16 +8,61 @@ export {
   requireBinding,
   resolveDriver
 } from "@/binding/bind";
+export {
+  bindingContractNames,
+  bindingContracts,
+  bindingProtocolVersion,
+  contractVersionProblem,
+  isBindingContractName,
+  mandatoryBindingContracts
+} from "@/binding/contracts";
+export type { BindingContractName, BindingProtocolVersion } from "@/binding/contracts";
 export { checkTriggerDelivery } from "@/binding/delivery-check";
+export type { DeliveredHandler } from "@/binding/delivery-check";
+export {
+  bindingFailure,
+  bindingFailureCodes,
+  isTransientBindingFailure
+} from "@/binding/failures";
+export type { BindingFailureInit, BindingFailureKind } from "@/binding/failures";
+export { combineHealth } from "@/binding/lifecycle";
+export type {
+  BindingHealth,
+  BindingLifecycle,
+  BindingStopOptions,
+  ComponentHealth,
+  HealthStatus
+} from "@/binding/lifecycle";
 export type {
   OperationBudgetRequest,
   OperationBudgetResult,
   OperationBudgetStore
 } from "@/binding/operation-budgets";
-export { createBindingSlot } from "@/binding/runtime-binding";
+export {
+  credentialRef,
+  isBindingProvider,
+  isCredentialReference,
+  isProviderId
+} from "@/binding/provider";
+export type {
+  AnyBindingProvider,
+  BindingProvider,
+  BindingServiceName,
+  CapabilityEmulation,
+  ConfigSource,
+  CredentialReference,
+  ExecutionCapabilities,
+  ProviderContext,
+  ProviderInstance,
+  ProviderLogLevel,
+  ProviderRole,
+  ProviderTopology
+} from "@/binding/provider";
+export { createBindingSlot, resourceBindingInfo } from "@/binding/runtime-binding";
 export type {
   BindingCapabilities,
   BindingSlot,
+  ResourceBindingInfo,
   ResourceDrivers,
   RuntimeBinding
 } from "@/binding/runtime-binding";
@@ -42,6 +87,7 @@ export type {
 } from "@/binding/sources";
 export { childTrace, lineageOfDelivery } from "@/binding/trace";
 export type { DeliveryTrace, InvocationLineage } from "@/binding/trace";
+export { validateProvider } from "@/binding/validate-provider";
 export type { ConfigDescriptor } from "@/config/config-descriptor";
 export { diagnosticCodes } from "@/diagnostics/codes";
 export type { DiagnosticCode } from "@/diagnostics/codes";

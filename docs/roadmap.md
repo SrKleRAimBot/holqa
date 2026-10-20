@@ -281,6 +281,12 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 
 **Goal:** Bind the infrastructure-neutral manifest to real infrastructure. See [infrastructure providers](concepts/infrastructure-providers.md).
 
+### Done
+
+| Item | Status |
+| --- | --- |
+| Versioned binding contracts, the provider protocol (`BindingProvider`, roles, validation), classified binding failures, lifecycle and health types, per-resource capability checks ([ADR 0029](architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md), [binding contracts](reference/bindings.md)) | **Implemented** |
+
 ### Goals
 
 - Define the provisioning provider contract. The runtime driver and delivery source contracts exist in `@holqa/core` (**Implemented**, implemented locally by `@holqa/local`); drivers for external services are Planned.

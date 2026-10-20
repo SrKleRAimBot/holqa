@@ -157,7 +157,19 @@ export const diagnosticCodes = {
   /** A hot handler replacement named an unknown handler, named one twice, or changed a handler's definition; nothing was replaced. */
   handlerReplacementInvalid: "HOLQA_HANDLER_REPLACEMENT_INVALID",
   /** Messages already waiting in a local queue do not match the queue's changed message contract. A warning: the messages are kept. */
-  queuedMessageIncompatible: "HOLQA_QUEUED_MESSAGE_INCOMPATIBLE"
+  queuedMessageIncompatible: "HOLQA_QUEUED_MESSAGE_INCOMPATIBLE",
+  /** A binding's settings are malformed or contradictory, for example a non-numeric limit or an unknown option. Permanent: fix the binding configuration. */
+  bindingConfigInvalid: "HOLQA_BINDING_CONFIG_INVALID",
+  /** A credential a binding needs (for example a connection URL or an access key) is not set. Its value is never included. */
+  bindingCredentialsMissing: "HOLQA_BINDING_CREDENTIALS_MISSING",
+  /** Infrastructure rejected a binding's credentials, for example an authentication or authorization failure. Its value is never included. */
+  bindingCredentialsInvalid: "HOLQA_BINDING_CREDENTIALS_INVALID",
+  /** A provider implements a version of a binding contract (or of the provider protocol) this version of Holqa does not implement. */
+  bindingContractIncompatible: "HOLQA_BINDING_CONTRACT_INCOMPATIBLE",
+  /** Infrastructure a binding needs is temporarily unreachable, for example a broker that refuses connections. Transient: retrying later may succeed. */
+  bindingUnavailable: "HOLQA_BINDING_UNAVAILABLE",
+  /** A binding failed permanently, for example because a queue or bucket it connects to does not exist. Retrying does not help. */
+  bindingFailed: "HOLQA_BINDING_FAILED"
 } as const;
 
 /**

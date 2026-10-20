@@ -84,7 +84,13 @@ describe("diagnosticCodes", () => {
       telemetryExportFailed: "HOLQA_TELEMETRY_EXPORT_FAILED",
       telemetryNotFound: "HOLQA_TELEMETRY_NOT_FOUND",
       handlerReplacementInvalid: "HOLQA_HANDLER_REPLACEMENT_INVALID",
-      queuedMessageIncompatible: "HOLQA_QUEUED_MESSAGE_INCOMPATIBLE"
+      queuedMessageIncompatible: "HOLQA_QUEUED_MESSAGE_INCOMPATIBLE",
+      bindingConfigInvalid: "HOLQA_BINDING_CONFIG_INVALID",
+      bindingCredentialsMissing: "HOLQA_BINDING_CREDENTIALS_MISSING",
+      bindingCredentialsInvalid: "HOLQA_BINDING_CREDENTIALS_INVALID",
+      bindingContractIncompatible: "HOLQA_BINDING_CONTRACT_INCOMPATIBLE",
+      bindingUnavailable: "HOLQA_BINDING_UNAVAILABLE",
+      bindingFailed: "HOLQA_BINDING_FAILED"
     });
   });
 });

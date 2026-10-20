@@ -1,4 +1,8 @@
-import type { ResourceDescriptorOf } from "@/index";
+import type {
+  Diagnostic,
+  ResourceDescriptorOf,
+  RuntimeBinding
+} from "@/index";
 
 import {
   appDescriptor,
@@ -87,6 +91,28 @@ describe("bindApp", () => {
   it("rejects a binding without a driver for a declared kind that has operations", () => {
     const files: ResourceDescriptorOf<"bucket"> = { protocol: 1, type: "resource", kind: "bucket", id: id("files"), config: {}, requirements: { access: "private" }, schemas: {} };
     expect(codesOf(() => bindApp(appDescriptor([files]), recordingBinding()))).toEqual(["HOLQA_BINDING_CAPABILITY_UNSUPPORTED"]);
+  });
+});
+
+describe("bindApp with a composed binding", () => {
+  it("checks every resource against the provider selected for it and names that provider", () => {
+    const orders = queueDescriptor("orders", { deadLetter: true });
+    const audit = queueDescriptor("audit", { deadLetter: true });
+    const binding: RuntimeBinding = {
+      ...recordingBinding(),
+      describe: resource => resource.id === "audit"
+        ? { binding: "broker", capabilities: { queue: { delivery: ["at-least-once"], maxAttempts: 5, deadLetter: false } } }
+        : { binding: "local", capabilities: { queue: { delivery: ["at-least-once"], maxAttempts: 5, deadLetter: true } } }
+    };
+    let diagnostics: readonly Diagnostic[] = [];
+    try {
+      bindApp(appDescriptor([orders, audit]), binding);
+    } catch (error) {
+      diagnostics = diagnosticsOf(error);
+    }
+    expect(diagnostics.map(diagnostic => [diagnostic.message, diagnostic.details])).toEqual([
+      ["Binding \"broker\" cannot satisfy queue \"audit\": a dead-letter destination is required.", { resource: "audit", kind: "queue", binding: "broker", requirement: "queue.dead-letter" }]
+    ]);
   });
 });
 
