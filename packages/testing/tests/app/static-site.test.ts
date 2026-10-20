@@ -14,7 +14,7 @@ import { createTestApp } from "@/app/create-test-app";
 
 describe("createTestApp with a static site", () => {
   it("serves the site's files from the application root, with the SPA fallback", async () => {
-    const web = staticSite({ id: "web", directory: "dist", spa: true });
+    const web = staticSite({ id: "web", directory: "public", spa: true });
     const app = await createTestApp({ app: defineApp({ name: "storefront", resources: { web } }), handlers: [], root: join(import.meta.dir, "..", "fixtures", "site") });
     try {
       const home = await app.fetch("/");
