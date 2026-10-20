@@ -97,6 +97,12 @@ export interface QueueCapabilities {
    * a redelivery. Absent means no delayed delivery: sends with a delay fail.
    */
   readonly maxDelaySeconds?: number;
+  /**
+   * The largest message the binding accepts, in bytes of the serialized
+   * `holqa.message/1` envelope (UTF-8 JSON). Absent means no limit beyond the
+   * binding's infrastructure. Sends of larger messages fail before they reach the driver.
+   */
+  readonly maxMessageBytes?: number;
 }
 
 /** Settings of one queue send. */

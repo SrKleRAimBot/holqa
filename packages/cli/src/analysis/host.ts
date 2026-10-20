@@ -1,3 +1,4 @@
+import type { BindingReport } from "@holqa/bindings";
 import type {
   EntrypointMap,
   EventAnalysis,
@@ -32,6 +33,13 @@ export interface AnalysisSuccess {
    * `holqa inspect --cycles` reports `HOLQA_ANALYSIS_FAILED` without it.
    */
   readonly events?: EventAnalysis;
+  /**
+   * The binding configuration resolved and validated against the analyzed
+   * application, when a bindings module was given. Its own `diagnostics`
+   * (unmet requirements, missing providers) are separate from the analysis
+   * diagnostics, which only report whether the module could be loaded.
+   */
+  readonly bindings?: BindingReport;
   /** Warnings and information, sorted. Locations are relative to the application root. */
   readonly diagnostics: readonly Diagnostic[];
   /** Text the application's modules printed while they were evaluated. */
@@ -44,6 +52,12 @@ export interface AnalysisFailure {
   readonly diagnostics: readonly Diagnostic[];
   /** Text the application's modules printed while they were evaluated. */
   readonly output: string;
+}
+
+/** Settings of {@link CliHost.analyze}. */
+export interface AnalyzeOptions {
+  /** The absolute path of a binding configuration module (default export of `defineBindings`) to resolve against the application. */
+  readonly bindingsPath?: string;
 }
 
 /** The outcome of analyzing an application. */
@@ -61,9 +75,10 @@ export interface CliHost {
    * the application's modules, which runs their code.
    *
    * @param appPath - The absolute path of the application module, conventionally `infra.ts`.
+   * @param options - A binding configuration to resolve too. Hosts written before bindings existed ignore it and report no `bindings`.
    * @returns The analysis outcome; never rejects for problems in the application.
    */
-  readonly analyze: (appPath: string) => Promise<AnalysisOutcome>;
+  readonly analyze: (appPath: string, options?: AnalyzeOptions) => Promise<AnalysisOutcome>;
   /**
    * Writes a text file, creating missing parent directories.
    *
@@ -122,4 +137,10 @@ export interface CliHost {
    * @returns `true` when the process was asked to stop, `false` when the interval passed.
    */
   readonly waitForStop?: (intervalMs: number) => Promise<boolean>;
+  /**
+   * The environment variables the application will start with, for
+   * `holqa bindings validate` to check that credentials and configuration
+   * values are set (never printed). Optional; without it the check is skipped.
+   */
+  readonly environment?: Readonly<Record<string, string | undefined>>;
 }

@@ -207,16 +207,63 @@ A provider never registers consumers itself and never falls back to another prov
 
 ## Capabilities
 
-A resource declares requirements (`ResourceKindMap[kind]["requirements"]`); a provider advertises capabilities (`ResourceKindMap[kind]["capabilities"]`). `checkCapabilities(resource, capabilities, bindingName)` reports one `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` per unmet requirement, with `details`:
+A resource declares requirements (`ResourceKindMap[kind]["requirements"]`); a provider advertises capabilities per resource kind (`ResourceKindMap[kind]["capabilities"]`). Both sides are named in the required-capability vocabulary of the [compiler specification](compiler-specification.md#required-capabilities):
+
+| Function | Returns |
+| --- | --- |
+| `requiredCapabilities(resource)` | What a resource requires, for example `["queue", "queue.delivery.at-least-once", "queue.dead-letter"]`. The compiler records the same strings in manifests. |
+| `providedCapabilities(kind, capabilities)` | What a provider advertises for a kind, sorted, for example `queue.delay` when it can delay deliveries, `bucket.signed-urls`, `trigger.bucket.object-created`. |
+
+Quantities are part of the advertised capabilities and are checked where they apply:
+
+| Capability | Checked |
+| --- | --- |
+| `queue.maxAttempts`, `queue.maxDelaySeconds` | Against declared `maxAttempts` and backoff (`checkCapabilities`), the default backoff (`checkTriggerDelivery`), and each send's delay (`HOLQA_BINDING_CAPABILITY_UNSUPPORTED`). |
+| `queue.maxMessageBytes` | Each send: the serialized `holqa.message/1` envelope (UTF-8 JSON) must not be larger. Absent means no limit. |
+| `bucket.signedUrls.maxExpiresInSeconds` | Each signed URL request. |
+| `execution.maxTimeoutMs`, `execution.maxConcurrency` | The runtime's limits (`validateBindings`). |
+
+Sends and signed URLs use the limits of the provider selected for the resource (`resourceBindingInfo`), never those of another provider in the same binding.
+
+`checkCapabilities(resource, capabilities, bindingName)` reports one `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` per unmet requirement, with `details`:
 
 | Key | Meaning |
 | --- | --- |
 | `resource` | The resource identifier. |
 | `kind` | Its kind. |
 | `binding` | The provider (or binding) selected for it. |
-| `requirement` | The unmet capability in the [required-capability vocabulary](compiler-specification.md#required-capabilities), plus `queue.delay` for redelivery delays longer than the provider supports. A kind the provider does not bind at all reports the kind itself. |
+| `requirement` | The unmet capability in the vocabulary, plus `queue.delay` for redelivery delays longer than the provider supports. A kind the provider does not bind at all reports the kind itself. |
 
 A stronger capability than required is accepted. A requirement is never weakened. When a binding `describe`s resources individually (`RuntimeBinding.describe`), `bindApp` and `checkTriggerDelivery` compare each resource with the provider selected for it (`resourceBindingInfo`), and trigger delivery diagnostics name it in `details.binding`, with `details.requirement` set to `trigger.<trigger kind>`.
+
+### Native and emulated capabilities
+
+A provider may meet a capability its infrastructure lacks through a compatibility layer, only when its settings enable it explicitly, and it must declare it in `emulations` with the mechanism and the infrastructure it needs. Inspection marks such requirements `emulated`, so the operational consequences stay visible.
+
+### Validation
+
+`validateBindings(resolved, { handlers?, limits?, operationBudgets? })` (`@holqa/bindings`) checks a resolved configuration without opening anything:
+
+| Check | Diagnostic |
+| --- | --- |
+| The resolution's own problems (missing, unknown, mismatched, invalid providers); further checks are skipped when there are any. | As reported by `resolveBindings`. |
+| Every resource's requirements against its provider. | `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` |
+| Every handler's trigger can be delivered (`checkTriggerDelivery`). | `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` |
+| A background handler whose resource's provider delivers no events (`topology.delivery: "none"`), or a pull-based provider when the execution host is `request-driven`. | `HOLQA_BINDING_TOPOLOGY_UNSUPPORTED` |
+| `limits.timeoutMs` (30 000 when not set) and `limits.concurrency` within the execution host's `maxTimeoutMs` and `maxConcurrency`. | `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` (`requirement`: `execution.timeout`, `execution.concurrency`) |
+| An idempotency service when a handler declares `idempotency`; an operation budget service when `operationBudgets` is set. | `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` (`requirement`: `idempotency`, `operation-budgets`) |
+
+`inspectBindings(resolved, options)` returns the `holqa.bindings/1` report, plain JSON without credential values:
+
+| Field | Content |
+| --- | --- |
+| `name`, `application` | The configuration and application names. |
+| `resources` | Per resource, sorted: `id`, `kind`, `provider`, `selection` (`resource`, `kind`, `default`) and `requirements`, each `{ capability, support }` with `support` `native`, `emulated` or `unsupported`; with handlers, also `trigger.<kind>`. |
+| `services` | Per service: `providers` and `selection` (`service`, `default`, `builtin`). |
+| `providers` | Per provider, in opening order: `name`, `provider`, `role`, `contracts`, `capabilities` (provided vocabulary per kind), `limits` (advertised capabilities as declared), `services`, `emulations`, `topology`, `execution`, `settings`, `credentials` (names). |
+| `diagnostics` | What `validateBindings` reported. |
+
+`holqa bindings inspect`, `holqa bindings validate` and `holqa inspect --capabilities` print them ([CLI reference](cli.md#holqa-bindings-inspect-and-holqa-bindings-validate)).
 
 ## Related
 

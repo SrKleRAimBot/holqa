@@ -16,6 +16,15 @@ export type {
 } from "@/define-bindings";
 export { environmentConfig } from "@/environment-config";
 export type { EnvironmentConfigOptions, EnvironmentVariables } from "@/environment-config";
+export { bindingReportFormat, inspectBindings } from "@/inspect";
+export type {
+  BindingReport,
+  CapabilitySupport,
+  ProviderReport,
+  RequirementReport,
+  ResourceReport,
+  ServiceReport
+} from "@/inspect";
 export { assertResolved, resolveBindings } from "@/resolve";
 export type {
   ResolvedBindings,
@@ -24,3 +33,5 @@ export type {
   ServiceSelectionResult,
   ServiceSelectionSource
 } from "@/resolve";
+export { validateBindings } from "@/validate";
+export type { BindingValidationOptions, ValidatedHandler } from "@/validate";

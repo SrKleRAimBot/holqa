@@ -16,7 +16,7 @@ Holqa's packages are layered so that framework-neutral contracts never depend on
 | `@holqa/bindings` | `packages/bindings` | Binding configurations: provider selection per resource, kind and service, resolution and composition into one runtime binding ([ADR 0030](decisions/0030-binding-composition-and-resolution.md)). Runtime-neutral. | **Implemented** | `core` |
 | `@holqa/local` | `packages/local` | Local runtime drivers: SQLite-backed queues and event state, filesystem object storage, a clock-driven scheduler, inspection. | **Implemented** (drivers, inspection, trace storage, manual trigger metadata) | `core`, `runtime-bun` |
 | `@holqa/testing` | `packages/testing` | Testing utilities, fixtures, deterministic execution. | **Implemented** (type assertions, `createTestApp`) | `core`, `sdk`, `local`, `runtime-bun` |
-| `@holqa/cli` | `packages/cli` | Developer CLI. | **Implemented** (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`); `openapi generate` and bundling Proposed | `core`, `compiler`, `local`, `runtime-bun`, `opentelemetry` |
+| `@holqa/cli` | `packages/cli` | Developer CLI. | **Implemented** (help, version, `--json`, `inspect` with `--cycles` and `--capabilities`, `build --manifest`, `bindings inspect`, `bindings validate`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`); `openapi generate` and bundling Proposed | `core`, `bindings`, `compiler`, `local`, `runtime-bun`, `opentelemetry` |
 | Schema adapters | `packages/integrations/{zod,valibot,...}` | Convert one schema library's schemas for the compiler ([ADR 0016](decisions/0016-schema-adapters-and-conversion-fidelity.md)). | **Implemented** for Zod (`@holqa/zod`); others Planned | `core` only (enforced for `@holqa/zod`) |
 | `@holqa/opentelemetry` | `packages/integrations/opentelemetry` | OTLP/HTTP JSON export of telemetry and the standard `OTEL_*` variables ([ADR 0027](decisions/0027-observability-telemetry-and-local-inspection.md)). Fetch API only. | **Implemented**; `@opentelemetry/api` bridge Planned | `core` only (enforced) |
 | Framework adapters | `packages/integrations/{orpc,tanstack-query,effect,...}` | Handler, transport, and client adapters. | Planned | `core`, `sdk`, `client` |
@@ -46,7 +46,7 @@ flowchart BT
   local --> core & runtime
   bindings --> core
   testing --> core & sdk & local & runtime
-  cli --> core & compiler & local & runtime & otel
+  cli --> core & bindings & compiler & local & runtime & otel
   integrations --> core & sdk & client
   otel --> core
 ```

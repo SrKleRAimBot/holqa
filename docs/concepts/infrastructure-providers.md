@@ -53,7 +53,7 @@ Provider-specific tuning belongs in the binding, which is outside the portable a
 
 ## Capability negotiation
 
-Capability negotiation is how a binding proves it can satisfy a contract. The following table is illustrative of the kinds of capabilities involved; the actual capability vocabulary is **Proposed**.
+Capability negotiation is how a binding proves it can satisfy a contract. The vocabulary that is **Implemented** (`requiredCapabilities`, `providedCapabilities`, quantities such as `maxDelaySeconds` and `maxMessageBytes`, native and emulated support) is specified in the [binding contracts reference](../reference/bindings.md#capabilities). The following table is illustrative of the kinds of capabilities involved; ordering and time zone capabilities in it are not defined.
 
 | Capability | Requirement source (example) | Local emulator | Driver A (illustrative) | Driver B (illustrative) |
 | --- | --- | --- | --- | --- |
@@ -78,7 +78,7 @@ Negotiation outcomes:
 
 Provider independence does not imply that every provider offers identical functionality or guarantees. An unsupported capability **fails explicitly**; it is never silently ignored or emulated with weaker semantics. For example, if a queue declares `deadLetter: true` and the bound driver cannot dead-letter, Holqa must refuse the binding rather than drop messages after the final attempt.
 
-When this check runs (at `holqa build`, `holqa doctor`, deployment time, or all three) is **Proposed**. The compiler already records the capabilities an application requires in the manifest (`requiredCapabilities`, **Implemented**, with the vocabulary in the [compiler specification](../reference/compiler-specification.md#required-capabilities)); comparing them with a binding at build time is **Planned**.
+The check runs when a runtime installs a binding (`bindApp`), and before anything runs with `holqa bindings validate` and `holqa inspect --capabilities --bindings <path>` (**Implemented**), which compare the manifest's requirements with a binding configuration without connecting to any infrastructure.
 
 ## Possible future adapters
 

@@ -1,5 +1,6 @@
 import type {
   AnalysisOutcome,
+  AnalyzeOptions,
   CliHost
 } from "@/analysis/host";
 
@@ -93,9 +94,10 @@ export function createProcessHost(options: ProcessHostOptions = {}): CliHost {
    * Analyzes one application in the isolated analysis process.
    *
    * @param appPath - The application module.
+   * @param analyzeOptions - The binding configuration module to resolve too, if any.
    * @returns The outcome.
    */
-  const analyze = async (appPath: string): Promise<AnalysisOutcome> => {
+  const analyze = async (appPath: string, analyzeOptions: AnalyzeOptions = {}): Promise<AnalysisOutcome> => {
     if (!existsSync(appPath)) {
       return {
         ok: false,
@@ -108,7 +110,20 @@ export function createProcessHost(options: ProcessHostOptions = {}): CliHost {
         })]
       };
     }
-    return runWorker(appPath, options);
+    const bindingsPath = analyzeOptions.bindingsPath;
+    if (bindingsPath !== undefined && !existsSync(bindingsPath)) {
+      return {
+        ok: false,
+        output: "",
+        diagnostics: [createDiagnostic({
+          code: diagnosticCodes.fileUnreadable,
+          severity: "error",
+          message: `The binding configuration module "${relative(cwd, bindingsPath) || basename(bindingsPath)}" does not exist.`,
+          hint: "Create bindings.ts next to infra.ts (export default defineBindings(app, { ... })), or pass --bindings <path>."
+        })]
+      };
+    }
+    return runWorker(appPath, options, bindingsPath);
   };
   /**
    * Writes a file, creating its directory.
@@ -123,6 +138,7 @@ export function createProcessHost(options: ProcessHostOptions = {}): CliHost {
   const local = { cwd, analyze, writeFile };
   return {
     cwd,
+    environment: options.environment ?? process.env,
     analyze,
     writeFile,
     readFile: async path => new Uint8Array(readFileSync(path)),
@@ -162,9 +178,10 @@ async function waitForStop(intervalMs: number): Promise<boolean> {
  *
  * @param appPath - The absolute path of the application module.
  * @param options - Timeout and overrides.
+ * @param bindingsPath - The binding configuration module to resolve too, if any.
  * @returns The validated outcome, or a `HOLQA_ANALYSIS_FAILED` failure.
  */
-async function runWorker(appPath: string, options: ProcessHostOptions): Promise<AnalysisOutcome> {
+async function runWorker(appPath: string, options: ProcessHostOptions, bindingsPath?: string): Promise<AnalysisOutcome> {
   const timeoutMs = options.timeoutMs ?? 60_000;
   const environment = options.environment ?? process.env;
   const env: Record<string, string> = { TZ: "UTC", LC_ALL: "C" };
@@ -177,7 +194,7 @@ async function runWorker(appPath: string, options: ProcessHostOptions): Promise<
   let message: string | undefined;
   let oversized = false;
   const child = Bun.spawn({
-    cmd: [options.bunPath ?? process.execPath, "--no-install", "--no-env-file", options.workerPath ?? defaultWorkerPath(), JSON.stringify({ root: dirname(appPath), appModule: basename(appPath) })],
+    cmd: [options.bunPath ?? process.execPath, "--no-install", "--no-env-file", options.workerPath ?? defaultWorkerPath(), JSON.stringify({ root: dirname(appPath), appModule: basename(appPath), ...bindingsPath === undefined ? {} : { bindingsModule: bindingsPath } })],
     cwd: dirname(appPath),
     env,
     stdin: "ignore",

@@ -255,6 +255,8 @@ export {
   queueBackoffProblem
 } from "@/resources/backoff";
 export { checkCapabilities } from "@/resources/capabilities";
+export { providedCapabilities, requiredCapabilities } from "@/resources/capability-vocabulary";
+export type { CapabilitySubject } from "@/resources/capability-vocabulary";
 export { checkIdentities } from "@/resources/identity-check";
 export type { DeclaredIdentity } from "@/resources/identity-check";
 export { isResourceKind, resourceKinds } from "@/resources/kinds";

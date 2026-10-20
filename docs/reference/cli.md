@@ -1,6 +1,6 @@
 # CLI reference
 
-> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect` (including `--cycles`), `holqa build --manifest`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`, `holqa state`, `holqa doctor` and the telemetry commands `holqa logs`, `holqa traces list`, `holqa traces inspect`, `holqa events inspect` and `holqa metrics`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
+> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect` (including `--cycles` and `--capabilities`), `holqa build --manifest`, `holqa bindings inspect`, `holqa bindings validate`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`, `holqa state`, `holqa doctor` and the telemetry commands `holqa logs`, `holqa traces list`, `holqa traces inspect`, `holqa events inspect` and `holqa metrics`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
 
 The `holqa` binary is provided by `@holqa/cli` (`packages/cli`). It runs on Bun (`#!/usr/bin/env bun`; `engines.bun >= 1.3.13`). The package is private and not published, so the CLI is only available inside this repository.
 
@@ -17,8 +17,10 @@ Within the workspace, packages that depend on `@holqa/cli` (such as `examples/pa
 
 ```text
 holqa [--help] [--version] [--json]
-holqa inspect [--cycles] [--app <path>] [--json]
+holqa inspect [--cycles | --capabilities [--bindings <path>]] [--app <path>] [--json]
 holqa build --manifest [--app <path>] [--out-dir <dir>] [--json]
+holqa bindings inspect [--bindings <path>] [--app <path>] [--json]
+holqa bindings validate [--bindings <path>] [--app <path>] [--json]
 holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--no-hot] [--no-dashboard] [--json]
 holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]
 holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]
@@ -52,6 +54,8 @@ holqa metrics [--app <path>] [--state-dir <dir>] [--json]
 | `--no-hot` | `dev`: restart the generation process on every change instead of replacing handlers in place. | — |
 | `--no-dashboard` | `dev`: do not serve the development dashboard. | — |
 | `--cycles` | `inspect`: print the event dependency graph and its cycles instead of the summary. | — |
+| `--capabilities` | `inspect`: print every resource's required capabilities instead of the summary. Cannot be combined with `--cycles`. | — |
+| `--bindings <path>` | `bindings inspect`, `bindings validate`, `inspect --capabilities`: the binding configuration module, relative to the working directory. Default for the `bindings` commands: `bindings.ts` in the application root; `inspect` uses one only when given. `--bindings` without `--capabilities` is a usage error. | — |
 | `--follow` | `logs`: keep printing new entries until the process receives `SIGINT` or `SIGTERM`. | — |
 | `--handler <id>`, `--trace <trace-id>`, `--level <level>` | `logs`: only entries of one handler, of one trace, or at `debug`, `info`, `warn` or `error` and more severe. | — |
 | `--limit <n>` | `logs`, `traces list`: how many entries or traces, `1` to `10000`. Defaults 100 and 20. | — |
@@ -60,7 +64,7 @@ Options take their value as `--app path` or `--app=path`. Positional arguments (
 
 ## Commands
 
-> **Every command except `--help`, `--version` and the telemetry commands runs your application's code.** `inspect` and `build` import the application module, every handler module and everything those import, in a separate Bun process with an allowlisted environment. The local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) analyze the same way and then **run** the application in a separate Bun process with the CLI's full environment, as any server you start would, including `.env` files Bun loads from the application root. None of this is a sandbox. See the [security model](compiler-specification.md#security-model).
+> **Every command except `--help`, `--version` and the telemetry commands runs your application's code.** `inspect`, `build` and the `bindings` commands import the application module, every handler module and everything those import, in a separate Bun process with an allowlisted environment. The local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) analyze the same way and then **run** the application in a separate Bun process with the CLI's full environment, as any server you start would, including `.env` files Bun loads from the application root. None of this is a sandbox. See the [security model](compiler-specification.md#security-model).
 
 ### `holqa inspect`
 
@@ -86,6 +90,39 @@ interface InspectCyclesJsonOutput {
   events: EventGraph; // nodes, edges and unresolved publications; locations relative to the application root
 }
 ```
+
+With `--capabilities`, it prints every resource's required capabilities in the [required-capability vocabulary](compiler-specification.md#required-capabilities), including `trigger.<kind>` for each kind of handler the resource has. With `--bindings <path>`, it also resolves that binding configuration and shows, per resource, the selected provider and whether it meets each requirement natively (`ok`), through an explicitly enabled emulation (`emulated`) or not at all (`MISSING`). Unmet requirements are findings: the exit code is `0` whenever analysis succeeds; `holqa bindings validate` fails on them. With `--json`:
+
+```ts
+interface InspectCapabilitiesJsonOutput {
+  capabilities: Array<{
+    resource: string;
+    kind: string;
+    provider?: string; // with --bindings
+    requirements: Array<{ capability: string; support?: "native" | "emulated" | "unsupported" }>;
+  }>;
+  diagnostics: Diagnostic[];
+  bindings?: { name: string; diagnostics: Diagnostic[] }; // with --bindings
+}
+```
+
+### `holqa bindings inspect` and `holqa bindings validate`
+
+Both analyze the application, import the binding configuration module (`--bindings`, default `bindings.ts` next to the application module), check that its default export is a `defineBindings` configuration of the analyzed application, and resolve and validate it against the manifest's handlers ([binding contracts](bindings.md#binding-configurations)). This happens in the analysis process with its allowlisted environment; **no provider is opened**, so neither command needs network access or credentials, and provider factories must not connect when they are called.
+
+`holqa bindings inspect` prints which provider binds each resource and why (`resource override`, `kind default` or `platform default`), how each requirement is met, the services and why each provider was selected, and every provider with its contract versions, credential names, emulations and the background processes it needs, followed by the problems found. It exits with `0` whenever the configuration could be resolved. With `--json`: `{ bindings, diagnostics }`, where `bindings` is the `holqa.bindings/1` report of `inspectBindings` and `diagnostics` are the analysis warnings.
+
+`holqa bindings validate` prints every problem (resources without a provider, providers that do not bind a resource's kind, incompatible contract versions, unmet requirements, undeliverable triggers, unsupported topologies, execution limits, missing event safety stores) and exits with `1` when any is an error. When every configuration source reads the process environment (`settings.source: "environment"`, as `environmentConfig()` does), it also checks, in the CLI process, that every credential the providers reference is set (`HOLQA_BINDING_CREDENTIALS_MISSING`, an error) and that every configuration entry without a default is set (`HOLQA_CONFIG_INVALID`, a warning, because its schema may accept no value); values are never printed. Otherwise it says that credentials were not checked. With `--json`:
+
+```ts
+interface BindingsValidateJsonOutput {
+  credentialsChecked: boolean;
+  diagnostics: Diagnostic[];
+  valid: boolean;
+}
+```
+
+A missing bindings module fails with `HOLQA_FILE_UNREADABLE`; a module whose default export is not a binding configuration, or that binds another application, with `HOLQA_BINDING_CONFIG_INVALID`.
 
 ### `holqa build --manifest`
 

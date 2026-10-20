@@ -59,4 +59,15 @@ describe("readAnalysisReport", () => {
     expect(without.ok).toBe(true);
     expect(without.ok && without.events).toBeUndefined();
   });
+
+  it("accepts a well-formed binding report and rejects one that cannot be trusted, including malformed entries the output would read", async () => {
+    const provider = { name: "local", provider: "holqa.local", role: "platform", contracts: { queue: 1 }, capabilities: {}, limits: {}, services: ["config"], emulations: [], topology: { delivery: "pull", state: "host" }, settings: {}, credentials: [] };
+    const bindings = { format: "holqa.bindings/1", name: "local", application: "basic", resources: [{ id: "orders", kind: "queue", provider: "local", selection: "default", requirements: [{ capability: "queue", support: "native" }] }], services: [{ service: "config", providers: ["local"], selection: "default" }], providers: [provider], diagnostics: [] };
+    const outcome = await readAnalysisReport(await reportText({ bindings }), "");
+    expect(outcome.ok ? outcome.bindings as unknown : undefined).toEqual(bindings);
+    for (const tampered of [{ ...bindings, format: "other" }, { ...bindings, resources: "x" }, { ...bindings, diagnostics: [{ code: "HOLQA_MADE_UP", severity: "error", message: "x" }] }, { ...bindings, resources: [{ id: 1 }] }, { ...bindings, providers: [{}] }, { ...bindings, providers: [{ ...provider, contracts: undefined }] }, { ...bindings, providers: [{ ...provider, emulations: [{ capability: "queue.delay" }] }] }, { ...bindings, services: [{ service: "config" }] }, { ...bindings, resources: [{ ...bindings.resources[0], requirements: [{ capability: "queue" }] }] }]) {
+      const rejected = await readAnalysisReport(await reportText({ bindings: tampered }), "");
+      expect(rejected.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_ANALYSIS_FAILED"]);
+    }
+  });
 });

@@ -16,6 +16,10 @@ import {
   proposedCommands
 } from "@/commands";
 import { reportDiagnostics } from "@/commands/analysis-command";
+import {
+  bindingsCommand,
+  matchBindingsCommand
+} from "@/commands/bindings-commands";
 import { buildCommand } from "@/commands/build";
 import { inspectCommand } from "@/commands/inspect";
 import {
@@ -36,7 +40,8 @@ export type { CliIo } from "@/io";
  * through `io` and the returned exit code.
  *
  * Supported: `--help`/`-h` (or no arguments), `--version`/`-v`,
- * `holqa inspect [--app <path>]`, `holqa build --manifest [--app <path>] [--out-dir <dir>]`,
+ * `holqa inspect [--app <path>]` (with `--cycles` or `--capabilities [--bindings <path>]`), `holqa build --manifest [--app <path>] [--out-dir <dir>]`,
+ * `holqa bindings inspect` and `holqa bindings validate` (`--bindings <path>`),
  * the local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`,
  * `cron run`, `state`, `doctor`), the telemetry commands (`logs`, `traces list`,
  * `traces inspect`, `events inspect`, `metrics`), and `--json` anywhere, which switches
@@ -71,14 +76,20 @@ export async function runCli(argv: readonly string[], io: CliIo, version: string
 
   const [command, ...rest] = args;
   if (command === "inspect" || command === "build") {
-    const options = parseOptions(rest, command === "inspect" ? { flags: ["cycles"], values: ["app"] } : { flags: ["manifest"], values: ["app", "out-dir"] });
+    const options = parseOptions(rest, command === "inspect" ? { flags: ["cycles", "capabilities"], values: ["app", "bindings"] } : { flags: ["manifest"], values: ["app", "out-dir"] });
     if (!options.ok) {
       reportDiagnostics(io, json, options.problems.map(problem => usageError(`holqa ${command}: ${problem}`, command)));
       return exitCodes.usage;
     }
     const app = options.values.get("app");
-    if (command === "inspect")
-      return inspectCommand(host ?? createProcessHost(), io, json, app, options.flags.has("cycles"));
+    if (command === "inspect") {
+      const bindings = options.values.get("bindings");
+      if ((options.flags.has("cycles") && options.flags.has("capabilities")) || (bindings !== undefined && !options.flags.has("capabilities"))) {
+        reportDiagnostics(io, json, [usageError("holqa inspect: --bindings requires --capabilities, which cannot be combined with --cycles.", command)]);
+        return exitCodes.usage;
+      }
+      return inspectCommand(host ?? createProcessHost(), io, json, app, options.flags.has("cycles"), options.flags.has("capabilities") ? { ...bindings === undefined ? {} : { bindings } } : undefined);
+    }
     if (!options.flags.has("manifest")) {
       reportError(io, json, createDiagnostic({
         code: diagnosticCodes.cliNotImplemented,
@@ -91,6 +102,9 @@ export async function runCli(argv: readonly string[], io: CliIo, version: string
     return buildCommand(host ?? createProcessHost(), io, json, { app, outDir: options.values.get("out-dir") });
   }
 
+  const bindings = matchBindingsCommand(args);
+  if (bindings !== undefined)
+    return bindingsCommand(host ?? createProcessHost(), io, json, bindings.name, bindings.rest);
   const local = matchLocalCommand(args);
   if (local !== undefined)
     return localCommand(host ?? createProcessHost(), io, json, local.name, local.rest);
@@ -161,8 +175,10 @@ function renderHelp(version: string): string {
     `holqa ${version}`,
     "",
     "Usage: holqa [--help] [--version] [--json]",
-    "       holqa inspect [--cycles] [--app <path>] [--json]",
+    "       holqa inspect [--cycles | --capabilities [--bindings <path>]] [--app <path>] [--json]",
     "       holqa build --manifest [--app <path>] [--out-dir <dir>] [--json]",
+    "       holqa bindings inspect [--bindings <path>] [--app <path>] [--json]",
+    "       holqa bindings validate [--bindings <path>] [--app <path>] [--json]",
     "       holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--no-hot] [--no-dashboard] [--json]",
     "       holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]",
     "       holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]",
@@ -190,6 +206,8 @@ function renderHelp(version: string): string {
     "  --no-hot            dev: restart the application on every change instead of replacing handlers in place.",
     "  --no-dashboard      dev: do not serve the development dashboard at /_holqa/dashboard.",
     "  --cycles            inspect: print the event dependency graph and its cycles instead of the summary.",
+    "  --capabilities      inspect: print every resource's required capabilities (with --bindings, how providers meet them).",
+    "  --bindings <path>   The binding configuration module (default for bindings commands: bindings.ts next to the application).",
     "  --follow            logs: keep printing new entries until interrupted.",
     "",
     "Commands:",

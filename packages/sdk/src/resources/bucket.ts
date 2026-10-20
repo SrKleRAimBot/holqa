@@ -40,6 +40,7 @@ import {
   HolqaError,
   requireBinding,
   resolveDriver,
+  resourceBindingInfo,
   validateInput
 } from "@holqa/core";
 
@@ -346,12 +347,12 @@ export function bucket<const Id extends string>(options: BucketOptions<Id> & Che
     signedUrl: async (key: string, urlOptions: SignedUrlOptions) => {
       const { driver, operation } = prepare(handle, "signedUrl", key);
       const checked = readSignedUrlOptions(urlOptions, operation);
-      const binding = requireBinding(ownerOf(handle, operation), operation);
-      const supported = binding.capabilities.bucket?.signedUrls?.maxExpiresInSeconds;
+      const selected = resourceBindingInfo(requireBinding(ownerOf(handle, operation), operation), descriptor);
+      const supported = selected.capabilities.bucket?.signedUrls?.maxExpiresInSeconds;
       if (supported === undefined)
-        failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${binding.name}" does not issue signed URLs, required by ${operation}.`);
+        failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${selected.binding}" does not issue signed URLs, required by ${operation}.`);
       if (checked.expiresInSeconds > supported)
-        failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${binding.name}" issues signed URLs for at most ${supported} seconds; ${operation} asked for ${checked.expiresInSeconds}.`);
+        failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${selected.binding}" issues signed URLs for at most ${supported} seconds; ${operation} asked for ${checked.expiresInSeconds}.`);
       return driver.signUrl(key, checked);
     },
     onObjectCreated: <const HandlerId extends string>(registration: ObjectCreatedOptions<HandlerId> & CheckResourceId<HandlerId>) => {

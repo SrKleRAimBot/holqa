@@ -265,6 +265,7 @@ function capabilityProblems(kind: ResourceKind, value: unknown): string[] {
         problems.push("\"deadLetter\" must be a boolean");
       list("backoff", ["fixed", "exponential"], true);
       count("maxDelaySeconds", true);
+      count("maxMessageBytes", true);
       break;
     case "bucket": {
       list("access", ["private", "public-read"]);
