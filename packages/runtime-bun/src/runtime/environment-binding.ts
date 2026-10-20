@@ -1,17 +1,10 @@
 import type {
   AppDescriptor,
   ConfigDescriptor,
-  Diagnostic,
   RuntimeBinding
 } from "@holqa/core";
 
-import {
-  createDiagnostic,
-  diagnosticCodes,
-  HolqaError,
-  InputValidationError,
-  validateInput
-} from "@holqa/core";
+import { resolveConfiguration } from "@holqa/core";
 
 /** Environment variables by name, as `process.env` provides them. */
 export type EnvironmentVariables = Readonly<Record<string, string | undefined>>;
@@ -35,33 +28,7 @@ export type EnvironmentVariables = Readonly<Record<string, string | undefined>>;
  * @throws {HolqaError} `HOLQA_CONFIG_INVALID`, one diagnostic per invalid entry. Secret values and the schema's messages about them are never included.
  */
 export async function createEnvironmentBinding(app: AppDescriptor, env: EnvironmentVariables): Promise<RuntimeBinding> {
-  const values = new Map<string, unknown>();
-  const problems: Diagnostic[] = [];
-  for (const entry of app.config) {
-    const raw = env[entry.name];
-    const candidate: unknown = raw ?? entry.defaultValue;
-    try {
-      values.set(entry.name, await validateInput(entry.schema, candidate, `configuration value ${entry.name}`));
-    } catch (error) {
-      if (!(error instanceof InputValidationError))
-        throw error;
-      const missing = candidate === undefined;
-      const kind = entry.sensitive ? "secret" : "variable";
-      problems.push(createDiagnostic({
-        code: diagnosticCodes.configInvalid,
-        severity: "error",
-        message: missing
-          ? `The ${kind} ${entry.name} is required but not set.`
-          : entry.sensitive
-            ? `The secret ${entry.name} does not satisfy its schema.`
-            : `The variable ${entry.name} does not satisfy its schema: ${error.issues.map(issue => issue.message).join("; ")}`,
-        hint: `Set the environment variable ${entry.name} before starting the application.`,
-        details: { name: entry.name, kind, missing }
-      }));
-    }
-  }
-  if (problems.length > 0)
-    throw new HolqaError(problems);
+  const values = await resolveConfiguration(app.config, name => env[name]);
   return Object.freeze({
     name: "bun-environment",
     capabilities: Object.freeze({ "http.api": Object.freeze({}) }),

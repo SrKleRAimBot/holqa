@@ -5,7 +5,7 @@
 - **Deciders:** Holqa maintainers
 - **Refines:** [ADR 0005](0005-infrastructure-independent-resource-contracts.md), [ADR 0020](0020-runtime-binding-resolution.md), [ADR 0024](0024-event-delivery-sources-and-local-drivers.md). It supersedes none of them.
 
-> **Implementation status:** Implemented in `@holqa/core` (contract versions, the provider protocol, provider validation, failure classification, lifecycle types, per-resource capability resolution). Selecting and composing providers into one binding is a separate decision.
+> **Implementation status:** Implemented in `@holqa/core` (contract versions, the provider protocol, provider validation, failure classification, lifecycle types, per-resource capability resolution). Selecting and composing providers into one binding is [ADR 0030](0030-binding-composition-and-resolution.md).
 
 ## Context
 

@@ -1,0 +1,46 @@
+{
+  "name": "@holqa/bindings",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Holqa binding composition: select a provider for every resource and service with defineBindings, resolve the selection deterministically, validate it and compose it into one runtime binding.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SrKleRAimBot/holqa.git",
+    "directory": "packages/bindings"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@holqa/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

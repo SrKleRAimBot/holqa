@@ -7,6 +7,7 @@
 | --- | --- |
 | `@holqa/core` | nothing |
 | `@holqa/sdk`, `@holqa/client`, `@holqa/compiler`, `@holqa/runtime-bun` | `@holqa/core` |
+| `@holqa/bindings` | core |
 | `@holqa/local` | core, runtime-bun |
 | `@holqa/testing` | core, sdk, local, runtime-bun |
 | `@holqa/cli` | core, compiler, local, runtime-bun |

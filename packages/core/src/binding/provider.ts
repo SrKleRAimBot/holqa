@@ -4,6 +4,7 @@ import type {
   BindingProtocolVersion
 } from "@/binding/contracts";
 import type {
+  BindingLogLevel,
   BindingStopOptions,
   ComponentHealth
 } from "@/binding/lifecycle";
@@ -113,9 +114,6 @@ export interface ProviderTopology {
   readonly connectors?: readonly string[];
 }
 
-/** Log levels a provider may write through its context. */
-export type ProviderLogLevel = "debug" | "info" | "warn" | "error";
-
 /** What a provider receives when it is opened. */
 export interface ProviderContext {
   /** The application being bound. */
@@ -133,7 +131,7 @@ export interface ProviderContext {
   /** Aborted when the start exceeded its time limit or the runtime is stopping. */
   readonly signal: AbortSignal;
   /** Writes a structured log entry attributed to the provider. Fields are redacted like every runtime log. */
-  readonly log: (level: ProviderLogLevel, message: string, fields?: JsonObject) => void;
+  readonly log: (level: BindingLogLevel, message: string, fields?: JsonObject) => void;
 }
 
 /**

@@ -1,6 +1,6 @@
 # Packages
 
-> **Status:** Reference for the current repository state. Seven framework packages, two integration packages and nine example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline`, `event-safety` and `observability` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
+> **Status:** Reference for the current repository state. Eight framework packages, two integration packages and nine example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline`, `event-safety` and `observability` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
 
 All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single code entry point (`.`) through their `exports` map. `@holqa/compiler` additionally exports its JSON Schema files. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
 
@@ -21,6 +21,7 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | `@holqa/example-observability` | `examples/observability` | **Implemented** | Observability: one correlated trace from an HTTP request through a queue to an object event, redacted logs, metrics, OTLP export to a stand-in collector, and the telemetry commands of the built CLI. |
 | `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model, HTTP routes, RPC procedures, middleware, queue, bucket and schedule operations) | Public developer-facing SDK. |
 | `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery, telemetry, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP, RPC and background transports. |
+| `@holqa/bindings` | `packages/bindings` | **Implemented** (binding configurations, resolution, composition) | Selects a provider for every resource and service and composes them into one runtime binding. |
 | `@holqa/local` | `packages/local` | **Implemented** (local binding) | Local runtime drivers: SQLite-backed queues, filesystem object storage with events and signed URLs, a clock-driven scheduler, inspection, a local telemetry store. |
 | `@holqa/testing` | `packages/testing` | **Implemented** (`createTestApp` with recording and replay, in-memory telemetry, type assertions) | Deterministic integration tests on the local environment, and compile-time type assertions. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
@@ -88,10 +89,10 @@ Planned packages are directories containing only a README. They have no `package
 | `RuntimeBinding`, `BindingCapabilities`, `ResourceDrivers`, `BindingSlot`, `createBindingSlot` | Types, function | The data-plane binding contract. `RuntimeBinding.describe(resource)` (optional) reports the provider and capabilities selected for one resource. |
 | `ResourceBindingInfo`, `resourceBindingInfo(binding, resource)` | Type, function | The provider name and capabilities that apply to one resource: `describe`'s answer, or the binding's own. |
 | `bindingContracts`, `bindingContractNames`, `BindingContractName`, `bindingProtocolVersion`, `BindingProtocolVersion`, `mandatoryBindingContracts`, `isBindingContractName`, `contractVersionProblem` | Constants, types, functions | Versioned binding contracts and the exact-version compatibility check. See [binding contracts](bindings.md). |
-| `BindingProvider<Kinds, Services>`, `AnyBindingProvider`, `ProviderRole`, `BindingServiceName`, `ProviderContext`, `ProviderInstance`, `ProviderLogLevel`, `ConfigSource`, `ExecutionCapabilities`, `CapabilityEmulation`, `ProviderTopology`, `CredentialReference` | Types | The provider protocol. |
+| `BindingProvider<Kinds, Services>`, `AnyBindingProvider`, `ProviderRole`, `BindingServiceName`, `ProviderContext`, `ProviderInstance`, `ConfigSource`, `ExecutionCapabilities`, `CapabilityEmulation`, `ProviderTopology`, `CredentialReference` | Types | The provider protocol. |
 | `isBindingProvider(value)`, `isProviderId(value)`, `credentialRef(name)`, `isCredentialReference(value)`, `validateProvider(value)` | Functions | Recognize and validate providers; create credential references (`HOLQA_BINDING_CONFIG_INVALID` for an invalid name). |
 | `bindingFailure(kind, init)`, `bindingFailureCodes`, `BindingFailureKind`, `BindingFailureInit`, `isTransientBindingFailure(diagnostic)` | Functions, constant, types | Classified binding failures, one code per kind. |
-| `BindingLifecycle`, `BindingHealth`, `ComponentHealth`, `HealthStatus`, `BindingStopOptions`, `combineHealth(components)` | Types, function | The binding lifecycle and health reports. |
+| `BindingLifecycle`, `BindingHealth`, `ComponentHealth`, `HealthStatus`, `BindingStartOptions`, `BindingStopOptions`, `BindingLogLevel`, `combineHealth(components)` | Types, function | The binding lifecycle and health reports. |
 | `bindApp(app, binding)` | Function | Installs a binding after checking capabilities and drivers; returns an unbind function. Throws `HOLQA_RUNTIME_ALREADY_BOUND` or `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`. |
 | `requireBinding`, `resolveDriver`, `readConfig` | Functions | Resolve the current binding, a resource's driver or a configuration value; throw `HOLQA_RUNTIME_NOT_BOUND` without a binding. |
 | `checkCapabilities(resource, advertised, bindingName)` | Function | Compares a resource's requirements with the capabilities a binding advertises for its kind; one `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` diagnostic per shortfall. |
@@ -155,8 +156,9 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 
 | Export | Kind | Description |
 | --- | --- | --- |
-| `createRuntime(options)` | Function | Validates an application and its handlers and returns a `Runtime`: `start`, `stop`, `invoke`, `fetch`, `stats`, `telemetry`, `replaceHandlers`, `handlerVersions`, `state`, `name`, `handlers`. `start` consumes the binding's sources to deliver queue messages, object events and scheduled runs, and fails when the binding cannot deliver a handler's trigger unless `manualTriggers: true`. |
+| `createRuntime(options)` | Function | Validates an application and its handlers and returns a `Runtime`: `start`, `stop`, `invoke`, `fetch`, `stats`, `telemetry`, `replaceHandlers`, `handlerVersions`, `health`, `state`, `name`, `handlers`. `start` starts the binding's lifecycle when it has one, then consumes the binding's sources to deliver queue messages, object events and scheduled runs, and fails when the binding cannot deliver a handler's trigger unless `manualTriggers: true`. |
 | `Runtime`, `RuntimeOptions`, `RuntimeLimits`, `RuntimeHttpOptions`, `RuntimeDeliveryOptions`, `RuntimeState`, `RuntimeStats`, `StopOptions` | Types | The runtime and its settings. `RuntimeStats.delivery` (`TransportStats`, `DeliveryStats`) counts received, acknowledged, retried, dead-lettered, discarded, blocked (ended by an event limit) and released deliveries and scheduled runs. |
+| `RuntimeHealth` | Type | `runtime.health()`: `status`, `state`, `ready` and the runtime's and binding's `components`. See [binding lifecycle and health](runtime.md#binding-lifecycle-and-health). |
 | `HandlerReplacement`, `ReplaceHandlersOptions`, `HandlerVersionInfo`, `HandlerRegistryStats` | Types | In-place handler replacement: the result of `replaceHandlers`, its `sources` option, the entries of `handlerVersions()` and `RuntimeStats.versions`. See [handler versions](runtime.md#handler-versions). |
 | `RuntimeEventLimits`, `EventGuardViolation` | Types | `RuntimeOptions.events` (`maxDepth`, `maxPublications`, `maxEventAgeMs`, `maxEventsPerOperation`) and the refusal recorded as `blocked` on outcomes. See [event lineage and limits](runtime.md#event-lineage-and-limits). |
 | `InvocationRequest`, `InvocationOutcome`, `InvocationSuccess`, `InvocationFailed`, `InvocationFailure`, `DispatchStats` | Types | Normalized invocations (with optional `causationId`, `rootId` and `depth`) and their structured outcomes (with `emitted`, `lineage` and `blocked`). |
@@ -168,6 +170,22 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `correlationHeader` | Constant | `"x-correlation-id"`. |
 | `jsonLineSink(write?)`, `silentSink`, `LogSink`, `LogEntry`, `LogLevel` | Functions, types | Structured log sinks. `RuntimeOptions.logLevel` filters by level; `RuntimeOptions.redact` adds redacted field names. |
 | `RuntimeTelemetryOptions`, `MessageTraceRelation`, `TelemetryIdGenerator`, `TelemetryStats`, `RuntimeTelemetryControl`, `PipelineLimits` | Types | `RuntimeOptions.telemetry`, `runtime.telemetry` (`enabled`, `flush`), `RuntimeStats.telemetry` and `StopOptions.telemetryMs`. See [telemetry](runtime.md#telemetry). |
+
+## `@holqa/bindings`
+
+- **Path:** `packages/bindings`
+- **Status:** Implemented (binding configurations, resolution, composition). Private. See [binding contracts](bindings.md#binding-configurations) and [ADR 0030](../architecture/decisions/0030-binding-composition-and-resolution.md).
+- **Entry point:** `@holqa/bindings` → `dist/index.js`, `dist/index.d.ts`. Runtime-neutral.
+- **Internal dependencies:** `@holqa/core`.
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `defineBindings(app, config)`, `isBindingsDefinition(value)` | Functions | Declares which provider fulfils each resource (by identifier), resource kind and service; pure and type-checked against the application. `HOLQA_APP_INVALID`, `HOLQA_BINDING_CONFIG_INVALID`. |
+| `BindingsConfig`, `BindingsDefinition`, `BindableApp`, `ResourceBindings`, `KindBindings`, `ServiceBindings`, `ServiceSelection`, `CheckBindings`, `BindingsTypeError`, `ResourceIdsOf`, `ResourceKindsOf`, `KindOfResource` | Types | The configuration and its compile-time checks. |
+| `resolveBindings(definition)`, `assertResolved(resolved)` | Functions | Deterministic resolution (resource, kind, default) and service selection, reporting `HOLQA_BINDING_RESOURCE_UNKNOWN`, `HOLQA_BINDING_KIND_MISMATCH`, `HOLQA_BINDING_MISSING` and provider validation problems. |
+| `ResolvedBindings`, `ResourceSelection`, `ResourceSelectionSource`, `ServiceSelectionResult`, `ServiceSelectionSource` | Types | Resolution results. |
+| `createBinding(resolved)` | Function | Composes a resolution into one `RuntimeBinding` with a lifecycle. |
+| `environmentConfig(options?)`, `EnvironmentConfigOptions`, `EnvironmentVariables` | Function, types | The configuration service provider for environment variables; the built-in fallback. |
 
 ## `@holqa/local`
 

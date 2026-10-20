@@ -13,6 +13,7 @@ Holqa's packages are layered so that framework-neutral contracts never depend on
 | `@holqa/client` | `packages/client` | Framework-independent, browser-safe generated-client runtime. | Planned | `core` |
 | `@holqa/compiler` | `packages/compiler` | Resource analysis, manifest IR, diagnostics, compilation. | **Implemented** (canonical JSON, application compilation, graph validation, manifest version 1 and entry point map); client generation and bundling Planned | `core` |
 | `@holqa/runtime-bun` | `packages/runtime-bun` | Bun execution: invocation dispatcher, lifecycle, HTTP, RPC, queue, object event and schedule transports. | **Implemented** (dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve`, queue, object event and schedule delivery); worker isolation Planned | `core` |
+| `@holqa/bindings` | `packages/bindings` | Binding configurations: provider selection per resource, kind and service, resolution and composition into one runtime binding ([ADR 0030](decisions/0030-binding-composition-and-resolution.md)). Runtime-neutral. | **Implemented** | `core` |
 | `@holqa/local` | `packages/local` | Local runtime drivers: SQLite-backed queues and event state, filesystem object storage, a clock-driven scheduler, inspection. | **Implemented** (drivers, inspection, trace storage, manual trigger metadata) | `core`, `runtime-bun` |
 | `@holqa/testing` | `packages/testing` | Testing utilities, fixtures, deterministic execution. | **Implemented** (type assertions, `createTestApp`) | `core`, `sdk`, `local`, `runtime-bun` |
 | `@holqa/cli` | `packages/cli` | Developer CLI. | **Implemented** (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`); `openapi generate` and bundling Proposed | `core`, `compiler`, `local`, `runtime-bun`, `opentelemetry` |
@@ -33,6 +34,7 @@ flowchart BT
   compiler["@holqa/compiler"]
   runtime["@holqa/runtime-bun"]
   local["@holqa/local"]
+  bindings["@holqa/bindings"]
   testing["@holqa/testing"]
   cli["@holqa/cli"]
   integrations["packages/integrations/*"]
@@ -42,6 +44,7 @@ flowchart BT
   compiler --> core
   runtime --> core
   local --> core & runtime
+  bindings --> core
   testing --> core & sdk & local & runtime
   cli --> core & compiler & local & runtime & otel
   integrations --> core & sdk & client
@@ -54,6 +57,7 @@ flowchart BT
 - **`core` depends on nothing.** It is the innermost layer and must remain usable in any JavaScript environment.
 - **`sdk` and `client` must not import the compiler.** Application code and browser bundles must never pull in compiler internals. Compile-time knowledge flows through generated artifacts and the manifest, not imports.
 - **`sdk` does not depend on `runtime-bun`.** Typed handles describe operations; the runtime supplies their implementation. This keeps the SDK neutral and avoids a dependency hub.
+- **`bindings` depends on `core` only.** Providers are written against `@holqa/core` contracts, and the composed binding is a plain `RuntimeBinding`, so neither the runtime nor providers need to know about composition. It types configurations against the structural shape of `defineApp`'s result instead of importing the SDK.
 - **`local` depends on `runtime-bun`, not the reverse.** The runtime is the execution primitive; local emulation is one way of binding resources around it.
 - **Integrations depend inward only.** Adapters for third-party libraries never become dependencies of core packages.
 
@@ -95,7 +99,7 @@ The root `eslint.config.mjs` applies import restrictions by file path:
 | Files | Restriction |
 | --- | --- |
 | All files | No deep imports into another package's `src/` or `dist/` (for example `@holqa/core/src/result`). Use the package's public entry point. |
-| `packages/{core,compiler,sdk,client}/src/**`, `packages/integrations/{zod,opentelemetry}/src/**` and `experiments/{model,sdk,schema-adapters,compiler}/src/**` | No `bun`, `bun:*`, or `node:*`; no `@holqa/runtime-*`, `@holqa/local`, `@holqa/cli`, `@holqa/testing`. |
+| `packages/{core,compiler,sdk,client,bindings}/src/**`, `packages/integrations/{zod,opentelemetry}/src/**` and `experiments/{model,sdk,schema-adapters,compiler}/src/**` | No `bun`, `bun:*`, or `node:*`; no `@holqa/runtime-*`, `@holqa/local`, `@holqa/cli`, `@holqa/testing`. |
 | `packages/core/src/**` | No `@holqa/*` imports at all. |
 | `packages/{sdk,client}/src/**` and `experiments/sdk/src/**` | Additionally, no `@holqa/compiler`. |
 | `experiments/{model,schema-adapters,compiler,runtime-bun}/src/**` | No imports of the SDK prototype (and, outside the runtime, the runtime prototype), including type-only imports, which the boundary script cannot see. |
