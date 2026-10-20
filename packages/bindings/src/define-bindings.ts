@@ -82,6 +82,12 @@ export interface BindingsConfig<App extends BindableApp> {
   readonly resources?: ResourceBindings<App>;
   /** Providers for cross-cutting services. */
   readonly services?: ServiceBindings;
+  /**
+   * Providers of extensions. For each extension the application uses, the
+   * first listed provider that implements it is selected; without one, the
+   * default provider when it implements it.
+   */
+  readonly extensions?: readonly AnyBindingProvider[];
 }
 
 /** A compile-time error carried as a type, so the message appears in the editor. */
@@ -138,6 +144,7 @@ export interface BindingsDefinition<App extends BindableApp = BindableApp> {
   readonly "kinds": Readonly<Partial<Record<ResourceKind, AnyBindingProvider>>>;
   readonly "resources": Readonly<Record<string, AnyBindingProvider>>;
   readonly "services": ServiceBindings;
+  readonly "extensions": readonly AnyBindingProvider[];
   /** Phantom marker that keeps the application's type for tools; never set. */
   readonly "~app"?: App;
 }
@@ -183,7 +190,7 @@ export function defineBindings<const App extends BindableApp, const Config exten
   if (typeof input !== "object" || input === null)
     throw invalid(["the configuration must be an object."]);
   for (const key of Object.keys(input)) {
-    if (!["name", "defaults", "kinds", "resources", "services"].includes(key))
+    if (!["name", "defaults", "kinds", "resources", "services", "extensions"].includes(key))
       problems.push(`"${key}" is not a binding configuration setting.`);
   }
   const name = input.name ?? "default";
@@ -207,6 +214,9 @@ export function defineBindings<const App extends BindableApp, const Config exten
   const kinds = record(input.kinds, "kinds");
   const resources = record(input.resources, "resources");
   const services = record(input.services, "services");
+  const extensions: unknown = input.extensions ?? [];
+  if (!Array.isArray(extensions))
+    problems.push("\"extensions\" must be a list of providers.");
   for (const key of Object.keys(services)) {
     if (!["config", "telemetry", "idempotency", "operation-budgets"].includes(key))
       problems.push(`"services.${key}" is not a service; the services are config, telemetry, idempotency and operation-budgets.`);
@@ -220,7 +230,8 @@ export function defineBindings<const App extends BindableApp, const Config exten
     ...input.defaults === undefined ? {} : { defaults: input.defaults },
     kinds: Object.freeze({ ...kinds }) as BindingsDefinition<App>["kinds"],
     resources: Object.freeze({ ...resources }) as BindingsDefinition<App>["resources"],
-    services: Object.freeze(Object.fromEntries(Object.entries(services).map(([key, value]) => [key, Array.isArray(value) ? Object.freeze([...value]) : value]))) as ServiceBindings
+    services: Object.freeze(Object.fromEntries(Object.entries(services).map(([key, value]) => [key, Array.isArray(value) ? Object.freeze([...value]) : value]))) as ServiceBindings,
+    extensions: Object.freeze([...extensions as readonly AnyBindingProvider[]])
   });
 }
 

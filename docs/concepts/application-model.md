@@ -86,6 +86,7 @@ A logical resource describes **what** the application needs and **which guarante
 | `http.api({ id, basePath, docs? })` | Base path, documentation metadata and API middleware; routes and RPC procedures are registered on its handle. | **Implemented** |
 | `staticSite({ id, directory, basePath?, spa? })` | Built artifacts relative to the application, URL base path, single-page application fallback. The frontend build itself (for example `vite build`) is run by the frontend tool, not declared ([ADR 0031](../architecture/decisions/0031-static-sites-as-a-resource-kind.md)). | **Implemented** |
 | `secret(schema)` / `variable(schema, { default? })` | Configuration value schema; default for variables only. | **Implemented** |
+| `defineApp({ extensions: { required, optional } })` | Provider extensions the application uses beyond its resources, typed and versioned ([ADR 0032](../architecture/decisions/0032-typed-versioned-provider-extensions.md)). | **Implemented** |
 
 Future kinds (topics, WebSocket endpoints, workflows) are listed in [triggers and execution](triggers-and-execution.md). Adding one means adding an entry to the typed kind registry in `@holqa/core` ([resource model](../architecture/resource-model.md#adding-a-kind)).
 

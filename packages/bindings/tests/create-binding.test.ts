@@ -147,7 +147,7 @@ describe("createBinding", () => {
   });
 
   it("reports a missing credential by name, without a value", async () => {
-    const needsUrl = testQueueProvider({ onOpen: context => context.credential(credentialRef("QUEUE_URL")) });
+    const needsUrl = { ...testQueueProvider({ onOpen: context => context.credential(credentialRef("QUEUE_URL")) }), credentials: [credentialRef("QUEUE_URL")] };
     const binding = createBinding(resolveBindings(defineBindings(createApp(), { defaults: testPlatform({}, { API_TOKEN: "t" }), kinds: { queue: needsUrl } })));
     let details: unknown[] = [];
     try {

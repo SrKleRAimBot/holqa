@@ -873,6 +873,31 @@
       },
       "type": "array"
     },
+    "extensions": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "pattern": "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)+$",
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "version": {
+            "$ref": "#/$defs/positiveInteger"
+          }
+        },
+        "required": [
+          "id",
+          "version",
+          "required"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
     "handlers": {
       "items": {
         "$ref": "#/$defs/handler"

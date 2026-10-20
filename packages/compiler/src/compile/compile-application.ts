@@ -227,7 +227,9 @@ export async function compileApplication(input: CompileApplicationInput): Promis
     handlers: handlers.map(handler => handler.manifest),
     config,
     requiredCapabilities: [...capabilities].sort(compareCodeUnits),
-    schemas: table.table()
+    schemas: table.table(),
+    // Recorded only when declared, so manifests of applications without extensions keep their bytes.
+    ...app.extensions === undefined || app.extensions.length === 0 ? {} : { extensions: app.extensions.map(extension => ({ id: extension.id, version: extension.version, required: extension.required })).sort((left, right) => compareCodeUnits(left.id, right.id)) }
   };
   const entrypoints: EntrypointMap = {
     format: entrypointsFormat,

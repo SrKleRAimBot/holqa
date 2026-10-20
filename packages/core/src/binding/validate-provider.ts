@@ -16,6 +16,7 @@ import {
   isCredentialReference,
   isProviderId
 } from "@/binding/provider";
+import { extensionReferenceProblems } from "@/extensions/extension";
 import { isJsonValue } from "@/json";
 import {
   isResourceKind,
@@ -154,8 +155,25 @@ export function validateProvider(value: unknown): readonly Diagnostic[] {
   }
   if (role === "resource" && kinds.length === 0)
     invalid("a resource provider must bind at least one resource kind.");
-  if (role === "service" && (kinds.length > 0 || Object.keys(services).length === 0))
-    invalid("a service provider must supply at least one service and bind no resources.");
+  const extensions = candidate.extensions;
+  if (extensions !== undefined) {
+    if (!Array.isArray(extensions)) {
+      invalid("\"extensions\" must be a list of extension declarations.");
+    } else {
+      for (const [index, entry] of (extensions as unknown[]).entries()) {
+        for (const problem of extensionReferenceProblems(entry, `extensions[${index}]`))
+          invalid(problem);
+        const declaration: Fields<"dependsOn" | "runtimes"> = typeof entry === "object" && entry !== null ? entry : {};
+        if (declaration.dependsOn !== undefined && !(Array.isArray(declaration.dependsOn) && declaration.dependsOn.every(reference => extensionReferenceProblems(reference, "").length === 0)))
+          invalid(`extensions[${index}].dependsOn must be a list of extension references.`);
+        if (declaration.runtimes !== undefined && !(Array.isArray(declaration.runtimes) && declaration.runtimes.every(runtime => typeof runtime === "string")))
+          invalid(`extensions[${index}].runtimes must be a list of runtime names.`);
+      }
+    }
+  }
+  const extensionCount = Array.isArray(extensions) ? extensions.length : 0;
+  if (role === "service" && (kinds.length > 0 || Object.keys(services).length + extensionCount === 0))
+    invalid("a service provider must supply at least one service or extension and bind no resources.");
 
   if (candidate.emulations !== undefined) {
     if (!Array.isArray(candidate.emulations)) {

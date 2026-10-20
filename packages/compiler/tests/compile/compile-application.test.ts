@@ -138,6 +138,18 @@ describe("compileApplication", () => {
     ]);
   });
 
+  it("records declared extensions sorted by identifier, and nothing for applications without them", async () => {
+    const plain = application({ resources: [] });
+    const withExtensions = { "~holqa": { ...plain["~holqa"], extensions: [{ id: "example.cache", version: 1, required: true }, { id: "example.alpha", version: 2, required: false }] } };
+    const result = await compile({ app: withExtensions, modules: [] });
+    if (!result.ok)
+      throw new Error("Expected compilation to succeed.");
+    expect(result.manifest.extensions).toEqual([{ id: "example.alpha", version: 2, required: false }, { id: "example.cache", version: 1, required: true }]);
+    expect(validateManifest(JSON.parse(serializeManifest(result.manifest))).ok).toBe(true);
+    const without = await compile({ app: plain, modules: [] });
+    expect(without.ok && "extensions" in without.manifest).toBe(false);
+  });
+
   it("counts a handler exported under several names once", async () => {
     const consumer = queueConsumer("orders.process", "order-placed", shopSchemas.order);
     const result = await compile({

@@ -8,6 +8,12 @@ export type {
 } from "@/environment";
 export { openLocalState } from "@/environment";
 export type { LocalState, LocalStateOptions } from "@/environment";
+export { appCacheExtension, localAppCache } from "@/extensions/app-cache";
+export type {
+  AppCache,
+  AppCacheSetOptions,
+  LocalAppCacheOptions
+} from "@/extensions/app-cache";
 export { manualTriggerMetadata } from "@/manual-trigger";
 export type { ManualTriggerOptions } from "@/manual-trigger";
 export {

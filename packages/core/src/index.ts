@@ -56,6 +56,7 @@ export type {
   ConfigSource,
   CredentialReference,
   ExecutionCapabilities,
+  ExtensionDeclaration,
   ProviderContext,
   ProviderInstance,
   ProviderRole,
@@ -106,6 +107,22 @@ export {
   HolqaError,
   isHolqaError
 } from "@/errors/holqa-error";
+export {
+  checkExtensions,
+  defineExtension,
+  extensionReferenceProblems,
+  findExtension,
+  isExtensionDefinition,
+  requireExtension
+} from "@/extensions/extension";
+export type {
+  ExtensionApi,
+  ExtensionBinding,
+  ExtensionDefinition,
+  ExtensionOptions,
+  ExtensionReference,
+  ExtensionRequirement
+} from "@/extensions/extension";
 export type { ApplicationScope, ScopedDefinition } from "@/handlers/application-scope";
 export {
   defaultEventLimits,

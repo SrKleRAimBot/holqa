@@ -161,8 +161,9 @@ export const manifestJsonSchema: JsonObject = deepFreeze({
     handlers: { type: "array", items: ref("handler") },
     config: { type: "array", items: ref("configEntry") },
     requiredCapabilities: { type: "array", uniqueItems: true, items: { type: "string", pattern: "^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$" } },
-    schemas: { type: "object", propertyNames: ref("fingerprint"), additionalProperties: ref("schemaContract") }
-  }),
+    schemas: { type: "object", propertyNames: ref("fingerprint"), additionalProperties: ref("schemaContract") },
+    extensions: { type: "array", minItems: 1, items: closedObject({ id: { type: "string", pattern: "^[a-z][a-z0-9-]*(?:\\.[a-z][a-z0-9-]*)+$" }, version: ref("positiveInteger"), required: { type: "boolean" } }) }
+  }, ["manifestVersion", "application", "runtime", "resources", "handlers", "config", "requiredCapabilities", "schemas"]),
   $defs: {
     ...commonDefinitions,
     schemaSource: closedObject({ vendor: { type: "string" }, library: { type: "string" }, fidelity: { enum: ["verified", "unverified"] } }),

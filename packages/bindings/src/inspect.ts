@@ -4,6 +4,7 @@ import type {
   CapabilityEmulation,
   Diagnostic,
   ExecutionCapabilities,
+  ExtensionReference,
   JsonObject,
   ProviderRole,
   ProviderTopology,
@@ -62,6 +63,17 @@ export interface ServiceReport {
   readonly selection: ServiceSelectionSource;
 }
 
+/** The implementation selected for one extension. */
+export interface ExtensionReport {
+  readonly id: string;
+  /** The version the provider implements. */
+  readonly version: number;
+  readonly provider: string;
+  readonly selection: "extension" | "default";
+  /** Whether the application requires it; `false` for optional extensions and dependencies. */
+  readonly required: boolean;
+}
+
 /** One selected provider, as data. */
 export interface ProviderReport {
   readonly name: string;
@@ -75,6 +87,8 @@ export interface ProviderReport {
   readonly limits: Readonly<Record<string, JsonObject>>;
   readonly services: readonly BindingServiceName[];
   readonly emulations: readonly CapabilityEmulation[];
+  /** The extensions the provider implements. */
+  readonly extensions: readonly ExtensionReference[];
   readonly topology: ProviderTopology;
   readonly execution?: ExecutionCapabilities;
   /** Non-secret settings. */
@@ -97,6 +111,8 @@ export interface BindingReport {
   /** Sorted by resource identifier. */
   readonly resources: readonly ResourceReport[];
   readonly services: readonly ServiceReport[];
+  /** The selected extension implementations, sorted by identifier. */
+  readonly extensions: readonly ExtensionReport[];
   /** In opening order. */
   readonly providers: readonly ProviderReport[];
   readonly diagnostics: readonly Diagnostic[];
@@ -146,6 +162,7 @@ export function inspectBindings(resolved: ResolvedBindings, options: BindingVali
     application: resolved.app.name,
     resources,
     services: resolved.services.map(selection => ({ service: selection.service, providers: selection.providers.map(provider => provider.name), selection: selection.source })),
+    extensions: resolved.extensions.map(selection => ({ id: selection.id, version: selection.version, provider: selection.provider.name, selection: selection.source, required: (resolved.app.extensions ?? []).some(requirement => requirement.id === selection.id && requirement.required) })),
     providers: resolved.providers.map(describeProvider),
     diagnostics
   };
@@ -168,6 +185,7 @@ function describeProvider(provider: AnyBindingProvider): ProviderReport {
     limits: Object.fromEntries(kinds.map(kind => [kind, provider.resources[kind] as unknown as JsonObject])),
     services: (Object.keys(provider.services) as BindingServiceName[]).sort(),
     emulations: provider.emulations ?? [],
+    extensions: (provider.extensions ?? []).map(declaration => ({ id: declaration.id, version: declaration.version })),
     topology: provider.topology ?? { delivery: "none", state: "shared" },
     ...provider.execution === undefined ? {} : { execution: provider.execution },
     settings: provider.settings ?? {},
