@@ -27,6 +27,7 @@ import {
   matchLocalCommand
 } from "@/commands/local-commands";
 import { packageCommand } from "@/commands/package";
+import { providersTestCommand } from "@/commands/providers-test";
 import {
   matchProvisionCommand,
   provisionCommand
@@ -49,6 +50,7 @@ export type { CliIo } from "@/io";
  * `holqa bindings inspect` and `holqa bindings validate` (`--bindings <path>`),
  * `holqa package [--bindings <path>] [--app <path>] [--out-dir <dir>]`,
  * `holqa provision plan` and `holqa provision apply` (`--provisioning <path>`, `--allow-destructive`),
+ * `holqa providers test [--tests <path>] [--only <names>] [--timeout <ms>]`,
  * the local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`,
  * `cron run`, `state`, `doctor`), the telemetry commands (`logs`, `traces list`,
  * `traces inspect`, `events inspect`, `metrics`), and `--json` anywhere, which switches
@@ -117,6 +119,9 @@ export async function runCli(argv: readonly string[], io: CliIo, version: string
     }
     return packageCommand(host ?? createProcessHost(), io, json, { app: options.values.get("app"), bindings: options.values.get("bindings"), outDir: options.values.get("out-dir") });
   }
+
+  if (command === "providers" && rest[0] === "test")
+    return providersTestCommand(host ?? createProcessHost(), io, json, rest.slice(1));
 
   const provision = matchProvisionCommand(args);
   if (provision !== undefined)
@@ -201,6 +206,7 @@ function renderHelp(version: string): string {
     "       holqa bindings validate [--bindings <path>] [--app <path>] [--json]",
     "       holqa package [--bindings <path>] [--app <path>] [--out-dir <dir>] [--json]",
     "       holqa provision plan [--provisioning <path>] [--app <path>] [--json]",
+    "       holqa providers test [--tests <path>] [--only <names>] [--timeout <ms>] [--app <path>] [--json]",
     "       holqa provision apply [--allow-destructive] [--provisioning <path>] [--app <path>] [--json]",
     "       holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--no-hot] [--no-dashboard] [--json]",
     "       holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]",
@@ -233,6 +239,9 @@ function renderHelp(version: string): string {
     "  --bindings <path>   The binding configuration module (default for bindings commands and package: bindings.ts next to the application).",
     "  --provisioning <path>  provision: the provisioning module (default: provisioning.ts next to the application).",
     "  --allow-destructive    provision apply: also apply replacements, which delete and recreate infrastructure.",
+    "  --tests <path>         providers test: the provider test module (default: conformance.ts next to the application).",
+    "  --only <names>         providers test: comma-separated names of the provider tests to run.",
+    "  --timeout <ms>         providers test: the time limit per case (default 30000).",
     "  --follow            logs: keep printing new entries until interrupted.",
     "",
     "Commands:",

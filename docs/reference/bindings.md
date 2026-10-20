@@ -340,7 +340,7 @@ The manifest is deterministic for the same configuration and application manifes
 | `bucketEventsConformance` | `bucket.events` | `object.created` and `object.deleted` envelopes, type and prefix filters, independent subscriptions, redelivery with the same identifier. |
 | `scheduleConformance` | `schedule` | One run per due time with scheduled time and run identifier; no runs after stop. |
 
-A provider package supplies a harness (how to open a fresh resource, how time passes: a manual clock's `advance` or real sleeps, and optionally `now`) and registers the suite with its own test runner (`registerConformance(suite, harness, { describe, it })`) or runs it directly (`runConformance(suite, harness)`, which returns `passed`, `failed` and `skipped` results). Cases for capabilities a provider does not advertise (dead-lettering, delays, signed URLs, object events) are skipped, never weakened.
+A provider package supplies a harness (how to open a fresh resource, how time passes: a manual clock's `advance` or real sleeps, and optionally `now`) and registers the suite with its own test runner (`registerConformance(suite, harness, { describe, it })`) or runs it directly (`runConformance(suite, harness)`, which returns `passed`, `failed` and `skipped` results). Cases for capabilities a provider does not advertise (dead-lettering, delays, signed URLs, object events) are skipped, never weakened. `holqa providers test` runs suites against configured providers; see [conformance](conformance.md).
 
 ## Related
 

@@ -16,7 +16,7 @@ import {
 const require = createRequire(import.meta.url);
 
 /** Workspace packages whose build output is checked. */
-const packages = ["@holqa/core", "@holqa/compiler", "@holqa/cli", "@holqa/local", "@holqa/runtime-bun", "@holqa/sdk", "@holqa/testing", "@holqa/zod"];
+const packages = ["@holqa/core", "@holqa/compiler", "@holqa/cli", "@holqa/local", "@holqa/runtime-bun", "@holqa/sdk", "@holqa/testing", "@holqa/zod", "@holqa/bindings", "@holqa/conformance", "@holqa/container", "@holqa/opentelemetry", "@holqa/rabbitmq", "@holqa/s3"];
 
 /**
  * Locates the `dist/` directory of an installed workspace package.

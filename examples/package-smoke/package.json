@@ -12,11 +12,17 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@holqa/bindings": "workspace:*",
     "@holqa/cli": "workspace:*",
     "@holqa/compiler": "workspace:*",
+    "@holqa/conformance": "workspace:*",
+    "@holqa/container": "workspace:*",
     "@holqa/core": "workspace:*",
     "@holqa/local": "workspace:*",
+    "@holqa/opentelemetry": "workspace:*",
+    "@holqa/rabbitmq": "workspace:*",
     "@holqa/runtime-bun": "workspace:*",
+    "@holqa/s3": "workspace:*",
     "@holqa/sdk": "workspace:*",
     "@holqa/testing": "workspace:*",
     "@holqa/zod": "workspace:*",

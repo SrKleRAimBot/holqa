@@ -21,6 +21,7 @@ export const implementedCommands: readonly ProposedCommand[] = [
   { name: "package", summary: "Bundle the application for a binding configuration into a deployment artifact: server.js, manifests, static files, a Dockerfile and file hashes." },
   { name: "provision plan", summary: "Plan the infrastructure changes the provisioners of a binding configuration would make, reading only." },
   { name: "provision apply", summary: "Apply the planned infrastructure changes; destructive ones only with --allow-destructive." },
+  { name: "providers test", summary: "Run conformance suites against the providers a provider test module configures, and report every case." },
   { name: "dev", summary: "Run the application locally with emulated resources, and rebuild on changes." },
   { name: "invoke", summary: "Invoke a queue, object event or schedule handler once with a test input." },
   { name: "queue send", summary: "Send a message to a local queue." },
