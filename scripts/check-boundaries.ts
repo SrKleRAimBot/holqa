@@ -31,7 +31,7 @@ import {
 const root = join(import.meta.dir, "..");
 
 /** Directories whose children may be workspace packages. */
-const workspaceParents = ["packages", "packages/integrations", "examples", "experiments"];
+const workspaceParents = ["packages", "packages/integrations", "packages/providers", "examples", "experiments"];
 
 /**
  * Allowed internal dependencies for each framework package. Dependencies point
@@ -46,6 +46,8 @@ const allowedDependencies: Readonly<Record<string, readonly string[]>> = {
   "@holqa/runtime-bun": ["@holqa/core"],
   "@holqa/bindings": ["@holqa/core"],
   "@holqa/conformance": ["@holqa/core"],
+  // Provider packages depend inward on core; their tests run the conformance suite.
+  "@holqa/rabbitmq": ["@holqa/core", "@holqa/conformance"],
   "@holqa/local": ["@holqa/core", "@holqa/runtime-bun", "@holqa/conformance"],
   "@holqa/testing": ["@holqa/core", "@holqa/sdk", "@holqa/bindings", "@holqa/local", "@holqa/runtime-bun"],
   "@holqa/cli": ["@holqa/core", "@holqa/bindings", "@holqa/compiler", "@holqa/local", "@holqa/runtime-bun", "@holqa/opentelemetry"]

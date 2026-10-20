@@ -49,3 +49,43 @@ jobs:
 
       - name: Run all quality gates
         run: pnpm check
+
+  providers:
+    name: Provider integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      rabbitmq:
+        image: rabbitmq:4
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      HOLQA_RABBITMQ_URL: amqp://guest:guest@localhost:5672
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm (version from package.json "packageManager")
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run provider tests against real infrastructure
+        run: pnpm turbo run test --filter=@holqa/rabbitmq

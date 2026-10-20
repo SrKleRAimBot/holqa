@@ -1,6 +1,6 @@
 # Packages
 
-> **Status:** Reference for the current repository state. Nine framework packages, two integration packages and nine example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline`, `event-safety` and `observability` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
+> **Status:** Reference for the current repository state. Ten framework packages, two integration packages and nine example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline`, `event-safety` and `observability` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
 
 All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single code entry point (`.`) through their `exports` map. `@holqa/compiler` additionally exports its JSON Schema files. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
 
@@ -23,6 +23,7 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery, telemetry, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP, RPC and background transports. |
 | `@holqa/bindings` | `packages/bindings` | **Implemented** (binding configurations, resolution, composition) | Selects a provider for every resource and service and composes them into one runtime binding. |
 | `@holqa/conformance` | `packages/conformance` | **Implemented** (queue, bucket, object event and schedule suites) | Reusable provider conformance cases. |
+| `@holqa/rabbitmq` | `packages/providers/rabbitmq` | **Implemented** (queue provider) | RabbitMQ queues. |
 | `@holqa/local` | `packages/local` | **Implemented** (local binding) | Local runtime drivers: SQLite-backed queues, filesystem object storage with events and signed URLs, a clock-driven scheduler, inspection, a local telemetry store. |
 | `@holqa/testing` | `packages/testing` | **Implemented** (`createTestApp` with recording and replay, in-memory telemetry, type assertions) | Deterministic integration tests on the local environment, and compile-time type assertions. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
@@ -209,6 +210,20 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `QueueHarness`, `QueueFixture`, `BucketHarness`, `BucketFixture`, `ScheduleHarness`, `ScheduleFixture`, `ConformanceTime` | Types | What a provider supplies to run them. |
 | `runConformance(suite, harness)`, `registerConformance(suite, harness, runner, timeoutMs?)`, `ConformanceResult`, `ConformanceSuite`, `ConformanceCase`, `TestRunner` | Functions, types | Run a suite directly, or register it with a test runner. |
 | `ConformanceFailure`, `ConformanceSkip`, `expectThat`, `expectEqual`, `deepEqual`, `eventually` | Classes, functions | Assertions for writing cases. |
+
+## `@holqa/rabbitmq`
+
+- **Path:** `packages/providers/rabbitmq`
+- **Status:** Implemented (queue provider). Private. See the [RabbitMQ provider reference](providers/rabbitmq.md).
+- **Entry point:** `@holqa/rabbitmq` → `dist/index.js`, `dist/index.d.ts`.
+- **Internal dependencies:** `@holqa/core`. External: `rabbitmq-client` (no transitive dependencies).
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `rabbitmq.queues(options)`, `RabbitMqQueuesOptions` | Function, type | The queue provider. |
+| `queueTopology`, `topologyDeclarations`, `delaySteps`, `delayStep`, `maxDelaySeconds`, `QueueTopology`, `QueueDeclaration`, `TopologyOptions` | Functions, constants, types | The broker queues a Holqa queue uses and their declarations, for provisioning tools. |
+| `createQueueBinding`, `headers`, `QueueBindingSettings` | Function, constant, type | The queue driver and source on any `AmqpTransport`. |
+| `rabbitMqTransport`, `classifyAmqpError`, `AmqpTransport`, `AmqpMessage`, `AmqpSettlement`, `AmqpConsumer`, `AmqpPublishProperties`, `AmqpQueueArguments`, `RabbitMqTransportOptions` | Functions, types | The AMQP transport port and its `rabbitmq-client` implementation. |
 
 ## `@holqa/local`
 
