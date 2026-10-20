@@ -1,0 +1,70 @@
+# Environment B of the document processing example: the packaged application
+# in a Bun container, RabbitMQ, an S3-compatible store (RustFS) that publishes
+# bucket notifications to RabbitMQ, and an OpenTelemetry Collector.
+# See README.md ("Three environments") for the steps. Values come from .env
+# (copy .env.example and choose your own).
+name: holqa-documents
+
+services:
+  rabbitmq:
+    image: rabbitmq:4
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?set RABBITMQ_USER in .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+    ports:
+      - 25672:5672
+    healthcheck:
+      test: [CMD, rabbitmq-diagnostics, -q, ping]
+      interval: 5s
+      retries: 30
+
+  object-store:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY_ID:?set S3_ACCESS_KEY_ID in .env}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_ACCESS_KEY:?set S3_SECRET_ACCESS_KEY in .env}
+      RUSTFS_NOTIFY_ENABLE: "true"
+      RUSTFS_NOTIFY_AMQP_ENABLE_PRIMARY: on
+      RUSTFS_NOTIFY_AMQP_URL_PRIMARY: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      RUSTFS_NOTIFY_AMQP_EXCHANGE_PRIMARY: holqa.storage-events
+      RUSTFS_NOTIFY_AMQP_ROUTING_KEY_PRIMARY: storage
+      RUSTFS_NOTIFY_AMQP_PERSISTENT_PRIMARY: on
+    ports:
+      - 29000:9000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  collector:
+    image: otel/opentelemetry-collector:latest
+    command: [--config=/etc/collector.yaml]
+    volumes:
+      - ./deploy/collector.yaml:/etc/collector.yaml:ro
+
+  app:
+    build: .holqa/package/external
+    environment:
+      QUEUE_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      HOLQA_SHUTDOWN_GRACE_MS: "10000"
+    ports:
+      - 23000:3000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      object-store:
+        condition: service_started
+      collector:
+        condition: service_started
+
+  # A client inside the network, because signed upload URLs name the store as the application sees it.
+  client:
+    image: oven/bun:1.3.13-slim
+    profiles: [demo]
+    command: [bun, /deploy/client.ts]
+    environment:
+      API: http://app:3000
+    volumes:
+      - ./deploy:/deploy:ro
+    depends_on: [app]

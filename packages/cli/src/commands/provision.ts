@@ -179,7 +179,7 @@ export async function provisionCommand(host: CliHost, io: CliIo, json: boolean, 
   io.stdout(formatPlan(outcome.plan));
   if (outcome.result !== undefined) {
     const applied = outcome.result.applied;
-    io.stdout(["", applied.length === 0 && outcome.result.diagnostics.length === 0 ? "Nothing to apply." : `Applied ${applied.filter(item => item.status === "applied").length} of ${outcome.plan.changes.filter(change => change.action !== "none").length} changes.`, ...applied.filter(item => item.status !== "applied").map(item => `  ${item.status}: ${item.change.type} ${item.change.target}${item.message === undefined ? "" : ` (${item.message})`}`), ...outcome.result.diagnostics.map(formatDiagnostic)].join("\n"));
+    io.stdout(["", applied.length === 0 ? (outcome.result.diagnostics.length === 0 ? "Nothing to apply." : "Nothing was applied.") : `Applied ${applied.filter(item => item.status === "applied").length} of ${outcome.plan.changes.filter(change => change.action !== "none").length} changes.`, ...applied.filter(item => item.status !== "applied").map(item => `  ${item.status}: ${item.change.type} ${item.change.target}${item.message === undefined ? "" : ` (${item.message})`}`), ...outcome.result.diagnostics.map(formatDiagnostic)].join("\n"));
   }
   return errors ? exitCodes.failure : exitCodes.success;
 }
