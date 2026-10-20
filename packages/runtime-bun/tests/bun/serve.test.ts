@@ -57,4 +57,34 @@ describe("serve", () => {
     expect(second.state).toBe("stopped");
     await first.stop();
   });
+
+  it("answers liveness and readiness probes before routing", async () => {
+    const gate = latch();
+    const entered = latch();
+    const runtime = createRuntime({
+      app: application([apiResource("api")]),
+      env: {},
+      log: silentSink,
+      handlers: [routeHandler("slow", "api", "GET", "/slow", async () => {
+        entered.release();
+        await gate.promise;
+        return new Response("finished");
+      })]
+    });
+    const server = await serve(runtime, { port: 0, health: { livePath: "/.holqa/live", readyPath: "/.holqa/ready" } });
+    const live = await fetch(new URL("/.holqa/live", server.url));
+    expect([live.status, live.headers.get("cache-control"), await live.json()]).toEqual([200, "no-store", { status: "live", state: "running" }]);
+    const ready = await fetch(new URL("/.holqa/ready", server.url));
+    expect(ready.status).toBe(200);
+    expect(await ready.json()).toMatchObject({ state: "running", ready: true });
+    const slow = fetch(new URL("/api/slow", server.url));
+    await entered.promise;
+    const stopped = server.stop({ graceMs: 2_000 });
+    const draining = await fetch(new URL("/.holqa/ready", server.url));
+    expect([draining.status, (await draining.json() as { state: string }).state]).toEqual([503, "stopping"]);
+    expect((await fetch(new URL("/.holqa/live", server.url))).status).toBe(200);
+    gate.release();
+    expect(await (await slow).text()).toBe("finished");
+    await stopped;
+  });
 });

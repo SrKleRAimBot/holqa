@@ -25,6 +25,7 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | `@holqa/conformance` | `packages/conformance` | **Implemented** (queue, bucket, object event and schedule suites) | Reusable provider conformance cases. |
 | `@holqa/rabbitmq` | `packages/providers/rabbitmq` | **Implemented** (queue provider, event channel) | RabbitMQ queues and storage notifications. |
 | `@holqa/s3` | `packages/providers/s3` | **Implemented** (bucket provider) | S3-compatible object storage. |
+| `@holqa/container` | `packages/container` | **Implemented** (container runtime) | The conventional Bun container runtime and execution host provider. |
 | `@holqa/local` | `packages/local` | **Implemented** (local binding) | Local runtime drivers: SQLite-backed queues, filesystem object storage with events and signed URLs, a clock-driven scheduler, inspection, a local telemetry store. |
 | `@holqa/testing` | `packages/testing` | **Implemented** (`createTestApp` with recording and replay, in-memory telemetry, type assertions) | Deterministic integration tests on the local environment, and compile-time type assertions. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
@@ -197,6 +198,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `validateBindings(resolved, options?)`, `BindingValidationOptions`, `ValidatedHandler` | Function, types | Validates a resolution without opening providers: requirements, trigger delivery, topology (`HOLQA_BINDING_TOPOLOGY_UNSUPPORTED`), execution limits and event safety stores. |
 | `inspectBindings(resolved, options?)`, `bindingReportFormat`, `BindingReport`, `ResourceReport`, `RequirementReport`, `CapabilitySupport`, `ServiceReport`, `ProviderReport` | Function, constant, types | The `holqa.bindings/1` report: providers, selections and native, emulated or unsupported requirements. |
 | `ExtensionSelection`, `ExtensionSelectionSource`, `ExtensionReport` | Types | Extension implementations selected by `defineBindings({ extensions })` or the default provider. |
+| `createBindingManifest(report, options)`, `bindingManifestFormat`, `BindingManifest`, `ConnectorReport` | Function, constant, types | The `holqa.binding-manifest/1` binding manifest of a valid configuration. |
 
 ## `@holqa/conformance`
 
@@ -240,6 +242,20 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `putObject`, `getObject`, `headObject`, `deleteObject`, `listObjects`, `headBucket`, `signObjectUrl`, `objectUrl`, `traceMeta`, `S3Connection` | Functions, constant, type | Signed S3 requests with classified failures. |
 | `readS3Notification`, `objectEventFromS3`, `objectEventSource`, `S3EventRecord` | Functions, type | S3 event notifications as Holqa object events. |
 | `signHeaders`, `presign`, `uriEncode`, `sha256Hex`, `amzDate`, `SignableRequest`, `SignedHeaders`, `SigningCredentials`, `SigningScope` | Functions, types | AWS Signature Version 4. |
+
+## `@holqa/container`
+
+- **Path:** `packages/container`
+- **Status:** Implemented. Private. See the [container runtime reference](container.md).
+- **Entry point:** `@holqa/container` → `dist/index.js`, `dist/index.d.ts`. Requires Bun.
+- **Internal dependencies:** `@holqa/core`, `@holqa/bindings`, `@holqa/local`, `@holqa/runtime-bun`.
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `container.host(options?)`, `ContainerHostOptions` | Function, type | The execution host provider for `http.api` and `static.site`. |
+| `startContainer(options)`, `runContainer(options)`, `probePaths`, `ContainerOptions`, `RunningContainer` | Functions, constant, types | Verify, resolve, start and serve with probes and signal handling; `runContainer` is the packaged entry point. |
+| `verifyArtifact(directory, bunVersion)`, `artifactFormat`, `artifactFileName`, `sha256Hex`, `ArtifactDescriptor`, `ArtifactFile`, `VerifiedArtifact` | Function, constants, types | The `holqa.artifact/1` descriptor and its verification. |
+| `readContainerSettings(env)`, `ContainerSettings`, `ContainerEnvironment` | Function, types | Settings from `PORT`, `HOST` and the shutdown variables. |
 
 ## `@holqa/local`
 

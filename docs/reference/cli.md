@@ -1,6 +1,6 @@
 # CLI reference
 
-> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect` (including `--cycles` and `--capabilities`), `holqa build --manifest`, `holqa bindings inspect`, `holqa bindings validate`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`, `holqa state`, `holqa doctor` and the telemetry commands `holqa logs`, `holqa traces list`, `holqa traces inspect`, `holqa events inspect` and `holqa metrics`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
+> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect` (including `--cycles` and `--capabilities`), `holqa build --manifest`, `holqa bindings inspect`, `holqa bindings validate`, `holqa package`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`, `holqa state`, `holqa doctor` and the telemetry commands `holqa logs`, `holqa traces list`, `holqa traces inspect`, `holqa events inspect` and `holqa metrics`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
 
 The `holqa` binary is provided by `@holqa/cli` (`packages/cli`). It runs on Bun (`#!/usr/bin/env bun`; `engines.bun >= 1.3.13`). The package is private and not published, so the CLI is only available inside this repository.
 
@@ -21,6 +21,7 @@ holqa inspect [--cycles | --capabilities [--bindings <path>]] [--app <path>] [--
 holqa build --manifest [--app <path>] [--out-dir <dir>] [--json]
 holqa bindings inspect [--bindings <path>] [--app <path>] [--json]
 holqa bindings validate [--bindings <path>] [--app <path>] [--json]
+holqa package [--bindings <path>] [--app <path>] [--out-dir <dir>] [--json]
 holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--bindings <path>] [--no-watch] [--no-hot] [--no-dashboard] [--json]
 holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]
 holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]
@@ -45,7 +46,7 @@ holqa metrics [--app <path>] [--state-dir <dir>] [--json]
 | `-v`, `--version` | Prints the CLI version to standard output. | `0` |
 | `--json` | Switches output to machine-readable JSON. Can appear anywhere in the argument list. | — |
 | `--app <path>` | Every command: the application module, relative to the working directory. Default `infra.ts`. Its directory is the application root. | — |
-| `--out-dir <dir>` | `build`: where to write output, relative to the working directory. Default `.holqa/build` in the application root. | — |
+| `--out-dir <dir>` | `build`, `package`: where to write output, relative to the working directory. Defaults `.holqa/build` and `.holqa/package/<binding name>` in the application root. | — |
 | `--manifest` | `build`: write the manifest and entry point map. Required today. | — |
 | `--state-dir <dir>` | Local and telemetry commands: the local state directory, relative to the working directory. Default `.holqa/local` in the application root. | — |
 | `--port <port>` | `dev`, `doctor`: the dev server's port, `0` to `65535`. Default `3000`; `0` picks a free port. | — |
@@ -55,7 +56,7 @@ holqa metrics [--app <path>] [--state-dir <dir>] [--json]
 | `--no-dashboard` | `dev`: do not serve the development dashboard. | — |
 | `--cycles` | `inspect`: print the event dependency graph and its cycles instead of the summary. | — |
 | `--capabilities` | `inspect`: print every resource's required capabilities instead of the summary. Cannot be combined with `--cycles`. | — |
-| `--bindings <path>` | `dev`, `bindings inspect`, `bindings validate`, `inspect --capabilities`: the binding configuration module, relative to the working directory. Default for the `bindings` commands: `bindings.ts` in the application root; `inspect` uses one only when given. `--bindings` without `--capabilities` is a usage error. | — |
+| `--bindings <path>` | `dev`, `bindings inspect`, `bindings validate`, `package`, `inspect --capabilities`: the binding configuration module, relative to the working directory. Default for the `bindings` commands and `package`: `bindings.ts` in the application root; `inspect` uses one only when given. `--bindings` without `--capabilities` is a usage error. | — |
 | `--follow` | `logs`: keep printing new entries until the process receives `SIGINT` or `SIGTERM`. | — |
 | `--handler <id>`, `--trace <trace-id>`, `--level <level>` | `logs`: only entries of one handler, of one trace, or at `debug`, `info`, `warn` or `error` and more severe. | — |
 | `--limit <n>` | `logs`, `traces list`: how many entries or traces, `1` to `10000`. Defaults 100 and 20. | — |
@@ -144,6 +145,27 @@ interface BuildJsonOutput {
 ```
 
 `holqa build` without `--manifest` would bundle executable artifacts, which is **planned**; it exits with `1` and `HOLQA_CLI_NOT_IMPLEMENTED`.
+
+### `holqa package`
+
+Analyzes the application, resolves and validates the binding configuration (`--bindings`, default `bindings.ts` next to the application module) as `holqa bindings validate` does, builds its binding manifest, and writes a deployment artifact to `--out-dir` (default `.holqa/package/<binding name>` in the application root): `server.js` (bundled by a separate `bun build --target=bun` process), `manifest.json`, `bindings.json`, the static sites' files, a reference `Dockerfile` and `artifact.json` with every file's SHA-256. The [container runtime reference](container.md) describes the files and how the artifact starts. Nothing is provisioned and no provider is opened.
+
+An invalid binding configuration fails with its diagnostics and writes nothing. A missing static site directory, a bundling failure, or an output directory that is not empty and holds no previous artifact fail with `HOLQA_PACKAGE_FAILED`; a previous artifact in the output directory is replaced. Standard output names the directory, the bundle size, the artifact and manifest fingerprints, the credentials the artifact reads at start and the connectors it needs. With `--json` it is one line:
+
+```ts
+interface PackageJsonOutput {
+  artifact: {
+    path: string;
+    fingerprint: string; // "sha256:..." of artifact.json
+    application: string;
+    bindings: string; // the binding configuration's name
+    manifest: string; // "sha256:..." of the application manifest
+    entry: "server.js";
+    files: number;
+  };
+  diagnostics: Diagnostic[]; // analysis and binding warnings
+}
+```
 
 ### `holqa dev`
 

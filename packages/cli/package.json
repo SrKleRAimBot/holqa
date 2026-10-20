@@ -41,6 +41,7 @@
   "dependencies": {
     "@holqa/bindings": "workspace:*",
     "@holqa/compiler": "workspace:*",
+    "@holqa/container": "workspace:*",
     "@holqa/core": "workspace:*",
     "@holqa/local": "workspace:*",
     "@holqa/opentelemetry": "workspace:*",

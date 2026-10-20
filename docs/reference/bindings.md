@@ -308,6 +308,22 @@ Every provider (extensions included) resolves only the credentials it lists in `
 
 The reference extension is `holqa.app-cache` version 1 (`appCacheExtension` in `@holqa/local`: `get`, `set` with `ttlSeconds`, `delete`), implemented in process memory by `localAppCache({ maxEntries?, clock? })` (`local.appCache()`), with least-recently-used eviction and no credentials.
 
+## Binding manifests
+
+`createBindingManifest(report, { applicationManifest })` turns the report of a valid configuration (from `inspectBindings`, with the manifest's handlers) into a binding manifest, the environment-specific half of a deployment ([ADR 0033](../architecture/decisions/0033-deployment-artifacts-and-binding-manifests.md)). It throws the report's errors for an invalid configuration. `holqa package` writes it as `bindings.json`, canonical JSON.
+
+| Field | Content |
+| --- | --- |
+| `format` | `holqa.binding-manifest/1` |
+| `name`, `application` | The configuration's and the application's names. |
+| `applicationManifest` | The `sha256:` fingerprint of the application manifest it was resolved against. |
+| `compatibility` | `bindingProtocol` and the `contracts` versions of the Holqa that produced it. |
+| `resources`, `services`, `extensions`, `providers` | As in the `holqa.bindings/1` report, without `diagnostics`: mappings with their selection reasons and requirement support, and every provider's contracts, capabilities, emulations, topology, non-secret settings and credential names. |
+| `credentials` | Every credential name any provider resolves, sorted. Never values. |
+| `connectors` | `{ provider, connector }` for every background process or connector a provider needs. |
+
+The manifest is deterministic for the same configuration and application manifest. The [container runtime](container.md) refuses to start when the binding it resolves differs from the packaged one.
+
 ## Conformance
 
 `@holqa/conformance` holds the normative behaviour of the resource contracts as runnable cases, independent of any test runner:

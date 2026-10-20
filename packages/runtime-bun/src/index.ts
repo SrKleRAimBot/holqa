@@ -1,5 +1,9 @@
 export { serve, stopOnSignals } from "@/bun/serve";
-export type { RunningServer, ServeOptions } from "@/bun/serve";
+export type {
+  HealthEndpoints,
+  RunningServer,
+  ServeOptions
+} from "@/bun/serve";
 export type { DeliveryStats } from "@/delivery/delivery-worker";
 export type { RuntimeDeliveryOptions, TransportStats } from "@/delivery/transports";
 export type {

@@ -115,7 +115,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 ### Remaining goals
 
 - Compare the manifest with a previously deployed manifest using the **Implemented** compatibility checker.
-- Bundle executable artifacts from the entry point map (`holqa build` without `--manifest`).
+- Bundle executable artifacts from the entry point map (`holqa build` without `--manifest`). `holqa package` bundles a deployment artifact for one binding configuration (**Implemented**).
 - Check required capabilities against a selected binding at build time.
 - Harden analysis with a real sandbox (restricted file system and network) when one is practical on Bun.
 
@@ -293,6 +293,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | Typed, versioned provider extensions: definitions, required and optional declarations, selection in binding configurations, start-time checks, credential isolation, and the reference `holqa.app-cache` extension ([ADR 0032](architecture/decisions/0032-typed-versioned-provider-extensions.md)) | **Implemented** |
 | A RabbitMQ queue provider (`@holqa/rabbitmq`), passing the queue conformance suite against an in-memory broker and RabbitMQ 4 in CI | **Implemented** |
 | An S3-compatible bucket provider (`@holqa/s3`) with object events through an event channel, passing the bucket conformance suites against an in-memory store and a real S3-compatible store in CI | **Implemented** |
+| Deployment artifacts and the container runtime: binding manifests, `holqa package` (bundle, manifests, static files, reference Dockerfile, file hashes), `@holqa/container` with artifact verification, drift checks, probes and graceful shutdown ([ADR 0033](architecture/decisions/0033-deployment-artifacts-and-binding-manifests.md)) | **Implemented** |
 
 ### Goals
 

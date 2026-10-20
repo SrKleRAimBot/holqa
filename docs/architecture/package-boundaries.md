@@ -23,6 +23,7 @@ Holqa's packages are layered so that framework-neutral contracts never depend on
 | Framework adapters | `packages/integrations/{orpc,tanstack-query,effect,...}` | Handler, transport, and client adapters. | Planned | `core`, `sdk`, `client` |
 | `@holqa/rabbitmq` | `packages/providers/rabbitmq` | RabbitMQ queue provider and storage event channel ([reference](../reference/providers/rabbitmq.md)). | **Implemented** | `core` (and `conformance` for its tests) |
 | `@holqa/s3` | `packages/providers/s3` | S3-compatible bucket provider ([reference](../reference/providers/s3.md)). | **Implemented** | `core` (and `conformance` for its tests) |
+| `@holqa/container` | `packages/container` | Conventional Bun container runtime ([reference](../reference/container.md)). | **Implemented** | `core`, `bindings`, `local`, `runtime-bun` (and `sdk` for its tests) |
 | Other drivers and providers | `packages/providers/*` | Runtime drivers and provisioning providers. | Planned | `core` only |
 | Experiments | `experiments/*` | Disposable M0 prototypes ([experiments](../../experiments/README.md)). | Not framework code | Mirror of this table (`experimentDependencies`); never a dependency of `packages/*` |
 | Examples | `examples/*` | Example applications and smoke tests. | `package-smoke`, `schema-evolution` and `manifest` **Implemented**; `commerce` type-checked against the experiments | anything |

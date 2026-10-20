@@ -24,6 +24,8 @@ const server = await serve(runtime, { port: 3000 }); // starts the runtime first
 stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 ```
 
+`serve(runtime, { health: { livePath, readyPath } })` also answers liveness and readiness probes before routing: liveness `200` while the process serves, readiness `200` only while `runtime.health().ready`, `503` otherwise, with the health report as JSON. The [container runtime](container.md) serves the probes on `/.holqa/live` and `/.holqa/ready`.
+
 `createRuntime({ app, handlers })` also accepts registrations directly, for tests and embedding; `runtime.fetch(request)` serves a Fetch `Request` without a server. The [`http-api` example](../../examples/http-api/README.md) is a complete application compiled by the CLI and served this way.
 
 ### `createRuntime` options
@@ -520,7 +522,9 @@ Loading evaluates the application's code in the current process with its permiss
 
 | Capability | Status |
 | --- | --- |
-| Bindings for external queue, storage and scheduling services | Planned |
+| Bindings for external queues and object storage | **Implemented** in [`@holqa/rabbitmq`](providers/rabbitmq.md) and [`@holqa/s3`](providers/s3.md) |
+| Bindings for external scheduling services | Planned |
+| Packaging and running in a conventional Bun container | **Implemented** in [`@holqa/container`](container.md) and `holqa package` |
 | Topics with independent subscriptions (fan-out) | Planned |
 | Reload by process restart (`holqa dev`) | **Implemented** in `@holqa/cli` ([ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md)) |
 | In-place handler replacement (`replaceHandlers`, used by `holqa dev`) | **Implemented** ([ADR 0028](../architecture/decisions/0028-hot-handler-replacement.md)) |

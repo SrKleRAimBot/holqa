@@ -122,7 +122,8 @@ export function createBinding(resolved: ResolvedBindings): RuntimeBinding {
   const kinds = new Set<ResourceKind>(resolved.resources.map(selection => selection.resource.kind));
   const drivers: ResourceDrivers = Object.freeze({
     ...kinds.has("queue") ? { queue: (resource: ResourceDescriptorOf<"queue">) => driverOf(resource) } : {},
-    ...kinds.has("bucket") ? { bucket: (resource: ResourceDescriptorOf<"bucket">) => driverOf(resource) } : {}
+    ...kinds.has("bucket") ? { bucket: (resource: ResourceDescriptorOf<"bucket">) => driverOf(resource) } : {},
+    ...kinds.has("static.site") ? { "static.site": (resource: ResourceDescriptorOf<"static.site">) => driverOf(resource) } : {}
   });
   /**
    * Returns the source factory a provider supplied for a resource's kind.

@@ -27,8 +27,8 @@ describe("findProposedCommand", () => {
   });
 
   it("no longer lists implemented commands as proposed", () => {
-    expect(implementedCommands.map(command => command.name)).toEqual(["inspect", "bindings inspect", "bindings validate", "build --manifest", "dev", "invoke", "queue send", "queue redrive", "storage put", "cron run", "state", "doctor", "logs", "traces list", "traces inspect", "events inspect", "metrics"]);
-    for (const words of [["inspect"], ["build"], ["dev"], ["invoke"], ["queue", "send"], ["queue", "redrive"], ["storage", "put"], ["cron", "run"], ["doctor"], ["logs"], ["traces", "list"], ["traces", "inspect"], ["events", "inspect"], ["metrics"]])
+    expect(implementedCommands.map(command => command.name)).toEqual(["inspect", "bindings inspect", "bindings validate", "build --manifest", "package", "dev", "invoke", "queue send", "queue redrive", "storage put", "cron run", "state", "doctor", "logs", "traces list", "traces inspect", "events inspect", "metrics"]);
+    for (const words of [["inspect"], ["build"], ["package"], ["dev"], ["invoke"], ["queue", "send"], ["queue", "redrive"], ["storage", "put"], ["cron", "run"], ["doctor"], ["logs"], ["traces", "list"], ["traces", "inspect"], ["events", "inspect"], ["metrics"]])
       expect(findProposedCommand(words)).toBeUndefined();
   });
 });

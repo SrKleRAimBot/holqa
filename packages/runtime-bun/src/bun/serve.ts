@@ -13,6 +13,23 @@ export interface ServeOptions {
   readonly maxRequestBodySize?: number;
   /** Seconds a connection may stay idle. Default Bun's (10). Streaming responses that pause longer need a higher value. */
   readonly idleTimeoutSeconds?: number;
+  /**
+   * Answers liveness and readiness probes on these paths before routing, for
+   * container platforms and load balancers. Absent: no probe endpoints.
+   */
+  readonly health?: HealthEndpoints;
+}
+
+/** The paths of the probe endpoints {@link serve} answers. */
+export interface HealthEndpoints {
+  /** Answers `200` while the process serves requests, including while it drains. Conventionally `/.holqa/live`. */
+  readonly livePath: string;
+  /**
+   * Answers `200` while the runtime is running and no binding component is
+   * unhealthy, `503` otherwise (starting, degraded beyond use, stopping), with
+   * the runtime's health as JSON. Conventionally `/.holqa/ready`.
+   */
+  readonly readyPath: string;
 }
 
 /** A running HTTP server for one runtime. */
@@ -64,7 +81,7 @@ export async function serve(runtime: Runtime, options: ServeOptions = {}): Promi
       hostname: options.hostname ?? "127.0.0.1",
       maxRequestBodySize: options.maxRequestBodySize ?? defaultMaxRequestBodySize,
       ...options.idleTimeoutSeconds === undefined ? {} : { idleTimeout: options.idleTimeoutSeconds },
-      fetch: request => runtime.fetch(request)
+      fetch: options.health === undefined ? request => runtime.fetch(request) : withProbes(runtime, options.health)
     });
   } catch (error) {
     await runtime.stop();
@@ -91,6 +108,29 @@ export async function serve(runtime: Runtime, options: ServeOptions = {}): Promi
       return stopping;
     }
   });
+}
+
+/**
+ * Wraps a runtime's `fetch` with liveness and readiness probe endpoints. Probe
+ * responses are never cached and carry no binding credentials: component
+ * health holds names, statuses and messages only.
+ *
+ * @param runtime - The runtime whose health is reported.
+ * @param health - The probe paths.
+ * @returns The request handler.
+ */
+function withProbes(runtime: Runtime, health: HealthEndpoints): (request: Request) => Promise<Response> {
+  const headers = { "content-type": "application/json", "cache-control": "no-store" };
+  return async (request) => {
+    const { pathname } = new URL(request.url);
+    if (pathname === health.livePath)
+      return new Response(JSON.stringify({ status: "live", state: runtime.state }), { headers });
+    if (pathname === health.readyPath) {
+      const report = await runtime.health();
+      return new Response(JSON.stringify(report), { status: report.ready ? 200 : 503, headers });
+    }
+    return runtime.fetch(request);
+  };
 }
 
 /**
