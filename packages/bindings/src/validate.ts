@@ -9,6 +9,7 @@ import type { ResolvedBindings } from "@/resolve";
 import {
   bindingFailure,
   checkCapabilities,
+  checkExtensions,
   checkTriggerDelivery,
   createDiagnostic,
   diagnosticCodes
@@ -81,6 +82,22 @@ export function validateBindings(resolved: ResolvedBindings, options: BindingVal
       diagnostics.push(bindingFailure("capability", { binding: host.name, message: `The execution host "${host.name}" limits invocations to ${execution.maxTimeoutMs} ms, but the runtime's limits.timeoutMs is ${timeoutMs ?? "30000 (the default)"}.`, hint: "Set limits.timeoutMs to at most the host's limit.", details: { requirement: "execution.timeout" } }));
     if (execution.maxConcurrency !== undefined && concurrency !== undefined && concurrency > execution.maxConcurrency)
       diagnostics.push(bindingFailure("capability", { binding: host.name, message: `The execution host "${host.name}" allows ${execution.maxConcurrency} concurrent invocations, but the runtime's limits.concurrency is ${concurrency}.`, details: { requirement: "execution.concurrency" } }));
+  }
+
+  const provided = Object.fromEntries(resolved.extensions.map(selection => [selection.id, selection.version]));
+  diagnostics.push(...checkExtensions(resolved.app, provided, resolved.name));
+  for (const selection of resolved.extensions) {
+    for (const dependency of selection.declaration.dependsOn ?? []) {
+      const found = provided[dependency.id];
+      if (found === undefined)
+        diagnostics.push(createDiagnostic({ code: diagnosticCodes.extensionMissing, severity: "error", message: `The extension "${selection.id}" of provider "${selection.provider.name}" depends on the extension "${dependency.id}", which no selected provider implements.`, details: { extension: dependency.id, version: dependency.version, binding: selection.provider.name, dependent: selection.id } }));
+      else if (found !== dependency.version)
+        diagnostics.push(createDiagnostic({ code: diagnosticCodes.extensionIncompatible, severity: "error", message: `The extension "${selection.id}" depends on version ${dependency.version} of "${dependency.id}", but version ${found} is selected.`, details: { extension: dependency.id, version: dependency.version, provided: found, dependent: selection.id } }));
+    }
+    const runtimes = selection.declaration.runtimes;
+    const hostRuntimes = host?.execution?.runtimes;
+    if (runtimes !== undefined && hostRuntimes !== undefined && !runtimes.some(runtime => hostRuntimes.includes(runtime)))
+      diagnostics.push(createDiagnostic({ code: diagnosticCodes.extensionIncompatible, severity: "error", message: `The extension "${selection.id}" of provider "${selection.provider.name}" runs on ${runtimes.join(", ")}, but the execution host "${host!.name}" runs ${hostRuntimes.join(", ")}.`, details: { extension: selection.id, binding: selection.provider.name, requirement: "execution.runtime" } }));
   }
 
   const services = new Set(resolved.services.map(selection => selection.service));

@@ -30,6 +30,7 @@ The manifest is canonical JSON (keys sorted at every depth, two-space indentatio
 | `handlers` | One entry per handler, sorted by `id`: `id`, `trigger` (`kind`, `resource: { kind, id }`, normalized `options`) and `schemas`. |
 | `config` | Required configuration (environment bindings), sorted by `name`: `name`, `kind` (`secret` or `variable`), `schema`, and `default` for variables that declare one. Values are never recorded. |
 | `requiredCapabilities` | The capabilities a binding must provide, sorted and unique (see below). |
+| `extensions` | Present only when the application declares extensions: `{ id, version, required }` per extension, sorted by `id` ([extensions](bindings.md#extensions)). |
 | `schemas` | The schema table: normalized schema contracts keyed by `sha256:` fingerprint. |
 
 What the manifest deliberately does not contain: module paths, export names, TypeScript variable names, resource aliases, handler discovery patterns, provider names or settings, absolute paths, timestamps, the compiler's version, and configuration values.

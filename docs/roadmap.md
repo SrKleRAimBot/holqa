@@ -290,6 +290,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | The local binding as providers (`local.platform`, per-kind providers, `sqlite` and `memory` persistence) on the same engine as `createLocalEnvironment`, and the reusable provider conformance suite (`@holqa/conformance`) | **Implemented** |
 | Static frontend hosting: the `static.site` resource kind and contract, `staticSite`, runtime serving after routes, local hosting with SPA fallback ([ADR 0031](architecture/decisions/0031-static-sites-as-a-resource-kind.md)) | **Implemented** |
 | The local development workflow through the binding layer (`holqa dev` composes the local platform or a `--bindings` configuration; binding changes restart the generation), in-memory test state and provider fault injection (`withFaults`) | **Implemented** |
+| Typed, versioned provider extensions: definitions, required and optional declarations, selection in binding configurations, start-time checks, credential isolation, and the reference `holqa.app-cache` extension ([ADR 0032](architecture/decisions/0032-typed-versioned-provider-extensions.md)) | **Implemented** |
 
 ### Goals
 

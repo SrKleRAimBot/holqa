@@ -105,7 +105,7 @@ describe("validateProvider", () => {
       "Provider \"example-queue\": a resource provider must bind at least one resource kind."
     ]);
     expect(validateProvider(queueProvider({ role: "service" })).map(diagnostic => diagnostic.message)).toEqual([
-      "Provider \"example-queue\": a service provider must supply at least one service and bind no resources."
+      "Provider \"example-queue\": a service provider must supply at least one service or extension and bind no resources."
     ]);
     expect(validateProvider(queueProvider({ role: "service", contracts: { telemetry: 1 }, resources: {}, services: { telemetry: true } }))).toEqual([]);
   });

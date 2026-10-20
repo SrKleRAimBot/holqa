@@ -177,7 +177,13 @@ export const diagnosticCodes = {
   /** No provider is selected for a declared resource. */
   bindingMissing: "HOLQA_BINDING_MISSING",
   /** A deployment's topology cannot deliver what the application needs, for example a provider that delivers no events for a resource with handlers, or a process-local scheduler with several replicas. */
-  bindingTopologyUnsupported: "HOLQA_BINDING_TOPOLOGY_UNSUPPORTED"
+  bindingTopologyUnsupported: "HOLQA_BINDING_TOPOLOGY_UNSUPPORTED",
+  /** An extension definition, declaration or implementation is malformed. */
+  extensionInvalid: "HOLQA_EXTENSION_INVALID",
+  /** A required extension (or an extension another one depends on) has no implementation in the binding. */
+  extensionMissing: "HOLQA_EXTENSION_MISSING",
+  /** An extension is implemented in another version than the one used, or for a runtime the host does not run. */
+  extensionIncompatible: "HOLQA_EXTENSION_INCOMPATIBLE"
 } as const;
 
 /**

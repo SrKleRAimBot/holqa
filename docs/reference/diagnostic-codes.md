@@ -1,6 +1,6 @@
 # Diagnostic codes
 
-> **Status:** Eighty-six codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). No planned code is listed at the moment.
+> **Status:** Eighty-nine codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). No planned code is listed at the moment.
 
 Every problem Holqa reports is a structured `Diagnostic` with a stable code. Tools, CI scripts, and agents should match on the code, never on the message text, which may be reworded.
 
@@ -128,6 +128,9 @@ JSON form (as emitted by `holqa --json`):
 | `HOLQA_BINDING_KIND_MISMATCH` | `bindingKindMismatch` | `resolveBindings` (`@holqa/bindings`) | A selected provider does not bind the resource's kind, or a service provider does not supply the service. Resolution never falls through to another provider. `details`: `resource`, `kind` or `service`, `binding`, `selection`. |
 | `HOLQA_BINDING_MISSING` | `bindingMissing` | `resolveBindings`, composed bindings (`@holqa/bindings`) | No provider is selected for a declared resource. `details`: `resource`, `kind`. |
 | `HOLQA_BINDING_TOPOLOGY_UNSUPPORTED` | `bindingTopologyUnsupported` | `validateBindings` (`@holqa/bindings`); `holqa bindings validate` (`@holqa/cli`) | The deployment cannot deliver what the application needs: a background handler whose resource's provider delivers no events, or pull-based delivery on a request-driven execution host. `details`: `handler`, `resource`, `binding`, `host`. |
+| `HOLQA_EXTENSION_INVALID` | `extensionInvalid` | `defineExtension` (`@holqa/core`) | An extension definition is malformed: identifier, version, runtimes, dependencies or configuration schema. `defineApp` reports malformed extension declarations as `HOLQA_DECLARATION_INVALID`. |
+| `HOLQA_EXTENSION_MISSING` | `extensionMissing` | `checkExtensions`, `requireExtension` (`@holqa/core`); `validateBindings` (`@holqa/bindings`); `Runtime.start` (`@holqa/runtime-bun`) | A required extension, or an extension another one depends on, has no implementation in the binding. `details`: `extension`, `version`, `binding`, and `dependent` for dependencies. |
+| `HOLQA_EXTENSION_INCOMPATIBLE` | `extensionIncompatible` | Same as above | An extension is implemented in another version than the one used (a warning for optional extensions, which are then treated as absent), or for runtimes the execution host does not run. `details`: `extension`, `version`, `provided`, `binding`. |
 | `HOLQA_BUILD_STALE` | `buildStale` | `loadCompiledApplication` (`@holqa/runtime-bun`) | Build output no longer matches the application: the entry point map belongs to another manifest, or the application name, resources (kind, identifier, settings, requirements), configuration entries, handler exports or triggers differ from the manifest. Schema changes and handler modules added after the build are not detected. Rebuild with `holqa build --manifest`. |
 
 `@holqa/runtime-bun` also reports `HOLQA_INPUT_INVALID` (`400`) for a direct invocation with an invalid `timeoutMs` or with metadata that does not fit the handler's trigger kind, and for a request path with invalid percent-encoding.

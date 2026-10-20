@@ -20,6 +20,7 @@ export { bindingReportFormat, inspectBindings } from "@/inspect";
 export type {
   BindingReport,
   CapabilitySupport,
+  ExtensionReport,
   ProviderReport,
   RequirementReport,
   ResourceReport,
@@ -27,6 +28,8 @@ export type {
 } from "@/inspect";
 export { assertResolved, resolveBindings } from "@/resolve";
 export type {
+  ExtensionSelection,
+  ExtensionSelectionSource,
   ResolvedBindings,
   ResourceSelection,
   ResourceSelectionSource,

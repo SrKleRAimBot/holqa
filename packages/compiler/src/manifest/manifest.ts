@@ -111,6 +111,13 @@ export interface ManifestConfigEntry {
   readonly default?: JsonValue;
 }
 
+/** A provider extension an application declares: its identifier, version and whether it is required. */
+export interface ManifestExtension {
+  readonly id: string;
+  readonly version: number;
+  readonly required: boolean;
+}
+
 /** The application a manifest describes. */
 export interface ManifestApplication {
   readonly name: ResourceId;
@@ -137,4 +144,6 @@ export interface Manifest {
   readonly requiredCapabilities: readonly string[];
   /** Normalized schema contracts keyed by fingerprint. */
   readonly schemas: Readonly<Record<string, ManifestSchema>>;
+  /** The provider extensions the application declares, sorted by `id`. Absent when it declares none. */
+  readonly extensions?: readonly ManifestExtension[];
 }

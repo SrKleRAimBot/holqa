@@ -14,6 +14,7 @@ import type {
   LocalEnvironmentOptions,
   LocalState
 } from "@/environment";
+import type { LocalAppCacheOptions } from "@/extensions/app-cache";
 import type { LocalTelemetryStore } from "@/telemetry/telemetry-store";
 
 import {
@@ -28,6 +29,7 @@ import {
   localCapabilities,
   openLocalState
 } from "@/environment";
+import { localAppCache } from "@/extensions/app-cache";
 import { createLocalTelemetryStore } from "@/telemetry/telemetry-store";
 
 /** How local state is kept: SQLite and files in a directory (development), or memory (fast, isolated tests). */
@@ -309,7 +311,14 @@ export const local = Object.freeze({
    * @param options - Persistence, directory and settings.
    * @returns A schedule provider.
    */
-  schedules: (options: LocalBindingOptions = {}) => localEnvironment(options).schedules()
+  schedules: (options: LocalBindingOptions = {}) => localEnvironment(options).schedules(),
+  /**
+   * The local implementation of the `holqa.app-cache` reference extension.
+   *
+   * @param options - Name, size bound and clock.
+   * @returns An extension provider.
+   */
+  appCache: (options: LocalAppCacheOptions = {}) => localAppCache(options)
 });
 
 /**

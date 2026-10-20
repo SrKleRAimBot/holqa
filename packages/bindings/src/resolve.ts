@@ -3,6 +3,7 @@ import type {
   AppDescriptor,
   BindingServiceName,
   Diagnostic,
+  ExtensionDeclaration,
   ResourceDescriptor
 } from "@holqa/core";
 
@@ -39,6 +40,19 @@ export interface ServiceSelectionResult {
   readonly source: ServiceSelectionSource;
 }
 
+/** Why an extension implementation was selected: an entry in `extensions`, or the default provider. */
+export type ExtensionSelectionSource = "extension" | "default";
+
+/** The implementation selected for one extension. */
+export interface ExtensionSelection {
+  readonly id: string;
+  /** The version the provider implements, which may differ from the one the application uses. */
+  readonly version: number;
+  readonly provider: AnyBindingProvider;
+  readonly source: ExtensionSelectionSource;
+  readonly declaration: ExtensionDeclaration;
+}
+
 /**
  * A binding configuration resolved against its application: one provider per
  * resource and the providers of every service, deterministic for equal
@@ -51,7 +65,9 @@ export interface ResolvedBindings {
   readonly resources: readonly ResourceSelection[];
   /** The selected services, in the order config, telemetry, idempotency, operation-budgets. */
   readonly services: readonly ServiceSelectionResult[];
-  /** Every distinct selected provider, in the order they are opened: configuration first, then other services, then resource providers. */
+  /** The selected extension implementations: the application's extensions and their dependencies that some provider implements, sorted by identifier. */
+  readonly extensions: readonly ExtensionSelection[];
+  /** Every distinct selected provider, in the order they are opened: configuration first, then other services, extensions, then resource providers. */
   readonly providers: readonly AnyBindingProvider[];
   /** Every problem found. The configuration is usable when none has `error` severity. */
   readonly diagnostics: readonly Diagnostic[];
@@ -164,8 +180,38 @@ export function resolveBindings(definition: BindingsDefinition): ResolvedBinding
       services.push(Object.freeze({ service, providers: Object.freeze([builtinConfig]), source: "builtin" }));
   }
 
+  // Extensions: the first listed provider implementing one wins; the default provider otherwise. Dependencies are followed.
+  const available = new Map<string, { readonly provider: AnyBindingProvider; readonly declaration: ExtensionDeclaration; readonly source: ExtensionSelectionSource }>();
+  for (const [index, provider] of definition.extensions.entries()) {
+    if (!check(provider, `extensions[${index}]`))
+      continue;
+    if ((provider.extensions ?? []).length === 0)
+      diagnostics.push(problem(diagnosticCodes.bindingKindMismatch, `extensions[${index}] selects the provider "${provider.name}", which implements no extension.`, { binding: provider.name, selection: "extension" }));
+    for (const declaration of provider.extensions ?? []) {
+      if (!available.has(declaration.id))
+        available.set(declaration.id, { provider, declaration, source: "extension" });
+    }
+  }
+  if (definition.defaults !== undefined && valid.get(definition.defaults) === true) {
+    for (const declaration of definition.defaults.extensions ?? []) {
+      if (!available.has(declaration.id))
+        available.set(declaration.id, { provider: definition.defaults, declaration, source: "default" });
+    }
+  }
+  const extensions = new Map<string, ExtensionSelection>();
+  const pending = (app.extensions ?? []).map(requirement => requirement.id);
+  while (pending.length > 0) {
+    const id = pending.shift()!;
+    const found = available.get(id);
+    if (found === undefined || extensions.has(id))
+      continue;
+    extensions.set(id, Object.freeze({ id, version: found.declaration.version, provider: found.provider, source: found.source, declaration: found.declaration }));
+    pending.push(...(found.declaration.dependsOn ?? []).map(dependency => dependency.id));
+  }
+  const selectedExtensions = [...extensions.values()].sort((left, right) => compare(left.id, right.id));
+
   const providers: AnyBindingProvider[] = [];
-  for (const provider of [...services.flatMap(selection => selection.providers), ...resources.map(selection => selection.provider)]) {
+  for (const provider of [...services.flatMap(selection => selection.providers), ...selectedExtensions.map(selection => selection.provider), ...resources.map(selection => selection.provider)]) {
     if (!providers.includes(provider))
       providers.push(provider);
   }
@@ -181,6 +227,7 @@ export function resolveBindings(definition: BindingsDefinition): ResolvedBinding
     app,
     resources: Object.freeze(resources),
     services: Object.freeze(services),
+    extensions: Object.freeze(selectedExtensions),
     providers: Object.freeze(providers),
     diagnostics: Object.freeze(diagnostics)
   });

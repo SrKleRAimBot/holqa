@@ -2,6 +2,9 @@ import type {
   AppDescriptor,
   ConfigDescriptor,
   Described,
+  ExtensionApi,
+  ExtensionDefinition,
+  ExtensionRequirement,
   HandlerDiscovery,
   InferOutput,
   ResourceDescriptor
@@ -29,9 +32,12 @@ import {
   createBindingSlot,
   descriptorKey,
   descriptorProtocol,
+  findExtension,
   getResourceDescriptor,
+  isExtensionDefinition,
   isStandardSchema,
-  readConfig
+  readConfig,
+  requireExtension
 } from "@holqa/core";
 
 import { middlewareList } from "@/http/middleware";
@@ -59,6 +65,39 @@ export type HandlerDiscoveryOptions = readonly string[] | {
 };
 
 /**
+ * The extensions an application uses: `required` ones must be provided by
+ * every binding it runs with (a runtime refuses to start otherwise);
+ * `optional` ones may be absent, and the application checks with
+ * `app.extensions.get` and falls back.
+ */
+export interface AppExtensionsDefinition {
+  readonly required?: readonly ExtensionDefinition[];
+  readonly optional?: readonly ExtensionDefinition[];
+}
+
+/** The required extensions of a declaration. */
+type RequiredOf<Extensions extends AppExtensionsDefinition> = Extensions extends { readonly required: infer Required extends readonly ExtensionDefinition[] } ? Required[number] : never;
+
+/** The optional extensions of a declaration. */
+type OptionalOf<Extensions extends AppExtensionsDefinition> = Extensions extends { readonly optional: infer Optional extends readonly ExtensionDefinition[] } ? Optional[number] : never;
+
+/**
+ * Typed access to the extensions an application declared. Each call goes to
+ * the runtime binding; using it outside a runtime fails with `HOLQA_RUNTIME_NOT_BOUND`.
+ *
+ * @typeParam Extensions - The declared extensions.
+ */
+export interface AppExtensions<Extensions extends AppExtensionsDefinition> {
+  /**
+   * Returns a required extension's implementation. Only extensions declared as
+   * required are accepted; a runtime does not start without them.
+   */
+  readonly require: <Extension extends RequiredOf<Extensions>>(extension: Extension) => ExtensionApi<Extension>;
+  /** Returns a declared extension's implementation, or `undefined` when the binding provides none in this version. */
+  readonly get: <Extension extends RequiredOf<Extensions> | OptionalOf<Extensions>>(extension: Extension) => ExtensionApi<Extension> | undefined;
+}
+
+/**
  * The argument of {@link defineApp}.
  *
  * @typeParam Resources - Resource handles keyed by local alias.
@@ -81,6 +120,8 @@ export interface AppDefinition<Resources extends ResourceRecord, Env extends Env
    * adds is visible to routes registered through `app.resources`.
    */
   readonly middleware?: Middleware & CheckMiddlewareChain<{}, Middleware>;
+  /** The provider extensions the application uses, beyond its portable resources. */
+  readonly extensions?: AppExtensionsDefinition;
 }
 
 /**
@@ -99,7 +140,7 @@ export type ConfigValues<Env> = {
  * @typeParam Resources - Resource handles keyed by local alias, exactly as declared.
  * @typeParam Env - Configuration entries keyed by name.
  */
-export interface App<Resources extends ResourceRecord, Env extends EnvRecord, Context extends object = {}> extends Described<AppDescriptor> {
+export interface App<Resources extends ResourceRecord, Env extends EnvRecord, Context extends object = {}, Extensions extends AppExtensionsDefinition = {}> extends Described<AppDescriptor> {
   readonly name: string;
   /**
    * The handles passed to `defineApp`, unchanged at run time, so their types
@@ -109,6 +150,8 @@ export interface App<Resources extends ResourceRecord, Env extends EnvRecord, Co
   readonly resources: AppResources<Resources, Context>;
   /** Configuration values. Each read goes to the runtime binding; reading one outside a runtime fails with `HOLQA_RUNTIME_NOT_BOUND`. */
   readonly env: ConfigValues<Env>;
+  /** The declared extensions, typed from the declaration. */
+  readonly extensions: AppExtensions<Extensions>;
 }
 
 /**
@@ -142,8 +185,9 @@ export function defineApp<
   const Resources extends ResourceRecord,
   const Env extends EnvRecord = {},
   const Name extends string = string,
-  const Middleware extends readonly AnyHttpMiddleware[] = []
->(definition: AppDefinition<Resources, Env, Name, Middleware> & CheckUniqueResourceIds<Resources> & CheckResourceId<Name>): App<Resources, Env, MiddlewareChainContext<{}, Middleware>> {
+  const Middleware extends readonly AnyHttpMiddleware[] = [],
+  const Extensions extends AppExtensionsDefinition = {}
+>(definition: AppDefinition<Resources, Env, Name, Middleware> & { readonly extensions?: Extensions } & CheckUniqueResourceIds<Resources> & CheckResourceId<Name>): App<Resources, Env, MiddlewareChainContext<{}, Middleware>, Extensions> {
   const raw = requireOptions(definition, "defineApp");
   const problems = new DeclarationProblems(`application "${String(raw.name)}"`);
   const nameCandidate = problems.identifier(raw.name, "name");
@@ -153,6 +197,7 @@ export function defineApp<
   const resources = resourceEntries(raw.resources, problems);
   const config = configEntries(raw.env, problems);
   const middleware = middlewareList(raw.middleware, problems);
+  const extensions = extensionRequirements(raw.extensions, problems);
   const name = problems.valid(nameCandidate);
 
   const descriptor: AppDescriptor = Object.freeze({
@@ -163,6 +208,7 @@ export function defineApp<
     handlers,
     resources: Object.freeze(resources.map(([, resource]) => resource)),
     config: Object.freeze(config),
+    ...extensions.length === 0 ? {} : { extensions: Object.freeze(extensions) },
     binding: createBindingSlot()
   });
   for (const [handle] of resources)
@@ -179,8 +225,51 @@ export function defineApp<
     // Only the types change: every route and procedure of these APIs runs the
     // application middleware recorded by `setAppMiddleware` above.
     resources: definition.resources as AppResources<Resources, MiddlewareChainContext<{}, Middleware>>,
-    env: Object.freeze(env) as ConfigValues<Env>
+    env: Object.freeze(env) as ConfigValues<Env>,
+    extensions: Object.freeze({
+      require: (extension: ExtensionDefinition) => requireExtension(descriptor, extension),
+      get: (extension: ExtensionDefinition) => findExtension(descriptor, extension)
+    }) as AppExtensions<Extensions>
   });
+}
+
+/**
+ * Checks the `extensions` option and lists the declared extensions, sorted by
+ * identifier. An extension may be declared once, as required or optional.
+ *
+ * @param value - The `extensions` option, unvalidated.
+ * @param problems - Where to record problems.
+ * @returns The requirements, sorted by identifier.
+ */
+function extensionRequirements(value: unknown, problems: DeclarationProblems): ExtensionRequirement[] {
+  if (value === undefined)
+    return [];
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    problems.invalid("\"extensions\" must be { required?, optional } with lists of extensions created by defineExtension.");
+    return [];
+  }
+  const requirements = new Map<string, ExtensionRequirement>();
+  for (const [field, required] of [["required", true], ["optional", false]] as const) {
+    const list = (value as Readonly<Record<string, unknown>>)[field];
+    if (list === undefined)
+      continue;
+    if (!Array.isArray(list)) {
+      problems.invalid(`"extensions.${field}" must be a list of extensions.`);
+      continue;
+    }
+    for (const extension of list as readonly unknown[]) {
+      if (!isExtensionDefinition(extension)) {
+        problems.invalid(`"extensions.${field}" contains a value that is not an extension.`, "Create extensions with defineExtension from @holqa/core.");
+        continue;
+      }
+      if (requirements.has(extension.id)) {
+        problems.invalid(`The extension "${extension.id}" is declared more than once.`);
+        continue;
+      }
+      requirements.set(extension.id, Object.freeze({ id: extension.id, version: extension.version, required }));
+    }
+  }
+  return [...requirements.values()].sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0);
 }
 
 /**

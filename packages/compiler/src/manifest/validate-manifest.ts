@@ -69,6 +69,7 @@ export function validateManifest(value: unknown): Result<Manifest, readonly Diag
   sortedUnique(manifest.handlers.map(handler => handler.id), "$.handlers", "id", violations);
   sortedUnique(manifest.config.map(entry => entry.name), "$.config", "name", violations);
   sortedUnique(manifest.requiredCapabilities, "$.requiredCapabilities", "value", violations);
+  sortedUnique((manifest.extensions ?? []).map(extension => extension.id), "$.extensions", "id", violations);
 
   const kinds = new Map(manifest.resources.map(resource => [resource.id as string, resource.kind as string]));
   manifest.resources.forEach((resource, index) => {

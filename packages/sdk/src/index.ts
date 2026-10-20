@@ -2,6 +2,8 @@ export { defineApp } from "@/app/define-app";
 export type {
   App,
   AppDefinition,
+  AppExtensions,
+  AppExtensionsDefinition,
   AppResources,
   ConfigValues,
   HandlerDiscoveryOptions

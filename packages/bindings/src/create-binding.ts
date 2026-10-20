@@ -188,6 +188,9 @@ export function createBinding(resolved: ResolvedBindings): RuntimeBinding {
    * @throws {HolqaError} `HOLQA_BINDING_CREDENTIALS_MISSING` when no source has it.
    */
   const credential = (provider: AnyBindingProvider, reference: CredentialReference): string => {
+    // A provider reaches only the credentials it declares, so a binding manifest lists every credential and an extension cannot read another provider's.
+    if (!(provider.credentials ?? []).some(declared => declared.name === reference.name))
+      throw new HolqaError(bindingFailure("configuration", { binding: provider.name, message: `Provider "${provider.name}" asked for the credential ${reference.name}, which it does not declare.`, hint: "Providers list every credential they use in \"credentials\".", details: { credential: reference.name } }));
     for (const source of configSources) {
       const value = source.lookup(reference.name);
       if (value !== undefined && value !== "") {
@@ -266,6 +269,10 @@ export function createBinding(resolved: ResolvedBindings): RuntimeBinding {
       if (kind === "bucket" && (selection.provider.resources.bucket?.events ?? []).length > 0 && instance.sources?.bucket === undefined)
         report(selection.provider, "an object event source");
     }
+    for (const selection of resolved.extensions) {
+      if (opened.get(selection.provider)?.extensions?.[selection.id] === undefined)
+        report(selection.provider, `an implementation of the extension "${selection.id}"`);
+    }
     for (const { service, providers } of resolved.services) {
       for (const provider of providers) {
         const instance = opened.get(provider)!;
@@ -309,6 +316,20 @@ export function createBinding(resolved: ResolvedBindings): RuntimeBinding {
     ...idempotency === undefined ? {} : { idempotency },
     ...operationBudgets === undefined ? {} : { operationBudgets },
     ...telemetry.length === 0 ? {} : { telemetry: Object.freeze(telemetry) },
+    ...resolved.extensions.length === 0
+      ? {}
+      : {
+        extensions: Object.freeze({
+          provided: Object.freeze(Object.fromEntries(resolved.extensions.map(selection => [selection.id, selection.version]))),
+          resolve: (id: string) => {
+            const selection = resolved.extensions.find(candidate => candidate.id === id);
+            const instance = selection === undefined ? undefined : opened.get(selection.provider);
+            if (phase !== "started" || instance === undefined)
+              failWith(diagnosticCodes.runtimeNotRunning, `The extension "${id}" was used while the binding "${resolved.name}" is ${phase}.`);
+            return instance.extensions?.[id];
+          }
+        })
+      },
     config: (entry: ConfigDescriptor) => {
       if (phase !== "started")
         failWith(diagnosticCodes.runtimeNotRunning, `The configuration value ${entry.name} was read while the binding "${resolved.name}" is ${phase}.`);

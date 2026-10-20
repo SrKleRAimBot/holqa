@@ -77,6 +77,7 @@ export type {
   Manifest,
   ManifestApplication,
   ManifestConfigEntry,
+  ManifestExtension,
   ManifestHandler,
   ManifestResource,
   ManifestResourceOf,

@@ -1,5 +1,6 @@
 import type { BindingSlot } from "@/binding/runtime-binding";
 import type { ConfigDescriptor } from "@/config/config-descriptor";
+import type { ExtensionRequirement } from "@/extensions/extension";
 import type { ResourceId } from "@/identity/resource-id";
 import type { DescriptorProtocol } from "@/protocol/version";
 import type { ResourceDescriptor } from "@/resources/resource-descriptor";
@@ -28,5 +29,7 @@ export interface AppDescriptor {
   readonly resources: readonly ResourceDescriptor[];
   /** Every declared configuration entry, in declaration order. */
   readonly config: readonly ConfigDescriptor[];
+  /** The extensions the application declares, sorted by identifier. Absent means none. */
+  readonly extensions?: readonly ExtensionRequirement[];
   readonly binding: BindingSlot;
 }

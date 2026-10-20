@@ -35,6 +35,7 @@ import type { RuntimeTelemetryOptions } from "@/telemetry/runtime-telemetry";
 
 import {
   bindApp,
+  checkExtensions,
   checkTriggerDelivery,
   combineHealth,
   createDiagnostic,
@@ -484,6 +485,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         if (undeliverable.length > 0)
           throw new HolqaError(undeliverable);
       }
+      const missingExtensions = checkExtensions(app, binding.extensions?.provided, binding.name).filter(diagnostic => diagnostic.severity === "error");
+      if (missingExtensions.length > 0)
+        throw new HolqaError(missingExtensions);
       // The binding connects only after every static check passed.
       const lifecycle = binding.lifecycle;
       const startSignal = Number.isFinite(limits.bindingStartMs) ? AbortSignal.timeout(limits.bindingStartMs) : new AbortController().signal;

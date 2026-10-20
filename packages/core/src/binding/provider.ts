@@ -11,6 +11,7 @@ import type {
 import type { OperationBudgetStore } from "@/binding/operation-budgets";
 import type { ResourceDrivers } from "@/binding/runtime-binding";
 import type { ResourceSources } from "@/binding/sources";
+import type { ExtensionReference } from "@/extensions/extension";
 import type { IdempotencyStore } from "@/idempotency/idempotency-store";
 import type { JsonObject } from "@/json";
 import type { TelemetryExporter } from "@/observability/telemetry";
@@ -164,12 +165,22 @@ export interface ProviderInstance {
   readonly telemetry?: readonly TelemetryExporter[];
   readonly idempotency?: IdempotencyStore;
   readonly operationBudgets?: OperationBudgetStore;
+  /** The implementations of the extensions the provider declares, by identifier. */
+  readonly extensions?: Readonly<Record<string, unknown>>;
   /** Resolves once the provider can serve operations; rejects with a classified binding failure. */
   readonly ready?: (signal: AbortSignal) => Promise<void>;
   /** Reports the provider's health; `name` is filled in by the binding. Must not throw. */
   readonly health?: () => Promise<Omit<ComponentHealth, "name">>;
   /** Releases everything `open` acquired. Called once, also after a failed start. */
   readonly stop?: (options: BindingStopOptions) => Promise<void>;
+}
+
+/** One extension a provider implements, with what its definition requires. */
+export interface ExtensionDeclaration extends ExtensionReference {
+  /** Extensions the implementation needs, from the definition's `dependsOn`. */
+  readonly dependsOn?: readonly ExtensionReference[];
+  /** Runtimes the implementation runs in, from the definition's `runtimes`. Absent means any. */
+  readonly runtimes?: readonly string[];
 }
 
 /** Capabilities by resource kind, every kind optional. */
@@ -214,6 +225,8 @@ export interface BindingProvider<Kinds extends ResourceKind = never, Services ex
   readonly emulations?: readonly CapabilityEmulation[];
   /** How the provider takes part in a deployment's topology. Absent means `{ delivery: "none", state: "shared" }`. */
   readonly topology?: ProviderTopology;
+  /** The extensions the provider implements; its instance supplies them in `extensions`, keyed by identifier. */
+  readonly extensions?: readonly ExtensionDeclaration[];
   /** Non-secret settings, recorded in binding manifests. Never contains credential values. */
   readonly settings?: JsonObject;
   /** The credentials the provider resolves when it starts, recorded in binding manifests by name only. */

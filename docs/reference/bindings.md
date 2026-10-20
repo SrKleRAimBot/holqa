@@ -270,6 +270,42 @@ A provider may meet a capability its infrastructure lacks through a compatibilit
 
 `holqa bindings inspect`, `holqa bindings validate` and `holqa inspect --capabilities` print them ([CLI reference](cli.md#holqa-bindings-inspect-and-holqa-bindings-validate)).
 
+## Extensions
+
+Extensions are typed, versioned contracts for infrastructure features beyond the portable resource kinds ([ADR 0032](../architecture/decisions/0032-typed-versioned-provider-extensions.md)).
+
+```ts
+import { defineExtension } from "@holqa/core";
+
+export const edgeCache = defineExtension<{
+  get: (key: string) => Promise<string | undefined>;
+  set: (key: string, value: string, options?: { ttlSeconds?: number }) => Promise<void>;
+}>({ id: "example.edge-cache", version: 1 });
+
+// infra.ts
+const app = defineApp({ name: "shop", resources, extensions: { required: [edgeCache], optional: [recommendations] } });
+
+// in a handler
+await app.extensions.require(edgeCache).set("product:123", body, { ttlSeconds: 60 });
+const related = await app.extensions.get(recommendations)?.forProduct("123") ?? [];
+```
+
+`recommendations` stands for another extension definition; `resources` and `body` for the application's own values.
+
+| Part | Behaviour |
+| --- | --- |
+| Definition | `defineExtension<Api>({ id, version, description?, runtimes?, dependsOn?, config? })`: a namespaced identifier, a positive whole version, the runtimes and extensions implementations need, a configuration schema. `HOLQA_EXTENSION_INVALID` when malformed. |
+| Declaration | `defineApp({ extensions: { required, optional } })`; recorded in the descriptor and the manifest (`extensions`, sorted). |
+| Access | `app.extensions.require(extension)` (required extensions only, at compile time) returns the API or fails with `HOLQA_EXTENSION_MISSING` or `HOLQA_EXTENSION_INCOMPATIBLE`; `app.extensions.get(extension)` returns it or `undefined`. Outside a runtime: `HOLQA_RUNTIME_NOT_BOUND`. Core equivalents: `requireExtension`, `findExtension`. |
+| Implementation | A provider declares `extensions: [{ id, version, dependsOn?, runtimes? }]`; its instance supplies `extensions[id]`. A provider with only extensions has the `service` role. |
+| Selection | `defineBindings(app, { extensions: [provider] })`: the first listed provider implementing an extension, else `defaults`; dependencies are followed. `ResolvedBindings.extensions` and the report's `extensions` show the selection. |
+| Checks | `validateBindings` and `runtime.start()`: required extensions must be implemented in their version (`checkExtensions`); optional ones in another version are a warning and treated as absent; dependencies must be selected in their version; an implementation's `runtimes` must include one the execution host runs. |
+| Lifecycle | Extension providers are opened after services and before resource providers, and stopped in reverse, like every provider. |
+
+Every provider (extensions included) resolves only the credentials it lists in `credentials`; asking for another fails with `HOLQA_BINDING_CONFIG_INVALID`.
+
+The reference extension is `holqa.app-cache` version 1 (`appCacheExtension` in `@holqa/local`: `get`, `set` with `ttlSeconds`, `delete`), implemented in process memory by `localAppCache({ maxEntries?, clock? })` (`local.appCache()`), with least-recently-used eviction and no credentials.
+
 ## Conformance
 
 `@holqa/conformance` holds the normative behaviour of the resource contracts as runnable cases, independent of any test runner:

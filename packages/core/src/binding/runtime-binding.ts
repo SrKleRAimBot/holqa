@@ -2,6 +2,7 @@ import type { BindingLifecycle } from "@/binding/lifecycle";
 import type { OperationBudgetStore } from "@/binding/operation-budgets";
 import type { ResourceSources } from "@/binding/sources";
 import type { ConfigDescriptor } from "@/config/config-descriptor";
+import type { ExtensionBinding } from "@/extensions/extension";
 import type { IdempotencyStore } from "@/idempotency/idempotency-store";
 import type { TelemetryExporter } from "@/observability/telemetry";
 import type {
@@ -96,6 +97,8 @@ export interface RuntimeBinding {
    * the same bounded, failure-isolated pipeline.
    */
   readonly telemetry?: readonly TelemetryExporter[];
+  /** The extensions the binding provides. Absent means none: required extensions make a runtime refuse to start. */
+  readonly extensions?: ExtensionBinding;
   /**
    * Returns the value of a configuration entry. The binding is responsible for
    * supplying it, applying the declared default and validating it against the

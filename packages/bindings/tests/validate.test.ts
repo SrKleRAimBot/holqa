@@ -130,6 +130,7 @@ describe("inspectBindings", () => {
       limits: { queue: { delivery: ["at-least-once"], maxAttempts: 10, deadLetter: true, backoff: ["fixed", "exponential"], maxDelaySeconds: 900 } },
       services: [],
       emulations: [{ kind: "queue", capability: "queue.backoff.exponential", mechanism: "delay queues" }],
+      extensions: [],
       topology: { delivery: "pull", state: "shared" },
       settings: { cluster: "primary" },
       credentials: []
