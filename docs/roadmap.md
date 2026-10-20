@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Status:** Phase 0 to phase 3, the event safety milestone (M8) and the observability milestone (M9) are in progress. Later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
+> **Status:** Phase 0 to phase 3, the event safety milestone (M8), the observability milestone (M9) and the advanced local development milestone (M10) are in progress. Later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
 
 This roadmap distinguishes the current bootstrap state from future implementation work. Status terms follow the [status model](architecture/status-model.md). Each phase lists its goals and the exit criteria that must hold before the phase is considered complete. Later phases may start before earlier ones finish when the dependency allows it.
 
@@ -12,9 +12,10 @@ This roadmap distinguishes the current bootstrap state from future implementatio
 | M0 | Foundation and architecture validation | Complete (see [M0](milestones/m0/index.md)) |
 | 1 | Core resource model and SDK | In progress |
 | 2 | Compiler | In progress (manifest, discovery, validation, `inspect` and `build --manifest` **Implemented**) |
-| 3 | Bun runtime and local development | In progress (runtime, `@holqa/local` drivers, `holqa dev`, the operation commands and `createTestApp` **Implemented**; hot-swapping and worker isolation Planned) |
+| 3 | Bun runtime and local development | In progress (runtime, `@holqa/local` drivers, `holqa dev`, the operation commands and `createTestApp` **Implemented**; worker isolation Planned) |
 | M8 | Event safety, reliability and execution safeguards | In progress (cycle analysis, event lineage, runtime limits, idempotency, controlled redrive and test utilities **Implemented**; backlog thresholds and budgets on other bindings Planned) |
-| M9 | Observability, structured logging and telemetry | In progress (structured logging with redaction, tracing, framework metrics, OTLP/HTTP export, the local telemetry store, the telemetry commands and test helpers **Implemented**; dashboard and OpenTelemetry API bridge Planned) |
+| M9 | Observability, structured logging and telemetry | In progress (structured logging with redaction, tracing, framework metrics, OTLP/HTTP export, the local telemetry store, the telemetry commands and test helpers **Implemented**; trace timeline view and OpenTelemetry API bridge Planned) |
+| M10 | Advanced local development, backend HMR and debugging | In progress (versioned handler registry, hot handler replacement in `holqa dev`, the local development dashboard, recording, replay and causal chains in `@holqa/testing` **Implemented**; module unloading, worker isolation and type checking during reload Planned) |
 | 4 | Clients and integrations | Planned |
 | 5 | Providers and bindings | Planned |
 | Future | Extended triggers and tooling | Planned |
@@ -150,8 +151,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 ### Goals
 
 - `@holqa/runtime-bun`: worker isolation for production runtimes.
-- Module-level hot-swapping (through Bun's reload capabilities or a Vite module runner) that preserves module lifecycles and disposes of old resources; process restarts remain the fallback.
-- A graphical dashboard for local state and traces, if it adds value beyond `holqa state` and the [telemetry commands](#m9-observability-structured-logging-and-telemetry).
+- Hot handler replacement and the local development dashboard moved to [M10](#m10-advanced-local-development-backend-hmr-and-debugging), where they are **Implemented**; module unloading and a Vite module runner integration remain **Planned** there.
 
 ### Exit criteria
 
@@ -214,7 +214,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 
 ### Remaining goals
 
-- A dashboard prototype: a local trace and event timeline view.
+- A graphical trace and event timeline view. The read-only local development dashboard of `holqa dev` lists traces from the local telemetry store ([M10](#m10-advanced-local-development-backend-hmr-and-debugging)); a timeline or flame view is not implemented.
 - A bridge to `@opentelemetry/api`, so spans created by application code and instrumented libraries join Holqa's traces.
 - OTLP over protobuf or gRPC, and exporter retries with backoff.
 - Telemetry for bindings to external services, validated against their own propagation formats.
@@ -225,6 +225,38 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 - Logs identify the relevant execution without leaking declared secret values. **Met** (redaction tests in `@holqa/core`, `@holqa/runtime-bun` and `examples/observability`).
 - A standard OTLP-compatible setup receives usable traces and metrics, validated against the supported Bun versions. **Met** against a stand-in OTLP/HTTP receiver in `examples/observability` on Bun 1.3.13; validation against an OpenTelemetry Collector process in CI is not automated yet.
 - The framework remains operational when telemetry collection is disabled or an exporter is unavailable, with bounded buffering and defined failure policies. **Met** (runtime and example tests with failing and unreachable exporters).
+
+## M10: Advanced local development, backend HMR and debugging
+
+**Goal:** Change backend code without losing the running local session, see the state of the development session in one place, and reproduce and step through event chains in tests. See [local development](concepts/local-development.md), the [local development guide](guides/local-development.md) and [ADR 0028](architecture/decisions/0028-hot-handler-replacement.md).
+
+### Done
+
+| Item | Status |
+| --- | --- |
+| Versioned handler registry in `@holqa/runtime-bun`: `Runtime.replaceHandlers` installs new implementations as one registry version; invocations are pinned to the implementation current when they get their concurrency slot; replaced versions retire when their last invocation finishes, with a per-version application scope whose signal aborts at retirement; `handlerVersions()`, `stats().versions`, `handlerVersion` in invocation logs; definition changes rejected with `HOLQA_HANDLER_REPLACEMENT_INVALID` | **Implemented** |
+| Hot handler replacement in `holqa dev`: changes that leave the manifest and entry point map unchanged and only touch handler modules (or modules only they import) are rebundled, evaluated with side-effect detection and swapped in the running generation process; everything else falls back to a process restart that keeps local state; `--no-hot` | **Implemented** |
+| Stale state: a broken change keeps the last working code serving and the session reports it as stale; `handlers.swapped`, `handlers.swap-failed` and `handlers.swap-refused` events and a `reload` field on `build` in the dev JSON output | **Implemented** |
+| Queue safety during replacement: consumers are never re-registered; messages already waiting are checked against a changed queue contract and reported as `HOLQA_QUEUED_MESSAGE_INCOMPATIBLE` warnings | **Implemented** |
+| Read-only local development dashboard at `/_holqa/dashboard` on loopback addresses (handlers with versions, resources, queue backlog and dead letters, schedules, reload history and stale state, build diagnostics, recent logs and invocations, traces); never shows message payloads; `--no-dashboard` | **Implemented** |
+| `@holqa/testing`: `TestApp.recording()` (sanitized `holqa.recording/1`), `TestApp.replay` through the virtual clock, `TestApp.chain` for stepping through a causal chain | **Implemented** |
+
+### Remaining goals
+
+- Module unloading: old module copies stay in memory until the process restarts.
+- Worker isolation for handler execution.
+- Type checking during reload (`holqa dev` does not run `tsc`).
+- A Vite module runner integration.
+- Client regeneration on contract changes, once [clients](#phase-4-clients-and-integrations) exist.
+- Feature-flag overrides in the dashboard, and an interactive debugger with breakpoint stepping.
+
+### Exit criteria
+
+- A changed handler serves the next invocation without restarting the generation process, while in-flight invocations finish on the old implementation. **Met** (runtime and CLI dev session tests).
+- Changes that cannot be applied safely fall back to a process restart that keeps local state. **Met** (reload plan and dev session tests).
+- A broken change does not take down the running application and is reported as stale. **Met** (dev session tests).
+- Hot replacement never registers a second consumer for a queue. **Met** (dev session tests).
+- A recorded event chain can be replayed deterministically in a test. **Met** (`@holqa/testing` tests).
 
 ## Phase 4: Clients and integrations
 

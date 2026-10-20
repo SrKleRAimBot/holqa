@@ -1,6 +1,6 @@
 # Local development
 
-> **Status:** **Implemented** for the local drivers (`@holqa/local`), the Bun runtime (`@holqa/runtime-bun`), the development supervisor `holqa dev` with reload by process restart, the operation commands (`holqa invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) and `createTestApp` in `@holqa/testing`. Module-level hot-swapping, worker isolation and the Vite integration are **Planned**. All packages are private and unpublished. See Phase 3 of the [roadmap](../roadmap.md).
+> **Status:** **Implemented** for the local drivers (`@holqa/local`), the Bun runtime (`@holqa/runtime-bun`), the development supervisor `holqa dev` with reload by process restart and hot handler replacement, the local development dashboard, the operation commands (`holqa invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) and `createTestApp` in `@holqa/testing` with recording and replay. Module unloading, worker isolation, type checking during reload and the Vite integration are **Planned**. All packages are private and unpublished. See Phase 3 and M10 of the [roadmap](../roadmap.md).
 
 Local development is central to Holqa. A developer should be able to clone an application and run it, including its queues, storage, and schedules, without cloud credentials, Docker, or several terminal processes. This page describes the local environment, what exists of it today, and the constraints it must respect. For a step-by-step walkthrough, see the [local development guide](../guides/local-development.md); for every command and its JSON output, see the [CLI reference](../reference/cli.md).
 
@@ -17,9 +17,10 @@ Local development is central to Holqa. A developer should be able to clone an ap
 | CLI operations | `holqa invoke`, `queue send`, `storage put` and `cron run` run in the running dev session, or in a process started for the command; every command supports `--json` and stable exit codes. | **Implemented** |
 | Local state inspection | `holqa state` lists queue messages with their states and attempts, stored objects, object events with their deliveries, and schedule runs. The same data is available as an API (`queues`, `storage`, `scheduler`). | **Implemented** |
 | Structured logs and trace correlation | JSON log entries with `correlationId`, `invocationId`, `causationId`, `traceId`, trigger kind, delivery attempt, emitted messages and objects, and the failing handler's source. | **Implemented** |
-| Local execution history | Spans, logs and metrics in the local telemetry store; `holqa logs`, `traces list`, `traces inspect`, `events inspect` and `metrics`; OTLP export when `OTEL_EXPORTER_OTLP_ENDPOINT` is set ([observability](observability.md)). | **Implemented**; graphical dashboard **Planned** |
-| Backend reloads | Changed files are classified and the generation process is restarted in two phases; local state survives. | **Implemented** (process restart); module-level hot-swapping **Planned** |
-| Deterministic integration testing | `createTestApp` in `@holqa/testing`: isolated local state, a virtual clock, event flushing, failure injection, duplicate delivery, inspection and disposal. | **Implemented** |
+| Local execution history | Spans, logs and metrics in the local telemetry store; `holqa logs`, `traces list`, `traces inspect`, `events inspect` and `metrics`; OTLP export when `OTEL_EXPORTER_OTLP_ENDPOINT` is set ([observability](observability.md)). | **Implemented**; graphical timeline view **Planned** |
+| Backend reloads | Changed files are classified. Handler-only changes replace handlers in the running generation process; everything else restarts it in two phases. Local state survives both. | **Implemented** (hot handler replacement and process restart); module unloading **Planned** |
+| Development dashboard | A read-only page at `/_holqa/dashboard` showing handlers and their versions, resources, queue backlog, dead letters, schedules, reloads, build diagnostics, recent logs and traces. | **Implemented** |
+| Deterministic integration testing | `createTestApp` in `@holqa/testing`: isolated local state, a virtual clock, event flushing, failure injection, duplicate delivery, inspection, recording and replay of handler inputs, stepping through causal chains, and disposal. | **Implemented** |
 | Failure simulation | Duplicate deliveries, injected handler failures, retries, dead letters and redrive. | **Implemented** |
 | Diagnostics | `holqa doctor` checks Bun, the application, its configuration and capabilities, the local state, the dev session and the dev port. | **Implemented** |
 | Vite frontend HMR | Reuse Vite's dev server and HMR for the frontend. | **Planned** |
@@ -68,17 +69,29 @@ Reloads favor correctness over speed. The design is recorded in [ADR 0025](../ar
 | Change | Classification | What happens |
 | --- | --- | --- |
 | First build | `initial` | The application is analyzed and the first generation starts. |
-| Handler code, or code it imports, with an unchanged manifest | `implementation` | The generation restarts; the resource graph and contracts are unchanged. |
+| Handler code, or code it imports, with an unchanged manifest | `implementation` | The changed handlers are replaced in the running generation when the change qualifies for hot replacement (see below); otherwise the generation restarts. The resource graph and contracts are unchanged. |
 | Only `.env` files in the application root | `environment` | The generation restarts without re-analysis, so it reads the new values. |
 | Handlers added, removed, or with new triggers or contracts | `handlers` | The generation restarts; the change is reported per handler. |
 | Resources or configuration entries | `resources` | The generation restarts; added, removed and changed resources are reported. The state of removed resources is kept. |
 
 - A reload starts the new generation in two phases. In the first, the new process loads every module, creates its runtime and checks configuration and capabilities while the previous generation keeps serving. A failure there reports `HOLQA_RELOAD_FAILED` with its causes, and the previous generation keeps running. Only then is the previous generation stopped gracefully, and the new one starts consuming and serving.
-- Exactly one generation consumes queues, object events and schedules at a time, so restarts never duplicate consumers. Each generation is a fresh process, so module state, listeners and timers of the old code cannot leak. Subscriptions of object event handlers that no longer exist are removed when a generation starts.
+- Exactly one generation consumes queues, object events and schedules at a time, so restarts never duplicate consumers. Each restart starts a fresh process, so module state, listeners and timers of the old code cannot leak across a restart. Subscriptions of object event handlers that no longer exist are removed when a generation starts.
 - Requests that arrive during a swap wait for the new generation instead of failing.
 - Local state (queued messages, stored objects, events, schedule history) lives in the state directory and survives every reload.
 - When a contract changes (a queue message, a request or a response schema), the compatibility checker's diagnostics are reported, for example `HOLQA_SCHEMA_CHANGE_BREAKING`. Contract errors that the compiler rejects fail the reload.
-- Module-level hot-swapping, through Bun's reload capabilities or a Vite module runner, is **Planned** and will be explored once restarts are dependable. Such a design must preserve module lifecycles, dispose of the old module's resources (timers, connections, consumers) and fall back to a restart when safe invalidation cannot be guaranteed.
+
+### Hot handler replacement
+
+When a change leaves the manifest and the entry point map unchanged and only touches handler modules, or modules that only handler modules import, `holqa dev` replaces the affected handlers in the running generation process instead of restarting it. The affected handler modules are rebundled; the application module, its imports, packages and files outside the application root stay shared with the running code. A rebundled module that creates timers, listeners, servers or new globals while it loads is not swapped. The new implementations are installed atomically as a new handler version: invocations that already started finish on the old implementation, new ones run the new code, and a replaced version is retired when its last invocation finishes. The design is recorded in [ADR 0028](../architecture/decisions/0028-hot-handler-replacement.md).
+
+- Every other change falls back to the process restart above, which keeps local state: the application module or its imports, resources, configuration, handler definitions or contracts, `.env` files, dependency or `tsconfig` files, files no handler references, modules marked with a `holqa:restart-on-change` comment, detected module-level side effects, and every change after 50 replacements in one process. `--no-hot` turns hot replacement off.
+- A change that fails to build or load keeps the last working code serving, and the session is reported as stale until a later change succeeds.
+- Queue consumers are never registered again, so there is still one consumer per queue. When a queue's contract changes, messages already waiting are checked against the new contract and reported as `HOLQA_QUEUED_MESSAGE_INCOMPATIBLE` warnings; they are not changed.
+- Old module copies stay in memory until the process restarts (module unloading is **Planned**), and `holqa dev` does not type-check during reload. Worker isolation and a Vite module runner integration are **Planned**.
+
+### Development dashboard
+
+`holqa dev` serves a read-only dashboard at `/_holqa/dashboard` when it listens on a loopback address; `--no-dashboard` turns it off. It presents the supervisor status, the local state, the session logs and the local telemetry store: handlers with their versions, resources, queue backlog and dead letters, schedules, reload history and stale state, build diagnostics, recent logs and invocations with their causal fields, and traces. It never shows message payloads and cannot change state. See the [local development guide](../guides/local-development.md).
 
 ## Simulating failure
 

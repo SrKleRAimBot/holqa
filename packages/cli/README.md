@@ -21,7 +21,7 @@ bun packages/cli/dist/bin.js invoke orders.process --input '{"orderId":"123"}' -
 
 | Command | What it does |
 | --- | --- |
-| `holqa dev` | Analyzes the application, writes `.holqa/dev/build`, and runs it on Bun with the `@holqa/local` drivers behind one stable address. Watches files, classifies each change (handler code, handlers, resources, environment files), restarts the application process, and reports contract changes. A broken change is reported while the previous generation keeps serving. |
+| `holqa dev` | Analyzes the application, writes `.holqa/dev/build`, and runs it on Bun with the `@holqa/local` drivers behind one stable address. Watches files and classifies each change: handler code is replaced in the running process (hot handler replacement; in-flight work finishes on the old code), everything else restarts the application process; contract changes are reported. A broken change is reported while the last working code keeps serving, flagged as stale. Serves a read-only dashboard at `/_holqa/dashboard` on loopback addresses. `--no-hot` restarts on every change; `--no-dashboard` turns the dashboard off. |
 | `holqa invoke <handler>` | Invokes a queue, object event or schedule handler once with `--input` JSON and generated trusted metadata. |
 | `holqa queue send <queue>` | Sends `--data` JSON to a local queue, validated against its schema. |
 | `holqa queue redrive <queue>` | Redrives dead-lettered messages (`--message`, `--limit`), lists them with `--dry-run`, or gives each a fresh lineage with `--new-operation`. |

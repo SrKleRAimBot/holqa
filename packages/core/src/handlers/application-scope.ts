@@ -27,9 +27,15 @@ export interface ScopedDefinition<Value> {
  * A runtime creates one scope per started application instance. Separate
  * instances (for example two runtimes, or an isolated worker) never share
  * scoped values.
+ *
+ * When a development runtime replaces a handler's implementation in place,
+ * each implementation sees its own view of the scope: values are still
+ * shared, but the view's signal is also aborted once the replaced
+ * implementation has finished its last invocation, and values that only
+ * replaced implementations used are disposed of then.
  */
 export interface ApplicationScope {
-  /** Aborted when the execution context starts stopping. */
+  /** Aborted when the execution context starts stopping, or when the handler implementation that received this view is retired after a replacement. */
   readonly signal: AbortSignal;
   /**
    * Returns the value of a scoped definition, creating it on first use.

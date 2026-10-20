@@ -40,4 +40,58 @@ describe("RuntimeScope", () => {
     expect(disposed).toEqual([7]);
     expect(await scope.dispose()).toBe(0);
   });
+
+  it("releases a view: aborts its signal and disposes of values no other view used", async () => {
+    const disposed: string[] = [];
+    const scope = new RuntimeScope(new StructuredLogger(silentSink));
+    const first = scope.open({});
+    const ownerB = {};
+    const second = scope.open(ownerB);
+    /**
+     * Creates a definition that records its disposal.
+     *
+     * @param name - The value it creates, also its name.
+     * @returns A scoped definition whose disposal is recorded.
+     */
+    const definition = (name: string): { readonly name: string; readonly create: () => string; readonly dispose: (value: string) => void } => ({ name, create: () => name, dispose: value => void disposed.push(value) });
+    const shared = definition("shared");
+    const own = definition("own");
+    await first.use(shared);
+    await first.use(own);
+    await second.use(shared);
+    expect(scope.size).toBe(2);
+    expect(await scope.release(ownerB)).toBe(0);
+    expect(second.signal.aborted).toBe(true);
+    expect(first.signal.aborted).toBe(false);
+    // The second view used only the shared value, which the first still uses.
+    expect(disposed).toEqual([]);
+    expect(scope.size).toBe(2);
+  });
+
+  it("disposes of a released owner's values and creates a fresh value on the next use", async () => {
+    const disposed: number[] = [];
+    let created = 0;
+    const scope = new RuntimeScope(new StructuredLogger(silentSink));
+    const owner = {};
+    const view = scope.open(owner);
+    const definition = { name: "pool", create: () => ++created, dispose: (value: number) => void disposed.push(value) };
+    expect(await view.use(definition)).toBe(1);
+    await scope.release(owner);
+    expect(disposed).toEqual([1]);
+    expect(scope.size).toBe(0);
+    expect(await scope.open({}).use(definition)).toBe(2);
+  });
+
+  it("never disposes of values used through the scope itself before the runtime stops", async () => {
+    const disposed: string[] = [];
+    const scope = new RuntimeScope(new StructuredLogger(silentSink));
+    const owner = {};
+    const definition = { name: "client", create: () => "client", dispose: (value: string) => void disposed.push(value) };
+    await scope.open(owner).use(definition);
+    await scope.scope.use(definition);
+    await scope.release(owner);
+    expect(disposed).toEqual([]);
+    await scope.dispose();
+    expect(disposed).toEqual(["client"]);
+  });
 });

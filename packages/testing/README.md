@@ -3,7 +3,7 @@
 Testing utilities for Holqa applications.
 
 > **Status:** Implemented, private and unpublished: `createTestApp` for deterministic integration tests on the local
-> environment, and compile-time type assertions. `createTestApp` requires Bun; the type assertions do not.
+> environment (with recording, replay and causal chains), and compile-time type assertions. `createTestApp` requires Bun; the type assertions do not.
 
 ## Integration tests with `createTestApp`
 
@@ -41,6 +41,9 @@ it("retries a failed order after its backoff", async () => {
 | `messages`, `deadLetters`, `events`, `objects`, `read`, `runs` | Inspect queues, buckets and schedules. |
 | `logs`, `invocations(filter?)`, `trace(correlationId)` | Structured logs, and the finished invocations read from them (`InvocationRecord`: trigger, attempt, outcome, code, `causationId`, `rootId`, `depth`, `emitted`, `blocked`). |
 | `lineage(invocationId)`, `operation(rootId)` | The publication chain that led to an invocation, and everything one root operation caused. |
+| `recording({ sanitize?, handlerId?, rootId? })` | What every handler received (JSON input, trigger metadata, lineage) as a `holqa.recording/1` document, redacted like logs by default. HTTP requests are recorded as not replayable. |
+| `replay(recording or invocations, { rootsOnly?, flush? })` | Runs recorded invocations again with their inputs and metadata, followed by the work they cause. A whole recording replays its roots only, so the application causes the rest again. |
+| `chain(rootId)` | Steps through one root operation: its invocations depth first in causal order, with recorded inputs and the step that caused each. |
 | `telemetry`, `flushTelemetry()` | Spans, metrics and exported log records recorded in memory with deterministic identifiers (`spans(filter?)`, `trace(traceId)`, `metrics()`, `metric(name, attributes?)`, `logs()`); flush before asserting. |
 | `dispose()`, `[Symbol.asyncDispose]` | Stops the runtime, closes the state and removes the temporary directory. |
 
@@ -57,6 +60,10 @@ Configuration comes from `env` (default `{}`), never from the test process's env
 by default (`id-1`, `id-2`, ...). One application instance can be bound to one runtime at a time, so dispose of a test
 app before creating the next one for the same application. Module-level state of the application's modules is shared
 by every test app in the process.
+
+Replays are deterministic as far as handler code is: the virtual clock and sequential identifiers make the runtime side
+repeatable, but external services, other databases and the real clock are reproduced only through explicit mocks or
+fixtures. Sanitized recordings replace sensitive fields with `[REDACTED]`, which can change what a replay does.
 
 `createTestApp` loads `@holqa/local` (which uses `bun:sqlite`) only when it is called, so importing this package for
 its type assertions works on any runtime.

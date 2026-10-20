@@ -55,7 +55,7 @@ pnpm exec holqa queue send orders --app app/infra.ts --data '{"orderId":"124"}'
 pnpm exec holqa state --app app/infra.ts
 ```
 
-`holqa dev` rebuilds and restarts the application when a file changes. See the [local development guide](../guides/local-development.md) and the [CLI reference](../reference/cli.md).
+`holqa dev` replaces changed handlers in the running application when a change only touches handler code, and rebuilds and restarts the application for other changes. See the [local development guide](../guides/local-development.md) and the [CLI reference](../reference/cli.md).
 
 ### Using the core primitives
 

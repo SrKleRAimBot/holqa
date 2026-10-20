@@ -42,7 +42,7 @@ const common = ["app", "state-dir"];
 
 /** The options of each local command. */
 export const localCommandOptions: Readonly<Record<LocalCommandName, OptionSpec>> = {
-  "dev": { flags: ["no-watch"], values: [...common, "port", "host"] },
+  "dev": { flags: ["no-watch", "no-hot", "no-dashboard"], values: [...common, "port", "host"] },
   "invoke": { flags: [], values: [...common, "input", "attempt"], positionals: ["handler"] },
   "queue send": { flags: [], values: [...common, "data", "delay"], positionals: ["queue"] },
   "queue redrive": { flags: ["dry-run", "new-operation"], values: [...common, "message", "limit"], positionals: ["queue"] },
@@ -91,7 +91,7 @@ export async function localCommand(host: CliHost, io: CliIo, json: boolean, name
   if (name === "dev") {
     if (host.dev === undefined)
       return unavailable(io, json, name);
-    const result = await host.dev({ location, port, hostname, watch: !flags.has("no-watch") }, devReporter(io, json, location.root));
+    const result = await host.dev({ location, port, hostname, watch: !flags.has("no-watch"), hot: !flags.has("no-hot"), dashboard: !flags.has("no-dashboard") }, devReporter(io, json, location.root));
     if (!result.ok) {
       reportDiagnostics(io, json, result.diagnostics);
       return exitCodes.failure;
@@ -317,6 +317,7 @@ function describeResult(operation: LocalOperation, result: Fields, target: strin
     case "state":
       return describeState(result);
     case "doctor":
+    case "handlers":
       return JSON.stringify(result);
   }
 }

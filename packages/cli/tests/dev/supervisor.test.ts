@@ -162,8 +162,9 @@ describe("holqa dev supervisor", () => {
   it("does not accumulate processes, consumers or subscriptions over repeated restarts", async () => {
     const before = supervisor.stats().started;
     const since = events.length;
+    // The application module's changes always restart the generation process.
     for (let round = 0; round < 5; round += 1)
-      await supervisor.reload(["src/app.handler.ts"]);
+      await supervisor.reload(["infra.ts"]);
     const stats = supervisor.stats();
     expect(stats.started).toBe(before + 5);
     await until(() => supervisor.stats().alive === 1);

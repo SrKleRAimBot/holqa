@@ -8,7 +8,7 @@ metadata:
 
 # Debugging events
 
-> **Preview — not yet published.** In the Holqa repository (unpublished): structured diagnostics from the CLI, `holqa inspect --json`, `holqa dev` with structured logs carrying trace identifiers, `holqa invoke`, `queue send`, `storage put`, `cron run`, `holqa state --json`, and the inspection API of `@holqa/local` (messages, dead letters, redrive, storage events, schedule runs) are **implemented**. A CLI command for redriving dead letters and a graphical dashboard are **planned**.
+> **Preview — not yet published.** In the Holqa repository (unpublished): structured diagnostics from the CLI, `holqa inspect --json`, `holqa dev` with structured logs carrying trace identifiers and its read-only dashboard at `/_holqa/dashboard`, `holqa invoke`, `queue send`, `storage put`, `cron run`, `holqa state --json`, `holqa queue redrive`, the inspection API of `@holqa/local` (messages, dead letters, redrive, storage events, schedule runs), and recording, replay and causal chain stepping in `@holqa/testing` are **implemented**. A graphical trace timeline view and an interactive debugger are **planned**.
 
 ## When to use
 
@@ -53,7 +53,7 @@ With the local binding (`@holqa/local`), inspect delivery state directly: `env.q
    - *Duplicate side effects* — handler is not idempotent → see `add-queue-consumer`.
    - *Missing capability* — binding cannot satisfy a requirement → see `validate-infrastructure-bindings`.
    - *Event limit* (`HOLQA_EVENT_DEPTH_EXCEEDED`, `HOLQA_EVENT_PUBLICATION_LIMIT_EXCEEDED`, `HOLQA_EXECUTION_BUDGET_EXCEEDED`, `HOLQA_EVENT_AGE_EXCEEDED`) — the delivery was ended without retries, usually by an event cycle or a fan-out. Run `holqa inspect --cycles` to see which handlers trigger each other, and read the dead letter's `trace` (`rootId`, `depth`) for the chain.
-4. **Fix and test** with the failing payload as a fixture (`testing-event-driven-apps`).
+4. **Fix and test** with the failing payload as a fixture (`testing-event-driven-apps`). In a `createTestApp` test, `app.recording()` captures every handler input with its lineage as sanitized JSON, `app.replay(recording)` runs the recorded roots again through the virtual clock (HTTP requests are recorded but not replayable; external side effects are only reproduced by explicit mocks), and `app.chain(rootId)` steps through a causal chain in causal order. During `holqa dev`, a fixed handler is usually replaced in place; the dashboard shows each handler's versions and whether the session is stale, and log entries of replaced implementations carry `handlerVersion`.
 5. **Replay dead-lettered messages** only after the fix is deployed and only if the handler is idempotent. Locally, `holqa queue redrive <queue> --dry-run` lists what would be replayed, `holqa queue redrive <queue>` (or `env.queues.redrive(queueId)`, `createTestApp(...).redrive(queueId)`) replays it, and `--new-operation` gives messages refused by an event limit a fresh lineage; replay elsewhere is a deliberate, reviewed action.
 
 ## Pitfalls

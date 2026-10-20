@@ -18,6 +18,7 @@ const knownFields: ReadonlySet<string> = new Set([
   "application",
   "generation",
   "handlerId",
+  "handlerVersion",
   "invocationId",
   "correlationId",
   "causationId",
@@ -93,7 +94,9 @@ export function applicationFrame(stack: string, root: string): string | undefine
 export function formatLogEntry(entry: JsonObject, root: string): string {
   const time = text(entry, "time")?.slice(11, 23) ?? "";
   const level = (text(entry, "level") ?? "info").padEnd(5);
-  const who = text(entry, "handlerId") ?? "runtime";
+  // A replaced implementation is labelled with its version, so the developer sees which code ran.
+  const version = text(entry, "handlerVersion");
+  const who = `${text(entry, "handlerId") ?? "runtime"}${version === undefined || entry["message"] === "handlers replaced" ? "" : ` v${version}`}`;
   const parts: string[] = [time, level, who.padEnd(20), text(entry, "message") ?? ""];
   const code = text(entry, "code");
   if (code !== undefined)
@@ -177,7 +180,14 @@ export function devReporter(io: CliIo, json: boolean, root: string): (event: Dev
   return (event) => {
     switch (event.type) {
       case "dev.listening":
-        io.stdout([`holqa dev  ${event.url}`, `  state  ${event.stateDirectory}`, `  build  ${event.buildDirectory}`, event.watching ? "  Watching for changes. Press Ctrl+C to stop." : "  Not watching for changes. Press Ctrl+C to stop."].join("\n"));
+        io.stdout([
+          `holqa dev  ${event.url}`,
+          `  state  ${event.stateDirectory}`,
+          `  build  ${event.buildDirectory}`,
+          ...event.dashboard === undefined ? [] : [`  dashboard  ${event.dashboard}`],
+          ...event.hot === false ? ["  Hot replacement is off: every change restarts the application."] : [],
+          event.watching ? "  Watching for changes. Press Ctrl+C to stop." : "  Not watching for changes. Press Ctrl+C to stop."
+        ].join("\n"));
         break;
       case "change":
         io.stdout(`\nchanged  ${event.files.join(", ")}`);
@@ -196,7 +206,8 @@ export function devReporter(io: CliIo, json: boolean, root: string): (event: Dev
                   ...describeChanges("config", change.config),
                   ...describeChanges("handler", change.handlers)
                 ].join("; ");
-        io.stdout(`build    generation ${event.generation}: ${summary} (${event.durationMs} ms)`);
+        const how = event.reload === undefined || event.reload.strategy === "swap" || event.reload.reason === "initial" ? "" : `; restarting: ${event.reload.detail}`;
+        io.stdout(`build    generation ${event.generation}: ${summary} (${event.durationMs} ms)${how}`);
         const warnings = event.diagnostics.map(formatDiagnostic).join("\n");
         if (warnings !== "" && warnings !== lastWarnings)
           io.stderr(warnings);
@@ -205,7 +216,16 @@ export function devReporter(io: CliIo, json: boolean, root: string): (event: Dev
       }
       case "build.failed":
       case "generation.failed":
+      case "handlers.swap-failed":
         io.stderr(event.diagnostics.map(formatDiagnostic).join("\n"));
+        if (event.stale === true)
+          io.stderr(`STALE    generation ${String(event.serving)} still runs the code from before this change; fix the problems above and save.`);
+        break;
+      case "handlers.swapped":
+        io.stdout(`swapped  ${event.handlers.length} handler${event.handlers.length === 1 ? "" : "s"} in generation ${event.generation} as version ${event.version} (${event.durationMs} ms): ${event.handlers.join(", ")}`);
+        break;
+      case "handlers.swap-refused":
+        io.stdout(`restart  ${event.diagnostics.map(diagnostic => diagnostic.message).join(" ")}`);
         break;
       case "generation.ready":
         io.stdout(formatReady(event));
