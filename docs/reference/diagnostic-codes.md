@@ -1,6 +1,6 @@
 # Diagnostic codes
 
-> **Status:** Eighty codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). No planned code is listed at the moment.
+> **Status:** Eighty-two codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). No planned code is listed at the moment.
 
 Every problem Holqa reports is a structured `Diagnostic` with a stable code. Tools, CI scripts, and agents should match on the code, never on the message text, which may be reworded.
 
