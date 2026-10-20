@@ -111,7 +111,7 @@ describe("createBinding", () => {
     expect((await binding.lifecycle!.health!()).status).toBe("unhealthy");
   });
 
-  it("resolves credentials through the configuration service and never fall back when a provider fails", async () => {
+  it("resolves credentials through the configuration service and never falls back when a provider fails", async () => {
     const events: ProviderEvent[] = [];
     const contexts: ProviderContext[] = [];
     const config = testService("config", { name: "secrets", events }, { config: { lookup: name => ({ API_TOKEN: "token", QUEUE_URL: "amqp://user:pa55word@broker" } as Record<string, string>)[name] } });
