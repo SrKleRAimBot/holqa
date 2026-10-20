@@ -34,6 +34,7 @@ import {
   signObjectUrl
 } from "@/client";
 import { objectEventSource } from "@/events";
+import { provisioner } from "@/provisioner";
 
 /** Object events delivered through a separate event channel. */
 export interface S3EventsOptions {
@@ -241,4 +242,4 @@ function buckets(options: S3BucketsOptions): BindingProvider<"bucket"> {
 }
 
 /** S3-compatible binding providers. */
-export const s3 = Object.freeze({ buckets });
+export const s3 = Object.freeze({ buckets, provisioner });

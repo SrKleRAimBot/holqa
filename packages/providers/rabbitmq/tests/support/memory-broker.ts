@@ -1,5 +1,6 @@
 import type {
   AmqpConsumer,
+  AmqpExchangeType,
   AmqpMessage,
   AmqpPublishProperties,
   AmqpQueueArguments,
@@ -101,6 +102,9 @@ export class MemoryBroker {
   constructor(clock = new VirtualClock()) {
     this.clock = clock;
   }
+
+  /** Exchanges by name, with their type and bound queues. */
+  readonly exchanges = new Map<string, { readonly type: AmqpExchangeType; readonly bindings: Set<string> }>();
 
   /**
    * Declares a queue directly, as provisioning would.
@@ -209,6 +213,26 @@ export class MemoryBroker {
       declare: async (queue: string, args: AmqpQueueArguments) => this.declare(queue, args),
       remove: async (queue: string) => {
         this.queues.delete(queue);
+      },
+      checkQueue: async (queue: string, args: AmqpQueueArguments) => {
+        const found = this.queues.get(queue);
+        return found === undefined ? "missing" : JSON.stringify(Object.entries(found.args).sort()) === JSON.stringify(Object.entries(args).sort()) ? "matches" : "differs";
+      },
+      checkExchange: async (exchange: string, type: AmqpExchangeType) => {
+        const found = this.exchanges.get(exchange);
+        return found === undefined ? "missing" : found.type === type ? "matches" : "differs";
+      },
+      declareExchange: async (exchange: string, type: AmqpExchangeType) => {
+        if (!this.exchanges.has(exchange))
+          this.exchanges.set(exchange, { type, bindings: new Set() });
+      },
+      bindQueue: async (queue: string, exchange: string, routingKey: string) => {
+        if (!this.queues.has(queue) || !this.exchanges.has(exchange))
+          throw Object.assign(new Error("NOT_FOUND"), { code: "NOT_FOUND" });
+        this.exchanges.get(exchange)!.bindings.add(`${queue}:${routingKey}`);
+      },
+      removeExchange: async (exchange: string) => {
+        this.exchanges.delete(exchange);
       },
       generation: () => this.generationValue,
       connected: () => this.online,

@@ -198,6 +198,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `validateBindings(resolved, options?)`, `BindingValidationOptions`, `ValidatedHandler` | Function, types | Validates a resolution without opening providers: requirements, trigger delivery, topology (`HOLQA_BINDING_TOPOLOGY_UNSUPPORTED`), execution limits and event safety stores. |
 | `inspectBindings(resolved, options?)`, `bindingReportFormat`, `BindingReport`, `ResourceReport`, `RequirementReport`, `CapabilitySupport`, `ServiceReport`, `ProviderReport` | Function, constant, types | The `holqa.bindings/1` report: providers, selections and native, emulated or unsupported requirements. |
 | `ExtensionSelection`, `ExtensionSelectionSource`, `ExtensionReport` | Types | Extension implementations selected by `defineBindings({ extensions })` or the default provider. |
+| `defineProvisioning`, `isProvisioningDefinition`, `planProvisioning`, `applyProvisioning`, `provisioningPlanFormat`, `provisioningResultFormat`, `ProvisioningDefinition`, `ProvisioningOptions`, `ApplyProvisioningOptions`, `ProvisioningPlan`, `ProvisioningResult`, `UnprovisionedResource` | Functions, constants, types | [Provisioning](provisioning.md) configurations, plans and results. |
 | `createBindingManifest(report, options)`, `bindingManifestFormat`, `BindingManifest`, `ConnectorReport` | Function, constant, types | The `holqa.binding-manifest/1` binding manifest of a valid configuration. |
 
 ## `@holqa/conformance`
@@ -225,6 +226,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | --- | --- | --- |
 | `rabbitmq.queues(options)`, `RabbitMqQueuesOptions` | Function, type | The queue provider. |
 | `queueTopology`, `topologyDeclarations`, `delaySteps`, `delayStep`, `maxDelaySeconds`, `QueueTopology`, `QueueDeclaration`, `TopologyOptions` | Functions, constants, types | The broker queues a Holqa queue uses and their declarations, for provisioning tools. |
+| `rabbitmq.provisioner(options)`, `provisioner`, `RabbitMqProvisionerOptions`, `AmqpExchangeType` | Function, types | The RabbitMQ provisioner. |
 | `rabbitmq.eventChannel(options)`, `eventChannel`, `RabbitMqEventChannelOptions` | Function, type | An event channel delivering raw storage notifications per subscription. |
 | `createQueueBinding`, `createLeasedBinding`, `headers`, `QueueBindingSettings` | Functions, constant, type | The queue driver and source, and the generic leased source, on any `AmqpTransport`. |
 | `rabbitMqTransport`, `classifyAmqpError`, `AmqpTransport`, `AmqpMessage`, `AmqpSettlement`, `AmqpConsumer`, `AmqpPublishProperties`, `AmqpQueueArguments`, `RabbitMqTransportOptions` | Functions, types | The AMQP transport port and its `rabbitmq-client` implementation. |
@@ -239,6 +241,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | Export | Kind | Description |
 | --- | --- | --- |
 | `s3.buckets(options)`, `S3BucketsOptions`, `S3EventsOptions` | Function, types | The bucket provider. |
+| `s3.provisioner(options)`, `provisioner`, `S3ProvisionerOptions`, `bucketExists`, `createBucket`, `getBucketNotification`, `putBucketNotification` | Functions, type | The S3 provisioner and the bucket administration calls it uses. |
 | `putObject`, `getObject`, `headObject`, `deleteObject`, `listObjects`, `headBucket`, `signObjectUrl`, `objectUrl`, `traceMeta`, `S3Connection` | Functions, constant, type | Signed S3 requests with classified failures. |
 | `readS3Notification`, `objectEventFromS3`, `objectEventSource`, `S3EventRecord` | Functions, type | S3 event notifications as Holqa object events. |
 | `signHeaders`, `presign`, `uriEncode`, `sha256Hex`, `amzDate`, `SignableRequest`, `SignedHeaders`, `SigningCredentials`, `SigningScope` | Functions, types | AWS Signature Version 4. |
@@ -380,7 +383,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/cli`
 
 - **Path:** `packages/cli`
-- **Status:** Implemented (help, version, `--json`, `inspect` with `--cycles` and `--capabilities`, `build --manifest`, `bindings inspect`, `bindings validate`, `package`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
+- **Status:** Implemented (help, version, `--json`, `inspect` with `--cycles` and `--capabilities`, `build --manifest`, `bindings inspect`, `bindings validate`, `package`, `provision plan`, `provision apply`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
 - **Purpose:** Holqa developer CLI and local development supervisor.
 - **Entry points:** library `@holqa/cli` → `dist/index.js`; binary `holqa` → `dist/bin.js`; analysis process entry `dist/analyze.js` and generation process entry `dist/generation.js` (internal, spawned by the CLI). Runs on Bun, `engines.bun >= 1.3.13`.
 - **Internal dependencies:** `@holqa/core`, `@holqa/compiler`, `@holqa/local`, `@holqa/runtime-bun`, `@holqa/opentelemetry`.

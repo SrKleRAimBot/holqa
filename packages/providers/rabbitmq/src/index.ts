@@ -2,6 +2,8 @@ export { eventChannel } from "@/event-channel";
 export type { RabbitMqEventChannelOptions } from "@/event-channel";
 export { rabbitmq } from "@/provider";
 export type { RabbitMqQueuesOptions } from "@/provider";
+export { provisioner } from "@/provisioner";
+export type { RabbitMqProvisionerOptions } from "@/provisioner";
 export {
   createLeasedBinding,
   createQueueBinding,
@@ -23,6 +25,7 @@ export type {
 export { classifyAmqpError, rabbitMqTransport } from "@/transport";
 export type {
   AmqpConsumer,
+  AmqpExchangeType,
   AmqpMessage,
   AmqpPublishProperties,
   AmqpQueueArguments,

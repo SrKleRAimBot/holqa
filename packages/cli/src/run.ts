@@ -28,6 +28,10 @@ import {
 } from "@/commands/local-commands";
 import { packageCommand } from "@/commands/package";
 import {
+  matchProvisionCommand,
+  provisionCommand
+} from "@/commands/provision";
+import {
   matchTelemetryCommand,
   telemetryCommand
 } from "@/commands/telemetry-commands";
@@ -44,6 +48,7 @@ export type { CliIo } from "@/io";
  * `holqa inspect [--app <path>]` (with `--cycles` or `--capabilities [--bindings <path>]`), `holqa build --manifest [--app <path>] [--out-dir <dir>]`,
  * `holqa bindings inspect` and `holqa bindings validate` (`--bindings <path>`),
  * `holqa package [--bindings <path>] [--app <path>] [--out-dir <dir>]`,
+ * `holqa provision plan` and `holqa provision apply` (`--provisioning <path>`, `--allow-destructive`),
  * the local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`,
  * `cron run`, `state`, `doctor`), the telemetry commands (`logs`, `traces list`,
  * `traces inspect`, `events inspect`, `metrics`), and `--json` anywhere, which switches
@@ -112,6 +117,10 @@ export async function runCli(argv: readonly string[], io: CliIo, version: string
     }
     return packageCommand(host ?? createProcessHost(), io, json, { app: options.values.get("app"), bindings: options.values.get("bindings"), outDir: options.values.get("out-dir") });
   }
+
+  const provision = matchProvisionCommand(args);
+  if (provision !== undefined)
+    return provisionCommand(host ?? createProcessHost(), io, json, provision.name, provision.rest);
 
   const bindings = matchBindingsCommand(args);
   if (bindings !== undefined)
@@ -191,6 +200,8 @@ function renderHelp(version: string): string {
     "       holqa bindings inspect [--bindings <path>] [--app <path>] [--json]",
     "       holqa bindings validate [--bindings <path>] [--app <path>] [--json]",
     "       holqa package [--bindings <path>] [--app <path>] [--out-dir <dir>] [--json]",
+    "       holqa provision plan [--provisioning <path>] [--app <path>] [--json]",
+    "       holqa provision apply [--allow-destructive] [--provisioning <path>] [--app <path>] [--json]",
     "       holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--no-hot] [--no-dashboard] [--json]",
     "       holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]",
     "       holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]",
@@ -220,6 +231,8 @@ function renderHelp(version: string): string {
     "  --cycles            inspect: print the event dependency graph and its cycles instead of the summary.",
     "  --capabilities      inspect: print every resource's required capabilities (with --bindings, how providers meet them).",
     "  --bindings <path>   The binding configuration module (default for bindings commands and package: bindings.ts next to the application).",
+    "  --provisioning <path>  provision: the provisioning module (default: provisioning.ts next to the application).",
+    "  --allow-destructive    provision apply: also apply replacements, which delete and recreate infrastructure.",
     "  --follow            logs: keep printing new entries until interrupted.",
     "",
     "Commands:",

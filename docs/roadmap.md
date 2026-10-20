@@ -293,12 +293,13 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | Typed, versioned provider extensions: definitions, required and optional declarations, selection in binding configurations, start-time checks, credential isolation, and the reference `holqa.app-cache` extension ([ADR 0032](architecture/decisions/0032-typed-versioned-provider-extensions.md)) | **Implemented** |
 | A RabbitMQ queue provider (`@holqa/rabbitmq`), passing the queue conformance suite against an in-memory broker and RabbitMQ 4 in CI | **Implemented** |
 | An S3-compatible bucket provider (`@holqa/s3`) with object events through an event channel, passing the bucket conformance suites against an in-memory store and a real S3-compatible store in CI | **Implemented** |
+| Provisioning separate from runtime bindings: the provisioner protocol, classified plans without implicit deletes, `rabbitmq.provisioner`, `s3.provisioner`, `holqa provision plan` and `apply` ([ADR 0034](architecture/decisions/0034-provisioning-separate-from-runtime-bindings.md)) | **Implemented** |
 | Hybrid composition: the telemetry destination as a service provider (`otlp.telemetry`), file-based secrets with rotation (`container.secretFiles`), an in-process scheduler (`container.schedules`), and `replicas` with topology validation | **Implemented** |
 | Deployment artifacts and the container runtime: binding manifests, `holqa package` (bundle, manifests, static files, reference Dockerfile, file hashes), `@holqa/container` with artifact verification, drift checks, probes and graceful shutdown ([ADR 0033](architecture/decisions/0033-deployment-artifacts-and-binding-manifests.md)) | **Implemented** |
 
 ### Goals
 
-- Define the provisioning provider contract. The runtime driver and delivery source contracts exist in `@holqa/core` (**Implemented**, implemented locally by `@holqa/local`); drivers for external services are Planned.
+- Define the provisioning provider contract (**Implemented**: [provisioning](reference/provisioning.md)). The runtime driver and delivery source contracts exist in `@holqa/core` (**Implemented**, implemented locally by `@holqa/local`); drivers for external services are Planned.
 - One or two initial runtime drivers (for example an S3-compatible storage driver and a self-hostable queue) chosen to validate the abstraction, not to favor a vendor.
 - A first provisioning provider that produces a reviewable plan and never deletes physical infrastructure implicitly.
 - Extend `holqa doctor` (**Implemented** for the local binding) to validate bindings for external services.

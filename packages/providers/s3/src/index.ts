@@ -1,10 +1,14 @@
 export {
+  bucketExists,
+  createBucket,
   deleteObject,
+  getBucketNotification,
   getObject,
   headBucket,
   headObject,
   listObjects,
   objectUrl,
+  putBucketNotification,
   putObject,
   signObjectUrl,
   traceMeta
@@ -18,6 +22,8 @@ export {
 export type { S3EventRecord } from "@/events";
 export { s3 } from "@/provider";
 export type { S3BucketsOptions, S3EventsOptions } from "@/provider";
+export { provisioner } from "@/provisioner";
+export type { S3ProvisionerOptions } from "@/provisioner";
 export {
   amzDate,
   presign,
