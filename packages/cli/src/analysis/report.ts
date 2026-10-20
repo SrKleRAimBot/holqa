@@ -110,9 +110,83 @@ function readBindingReport(value: unknown): BindingReport | undefined {
   const diagnostics = (candidate.diagnostics as readonly unknown[]).map(readDiagnostic);
   if (diagnostics.includes(undefined))
     return undefined;
-  const resources = candidate.resources as readonly unknown[];
-  const wellFormed = resources.every(resource => typeof resource === "object" && resource !== null && typeof (resource as { readonly id?: unknown }).id === "string" && typeof (resource as { readonly provider?: unknown }).provider === "string" && Array.isArray((resource as { readonly requirements?: unknown }).requirements));
+  const wellFormed = (candidate.resources as readonly unknown[]).every(isResourceReport)
+    && (candidate.services as readonly unknown[]).every(isServiceReport)
+    && (candidate.providers as readonly unknown[]).every(isProviderReport);
   return wellFormed ? { ...value, diagnostics } as unknown as BindingReport : undefined;
+}
+
+/** A JSON object whose fields are read by name. */
+type Fields = Readonly<Record<string, unknown>>;
+
+/**
+ * Reports whether a value is a JSON object.
+ *
+ * @param value - The candidate.
+ * @returns `true` for a non-array object.
+ */
+function isObject(value: unknown): value is Fields {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Reports whether a value is a list of strings.
+ *
+ * @param value - The candidate.
+ * @returns `true` for an array whose elements are all strings.
+ */
+function isStringList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every(item => typeof item === "string");
+}
+
+/**
+ * Checks one resource entry of a binding report: the fields the CLI reads.
+ *
+ * @param value - The entry.
+ * @returns `true` when it has an identifier, kind, provider, selection and well-formed requirements.
+ */
+function isResourceReport(value: unknown): boolean {
+  if (!isObject(value))
+    return false;
+  const { id, kind, provider, selection, requirements } = value;
+  return typeof id === "string" && typeof kind === "string" && typeof provider === "string" && typeof selection === "string"
+    && Array.isArray(requirements) && requirements.every((requirement: unknown) => {
+    const { capability, support } = isObject(requirement) ? requirement : {};
+    return typeof capability === "string" && typeof support === "string";
+  });
+}
+
+/**
+ * Checks one service entry of a binding report.
+ *
+ * @param value - The entry.
+ * @returns `true` when it names its service, providers and selection.
+ */
+function isServiceReport(value: unknown): boolean {
+  const { service, providers, selection } = isObject(value) ? value : {};
+  return typeof service === "string" && isStringList(providers) && typeof selection === "string";
+}
+
+/**
+ * Checks one provider entry of a binding report: everything the binding
+ * output formats, so a malformed report is rejected here instead of failing
+ * while it is printed.
+ *
+ * @param value - The entry.
+ * @returns `true` for a well-formed provider entry.
+ */
+function isProviderReport(value: unknown): boolean {
+  if (!isObject(value))
+    return false;
+  const { name, provider, role, contracts, credentials, emulations, topology } = value;
+  return typeof name === "string" && typeof provider === "string" && typeof role === "string"
+    && isObject(contracts) && Object.values(contracts).every(version => typeof version === "number")
+    && isStringList(credentials)
+    && Array.isArray(emulations) && emulations.every((emulation: unknown) => {
+    const { capability, mechanism, requires } = isObject(emulation) ? emulation : {};
+    return typeof capability === "string" && typeof mechanism === "string" && (requires === undefined || isStringList(requires));
+  })
+  && isObject(topology) && (({ connectors }) => connectors === undefined || isStringList(connectors))(topology);
 }
 
 /**
