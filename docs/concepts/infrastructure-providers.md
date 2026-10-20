@@ -1,6 +1,6 @@
 # Infrastructure providers
 
-> **Status:** Partly implemented. Capability checks (`checkCapabilities`, `bindApp`), the runtime driver and source contracts in `@holqa/core`, the versioned provider protocol ([binding contracts](../reference/bindings.md), [ADR 0029](../architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md)), and the first binding, the local one in `@holqa/local`, are **Implemented** ([ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md), [local environment](../reference/local.md)). Provisioning providers and bindings for external services are not implemented. The three-part split (contract, runtime driver, provisioning provider) stays **Proposed** in [ADR 0005](../architecture/decisions/0005-infrastructure-independent-resource-contracts.md) until at least one external provider validates it.
+> **Status:** Partly implemented. Capability checks (`checkCapabilities`, `bindApp`), the runtime driver and source contracts in `@holqa/core`, the versioned provider protocol ([binding contracts](../reference/bindings.md), [ADR 0029](../architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md)), and the first binding, the local one in `@holqa/local`, are **Implemented** ([ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md), [local environment](../reference/local.md)). A RabbitMQ queue provider ([reference](../reference/providers/rabbitmq.md)) is **Implemented**; other external providers and provisioning providers are not. The three-part split (contract, runtime driver, provisioning provider) stays **Proposed** in [ADR 0005](../architecture/decisions/0005-infrastructure-independent-resource-contracts.md) until at least one external provider validates it.
 
 Holqa is infrastructure-agnostic: applications declare **logical** resources, and the same application can run against a local environment, self-managed infrastructure, or third-party services. This page explains how logical requirements are connected to real infrastructure, and why portability is never allowed to hide semantic differences.
 
@@ -37,7 +37,7 @@ A **binding** associates a logical resource with a runtime driver (and optionall
 | Staging | Self-hosted broker driver | S3-compatible storage driver |
 | Production | A managed queue driver | S3-compatible storage driver |
 
-The table above is illustrative; only the local drivers in `@holqa/local` exist. Where bindings are declared (a separate file, CLI configuration, or environment configuration) is **Proposed**. They do not live inside resource declarations.
+The table above is illustrative; the local drivers in `@holqa/local` and the RabbitMQ queue provider in `@holqa/rabbitmq` exist. Where bindings are declared (a separate file, CLI configuration, or environment configuration) is **Proposed**. They do not live inside resource declarations.
 
 ## No provider configuration bags in core
 
@@ -82,7 +82,7 @@ The check runs when a runtime installs a binding (`bindApp`), and before anythin
 
 ## Possible future adapters
 
-Potential future runtime drivers and providers include cloud queue services, S3-compatible object storage, RabbitMQ, Redis, and others. None are implemented, and the project deliberately avoids centering any single cloud vendor. The first drivers will be chosen to validate the abstraction (see Phase 5 of the [roadmap](../roadmap.md)).
+A RabbitMQ queue provider is implemented. Potential future runtime drivers and providers include cloud queue services, S3-compatible object storage, Redis, and others; they are not implemented, and the project deliberately avoids centering any single cloud vendor. The first drivers will be chosen to validate the abstraction (see Phase 5 of the [roadmap](../roadmap.md)).
 
 Drivers and providers depend inward on `@holqa/core` contracts; core never depends on them ([package boundaries](../architecture/package-boundaries.md)).
 

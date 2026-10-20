@@ -188,6 +188,9 @@ catalogs:
     eslint-plugin-path-alias:
       specifier: ^2.1.0
       version: 2.1.0
+    rabbitmq-client:
+      specifier: 5.0.8
+      version: 5.0.8
     tsdown:
       specifier: ^0.23.1
       version: 0.23.1
@@ -775,6 +778,28 @@ importers:
       '@holqa/conformance':
         specifier: workspace:*
         version: link:../conformance
+      '@types/bun':
+        specifier: 'catalog:'
+        version: 1.4.3
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.23.1(typescript@6.0.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+
+  packages/providers/rabbitmq:
+    dependencies:
+      '@holqa/core':
+        specifier: workspace:*
+        version: link:../../core
+      rabbitmq-client:
+        specifier: 'catalog:'
+        version: 5.0.8
+    devDependencies:
+      '@holqa/conformance':
+        specifier: workspace:*
+        version: link:../../conformance
       '@types/bun':
         specifier: 'catalog:'
         version: 1.4.3
@@ -2779,6 +2804,10 @@ packages:
   quote-js-string@0.1.0:
     resolution: {integrity: sha512-Y3NoRtprEEZQD8RfxMCfS0ZTqc4e+i18OrXEXAvpM6TfC/3y+0L5rNbZiSnbBBEkDfFzbpd8o+cE8q3/anjMGA==}
     engines: {node: '>=22'}
+
+  rabbitmq-client@5.0.8:
+    resolution: {integrity: sha512-nNto/okuVq+d/OamRYX4HIiCkHdOE0RICIDRjS4YQUo2DI/l3R9RlsFaEEYSjIc+LT6DV+1wUub3nD1HwrM4SQ==}
+    engines: {node: '>=16'}
 
   refa@0.12.1:
     resolution: {integrity: sha512-J8rn6v4DBb2nnFqkqwy6/NnTYMcgLA+sLr0iIO41qpv0n+ngb7ksag2tMRl0inb1bbO/esUwzW1vbJi7K0sI0g==}
@@ -5215,6 +5244,8 @@ snapshots:
   quansync@1.0.0: {}
 
   quote-js-string@0.1.0: {}
+
+  rabbitmq-client@5.0.8: {}
 
   refa@0.12.1:
     dependencies:

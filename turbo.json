@@ -25,6 +25,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
+      "env": ["HOLQA_RABBITMQ_URL"],
       "outputs": []
     },
     "test:watch": {

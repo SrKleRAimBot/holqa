@@ -12,6 +12,7 @@
 | `@holqa/testing` | core, sdk, local, runtime-bun (bindings for tests) |
 | `@holqa/cli` | core, bindings, compiler, local, runtime-bun |
 | `packages/integrations/*` | core, sdk, client |
+| `packages/providers/*` (`@holqa/rabbitmq`) | core (conformance for tests) |
 | `examples/*` | anything |
 
 - Do not import `bun`, `bun:*`, or `node:*` from `core`, `compiler`, `sdk`, or `client` source. Runtime-specific code belongs in `runtime-bun`, `local`, or `cli`.
