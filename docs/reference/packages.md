@@ -214,6 +214,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `QueueHarness`, `QueueFixture`, `BucketHarness`, `BucketFixture`, `ScheduleHarness`, `ScheduleFixture`, `ConformanceTime` | Types | What a provider supplies to run them. |
 | `runConformance(suite, harness)`, `registerConformance(suite, harness, runner, timeoutMs?)`, `ConformanceResult`, `ConformanceSuite`, `ConformanceCase`, `TestRunner` | Functions, types | Run a suite directly, or register it with a test runner. |
 | `ConformanceFailure`, `ConformanceSkip`, `expectThat`, `expectEqual`, `deepEqual`, `eventually` | Classes, functions | Assertions for writing cases. |
+| `defineProviderTests`, `providerTest`, `isProviderTests`, `runProviderTests`, `providerTestReportFormat`, `ProviderTests`, `ProviderTestEntry`, `AnyProviderTestEntry`, `ProviderTestReport` | Functions, constant, types | Provider tests for `holqa providers test` ([conformance](conformance.md)). |
 
 ## `@holqa/rabbitmq`
 
@@ -383,7 +384,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/cli`
 
 - **Path:** `packages/cli`
-- **Status:** Implemented (help, version, `--json`, `inspect` with `--cycles` and `--capabilities`, `build --manifest`, `bindings inspect`, `bindings validate`, `package`, `provision plan`, `provision apply`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
+- **Status:** Implemented (help, version, `--json`, `inspect` with `--cycles` and `--capabilities`, `build --manifest`, `bindings inspect`, `bindings validate`, `package`, `provision plan`, `provision apply`, `providers test`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
 - **Purpose:** Holqa developer CLI and local development supervisor.
 - **Entry points:** library `@holqa/cli` → `dist/index.js`; binary `holqa` → `dist/bin.js`; analysis process entry `dist/analyze.js` and generation process entry `dist/generation.js` (internal, spawned by the CLI). Runs on Bun, `engines.bun >= 1.3.13`.
 - **Internal dependencies:** `@holqa/core`, `@holqa/compiler`, `@holqa/local`, `@holqa/runtime-bun`, `@holqa/opentelemetry`.

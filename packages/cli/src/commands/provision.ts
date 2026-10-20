@@ -18,7 +18,6 @@ import {
   relative,
   resolve
 } from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { canonicalJsonStringify } from "@holqa/compiler";
 import {
@@ -33,6 +32,7 @@ import {
   defaultAppModule,
   reportDiagnostics
 } from "@/commands/analysis-command";
+import { runTrustedProcess } from "@/commands/trusted-process";
 import { exitCodes } from "@/exit-codes";
 
 /** The provisioning module used when `--provisioning` is not given, next to the application module. */
@@ -64,19 +64,8 @@ export function matchProvisionCommand(args: readonly string[]): { readonly name:
 }
 
 /**
- * Returns the provisioning process's entry point, from source or from the build.
- *
- * @returns Its absolute path.
- */
-function entryPath(): string {
-  const fromSource = import.meta.url.endsWith(".ts");
-  return fileURLToPath(new URL(fromSource ? "../provision/provision-entry.ts" : "./provision.js", import.meta.url));
-}
-
-/**
  * Runs the provisioning module in a separate Bun process with the CLI's
- * environment, which holds the provisioners' credentials, and receives the
- * outcome over IPC.
+ * environment, which holds the provisioners' credentials.
  *
  * @param request - The module, its display path, the mode and the handlers.
  * @param request.module - The provisioning module, absolute.
@@ -88,23 +77,10 @@ function entryPath(): string {
  * @returns The outcome.
  */
 async function runProvisioning(request: { readonly module: string; readonly display: string; readonly mode: "plan" | "apply"; readonly allowDestructive: boolean; readonly handlers: readonly DeliveredHandler[] }, cwd: string): Promise<ProvisionOutcome> {
-  let message: string | undefined;
-  const child = Bun.spawn({
-    cmd: [process.execPath, "--no-install", entryPath(), JSON.stringify(request)],
-    cwd,
-    env: process.env,
-    stdin: "ignore",
-    stdout: "inherit",
-    stderr: "pipe",
-    ipc: (received) => {
-      message ??= typeof received === "string" ? received : undefined;
-      child.kill();
-    }
-  });
-  const [exitCode, errors] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+  const { message, exitCode, errors } = await runTrustedProcess({ source: "../provision/provision-entry.ts", built: "./provision.js" }, request, cwd);
   if (message !== undefined)
     return JSON.parse(message) as ProvisionOutcome;
-  return { ok: false, diagnostics: [createDiagnostic({ code: diagnosticCodes.provisioningFailed, severity: "error", message: `The provisioning process exited with code ${exitCode} without a result.`, details: { output: errors.slice(-4_000) } })] };
+  return { ok: false, diagnostics: [createDiagnostic({ code: diagnosticCodes.provisioningFailed, severity: "error", message: `The provisioning process exited with code ${exitCode} without a result.`, details: { output: errors } })] };
 }
 
 /** Markers of each action in human-readable plans. */

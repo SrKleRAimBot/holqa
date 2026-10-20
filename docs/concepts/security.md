@@ -30,6 +30,8 @@ Secrets are declared explicitly (illustrative: `secret(z.string().min(1))`) and 
 - **No secrets in generated clients.** Browser-safe clients contain only public contract information.
 - **No secrets in diagnostics, logs, or tool output.** Validation errors for a secret report that it is invalid, not what it contains. Agent-facing output follows the same rule ([agent-native development](agent-native-development.md#safety)).
 - **Secrets are bound per environment** by the binding layer, not by the application definition.
+- **Credential references, not values** (**Implemented**). Providers take `credentialRef("NAME")`; plain strings are rejected where a credential is expected (for example connection URLs, which carry passwords). A provider resolves only the credentials it declares, when the binding starts, through the configuration services (the environment, mounted secret files with `container.secretFiles()`, or others). Binding reports, binding manifests and deployment artifacts list credential names only; resolved values of four or more characters are redacted from binding failures.
+- **Deployment artifacts are verified, not trusted blindly** (**Implemented**). A packaged container checks every file's SHA-256 and refuses a binding that differs from its packaged binding manifest. The hashes detect accidental or partial changes; they are not signatures.
 
 ## Safe infrastructure changes
 
@@ -37,9 +39,9 @@ Secrets are declared explicitly (illustrative: `secret(z.string().min(1))`) and 
 | --- | --- |
 | Deleting a declaration is not authorization to destroy. | Removing a resource from `infra.ts` stops the application using it. Destroying the physical resource is a separate, explicit action ([application model](application-model.md#resource-lifecycles)). |
 | Identity changes are visible. | Changing a resource `id` is surfaced as replacement, not hidden as a rename ([ADR 0004](../architecture/decisions/0004-stable-logical-resource-identities.md)). |
-| Plan before apply. | Provisioning providers produce a reviewable plan. |
-| Destructive changes require explicit confirmation. | Never performed silently by a tool or an agent. |
-| Runtime and provisioning credentials are separate. | Runtime drivers do not receive provisioning permissions ([infrastructure providers](infrastructure-providers.md)). |
+| Plan before apply. | Provisioning providers produce a reviewable plan (**Implemented**: `holqa provision plan`, [provisioning](../reference/provisioning.md)). |
+| Destructive changes require explicit confirmation. | Never performed silently by a tool or an agent. `holqa provision apply` applies nothing when a plan has a `replace` or `delete` unless `--allow-destructive` is given (**Implemented**). |
+| Runtime and provisioning credentials are separate. | Runtime drivers do not receive provisioning permissions ([infrastructure providers](infrastructure-providers.md)). Runtime providers never create infrastructure; provisioners declare their own credential references (**Implemented**). |
 | Least privilege. | Runtime permissions can be derived from the resource graph's `uses` edges ([resource graph](resource-graph.md#dependencies-and-least-privilege)). |
 | Unsupported semantics fail. | A binding that cannot satisfy a requirement is rejected rather than silently weakened. |
 

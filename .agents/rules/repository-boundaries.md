@@ -10,9 +10,10 @@
 | `@holqa/bindings`, `@holqa/conformance` | core |
 | `@holqa/local` | core, runtime-bun (conformance for tests) |
 | `@holqa/testing` | core, sdk, local, runtime-bun (bindings for tests) |
-| `@holqa/cli` | core, bindings, compiler, local, runtime-bun |
+| `@holqa/cli` | core, bindings, compiler, conformance, container, local, runtime-bun, opentelemetry |
 | `packages/integrations/*` | core, sdk, client |
-| `packages/providers/*` (`@holqa/rabbitmq`) | core (conformance for tests) |
+| `packages/providers/*` (`@holqa/rabbitmq`, `@holqa/s3`) | core (conformance for tests) |
+| `@holqa/container` | core, bindings, local, runtime-bun (sdk for tests) |
 | `examples/*` | anything |
 
 - Do not import `bun`, `bun:*`, or `node:*` from `core`, `compiler`, `sdk`, or `client` source. Runtime-specific code belongs in `runtime-bun`, `local`, or `cli`.

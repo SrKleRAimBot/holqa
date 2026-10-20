@@ -1,6 +1,6 @@
 # Infrastructure providers
 
-> **Status:** Partly implemented. Capability checks (`checkCapabilities`, `bindApp`), the runtime driver and source contracts in `@holqa/core`, the versioned provider protocol ([binding contracts](../reference/bindings.md), [ADR 0029](../architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md)), and the first binding, the local one in `@holqa/local`, are **Implemented** ([ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md), [local environment](../reference/local.md)). A RabbitMQ queue provider ([reference](../reference/providers/rabbitmq.md)) is **Implemented**; other external providers and provisioning providers are not. The three-part split (contract, runtime driver, provisioning provider) stays **Proposed** in [ADR 0005](../architecture/decisions/0005-infrastructure-independent-resource-contracts.md) until at least one external provider validates it.
+> **Status:** **Implemented** for the binding layer: capability checks, the runtime driver and source contracts, the versioned provider protocol ([binding contracts](../reference/bindings.md), [ADR 0029](../architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md)), binding configurations ([ADR 0030](../architecture/decisions/0030-binding-composition-and-resolution.md)), the local binding in `@holqa/local`, a RabbitMQ queue provider ([reference](../reference/providers/rabbitmq.md)), an S3-compatible bucket provider ([reference](../reference/providers/s3.md)), the Bun container runtime ([reference](../reference/container.md)) and provisioning separate from runtime access ([reference](../reference/provisioning.md), [ADR 0034](../architecture/decisions/0034-provisioning-separate-from-runtime-bindings.md)). The three-part split of [ADR 0005](../architecture/decisions/0005-infrastructure-independent-resource-contracts.md) (contract, runtime driver, provisioning provider) is validated by these providers. Providers for other services are **Planned**.
 
 Holqa is infrastructure-agnostic: applications declare **logical** resources, and the same application can run against a local environment, self-managed infrastructure, or third-party services. This page explains how logical requirements are connected to real infrastructure, and why portability is never allowed to hide semantic differences.
 
@@ -82,7 +82,7 @@ The check runs when a runtime installs a binding (`bindApp`), and before anythin
 
 ## Possible future adapters
 
-A RabbitMQ queue provider is implemented. Potential future runtime drivers and providers include cloud queue services, S3-compatible object storage, Redis, and others; they are not implemented, and the project deliberately avoids centering any single cloud vendor. The first drivers will be chosen to validate the abstraction (see Phase 5 of the [roadmap](../roadmap.md)).
+A RabbitMQ queue provider, an S3-compatible bucket provider and a Bun container execution host are implemented. Potential future providers include hosted queue services, request-driven execution hosts, external schedulers, Redis and others; they are not implemented, and the project deliberately avoids centering any single vendor. The [provider authoring guide](../guides/provider-authoring.md) explains how to write one and prove it with the conformance suites.
 
 Drivers and providers depend inward on `@holqa/core` contracts; core never depends on them ([package boundaries](../architecture/package-boundaries.md)).
 
@@ -105,7 +105,7 @@ Provisioning providers reconcile physical infrastructure, which makes them the m
 - Destructive actions (deleting queues, buckets, or data) require explicit confirmation and are never performed silently, including by agents.
 - Provisioning credentials are separate from runtime credentials.
 
-See [security](security.md).
+These rules are **Implemented** by the provisioning protocol: plans only read, changes are classified (`create`, `update`, `replace`, `delete`, `none`), provisioners never plan deletions for removed declarations, and destructive changes are applied only with explicit authorization ([provisioning](../reference/provisioning.md)). See [security](security.md).
 
 ## Related
 

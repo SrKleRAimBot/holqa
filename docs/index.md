@@ -20,9 +20,11 @@ What exists today:
 - `@holqa/local`: a local binding with SQLite-backed queues, filesystem object storage with events and development signed URLs, and a clock-driven scheduler, plus inspection and a local telemetry store. See the [local environment reference](reference/local.md).
 - `@holqa/cli`: a `holqa` binary that prints help and version information, inspects an application and its event cycles (`holqa inspect`, `--cycles`), writes its manifest (`holqa build --manifest`), runs it locally with hot handler replacement, reloads and a local development dashboard (`holqa dev`), invokes handlers and sends events (`holqa invoke`, `queue send`, `storage put`, `cron run`), redrives dead letters (`holqa queue redrive`), prints local state (`holqa state`), checks the project (`holqa doctor`), prints logs, traces, event histories and metrics of local runs (`holqa logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`), and reports structured diagnostics (with `--json`). See the [local development guide](guides/local-development.md).
 
+- The infrastructure binding layer: `@holqa/bindings` (typed binding configurations with deterministic resolution, capability negotiation, extensions, binding manifests and provisioning plans), `@holqa/conformance` (reusable provider conformance suites), `@holqa/rabbitmq` (RabbitMQ queues and storage event channels), `@holqa/s3` (S3-compatible object storage), `@holqa/container` (the Bun container runtime), and the CLI commands `holqa bindings inspect`, `bindings validate`, `inspect --capabilities`, `package`, `provision plan`, `provision apply` and `providers test`. See [binding contracts](reference/bindings.md) and the [operations guide](guides/operations.md).
+
 Disposable prototypes from the [M0 milestone](milestones/m0/index.md) live in [`experiments/`](../experiments/README.md); they are not part of the framework.
 
-Everything else (`holqa openapi generate`, module unloading, worker isolation, bundling, client generation, clients, integrations other than Zod and OTLP export, a graphical trace timeline view, and providers for external services) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
+Everything else (`holqa openapi generate`, module unloading, worker isolation, bundling, client generation, clients, integrations other than Zod and OTLP export, a graphical trace timeline view, and providers for external services other than RabbitMQ and S3-compatible storage) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
 
 ## Where to start
 
@@ -34,6 +36,8 @@ Everything else (`holqa openapi generate`, module unloading, worker isolation, b
 | Run, debug and test an application locally | [Local development guide](guides/local-development.md) |
 | Find event cycles and bound event-driven work | [Event safety guide](guides/event-safety.md) |
 | Read logs, traces and metrics, or export them to an OTLP backend | [Observability guide](guides/observability.md) |
+| Bind an application to infrastructure, package and run it | [Operations guide](guides/operations.md), [Migrating to binding configurations](guides/migrating-to-bindings.md) |
+| Write or test a provider | [Provider authoring guide](guides/provider-authoring.md), [Conformance](reference/conformance.md) |
 | Understand the architecture | [Architecture overview](architecture/overview.md) |
 | Look up a package, CLI flag, or diagnostic code | [Reference](#reference) |
 
@@ -124,6 +128,11 @@ Everything else (`holqa openapi generate`, module unloading, worker isolation, b
 | [Schema contracts](reference/schema-contracts.md) | Validation errors, wire encoding, canonical contracts, fingerprints, compatibility policy and Zod support. |
 | [CLI](reference/cli.md) | Implemented flags, exit codes, JSON output, and proposed commands. |
 | [Runtime](reference/runtime.md) | Execution lifecycle, invocations, HTTP routes, middleware ordering and the `holqa.rpc/1` protocol. |
+| [Binding contracts](reference/bindings.md) | Versioned contracts, providers, binding configurations, capabilities, extensions and binding manifests. |
+| [Container runtime](reference/container.md) | Deployment artifacts, the container host, probes and shutdown. |
+| [Provisioning](reference/provisioning.md) | Provisioner protocol, classified plans and the reference provisioners. |
+| [Conformance](reference/conformance.md) | Provider conformance suites, `holqa providers test` and the coverage map. |
+| [Providers](reference/providers/rabbitmq.md) | RabbitMQ and [S3-compatible storage](reference/providers/s3.md). |
 | [API design specification](reference/api-design.md) | Proposed public APIs for applications, resources, handlers, schema adapters and bindings. |
 
 ## Contributing
