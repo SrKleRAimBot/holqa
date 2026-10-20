@@ -289,6 +289,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | Capability negotiation: the required-capability vocabulary on both sides, native and emulated support, quantitative limits (delays, message size, signed URL expiry, execution limits), topology checks, and `holqa bindings inspect`, `holqa bindings validate` and `holqa inspect --capabilities`, all without connecting to infrastructure | **Implemented** |
 | The local binding as providers (`local.platform`, per-kind providers, `sqlite` and `memory` persistence) on the same engine as `createLocalEnvironment`, and the reusable provider conformance suite (`@holqa/conformance`) | **Implemented** |
 | Static frontend hosting: the `static.site` resource kind and contract, `staticSite`, runtime serving after routes, local hosting with SPA fallback ([ADR 0031](architecture/decisions/0031-static-sites-as-a-resource-kind.md)) | **Implemented** |
+| The local development workflow through the binding layer (`holqa dev` composes the local platform or a `--bindings` configuration; binding changes restart the generation), in-memory test state and provider fault injection (`withFaults`) | **Implemented** |
 
 ### Goals
 

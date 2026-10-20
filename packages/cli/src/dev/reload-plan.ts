@@ -27,6 +27,7 @@ import { reachable } from "@/dev/module-graph";
  * - `unreferenced-module`: a changed file is not imported by any handler (as far as static analysis sees), so its effect is unknown.
  * - `restart-marker`: an affected module contains the `holqa:restart-on-change` comment.
  * - `swap-limit`: the process has replaced handlers often enough that it is restarted to release old module copies.
+ * - `bindings`: the binding configuration module (`--bindings`) changed; providers are opened again by a new process.
  * - `side-effects`: evaluating the new modules created timers, listeners, servers or global names, which a replacement cannot manage.
  * - `replacement-rejected`: the runtime refused the replacement (a definition differs).
  */
@@ -43,6 +44,7 @@ export type RestartReason
     | "unreferenced-module"
     | "restart-marker"
     | "swap-limit"
+    | "bindings"
     | "side-effects"
     | "replacement-rejected";
 
@@ -82,6 +84,8 @@ export interface ReloadInput {
   readonly swaps: number;
   /** After how many replacements the process is restarted. */
   readonly maxSwaps: number;
+  /** The binding configuration module of the session, relative to the root with `/` separators, if any. */
+  readonly bindingsModule?: string;
 }
 
 /** Files whose changes alter how modules resolve or which dependencies load. */
@@ -136,6 +140,8 @@ export function planReload(input: ReloadInput): ReloadPlan {
     return restart("no-generation", "No generation is running, so a new one starts.");
   if (change === undefined || change.kind === "environment")
     return restart("environment", "Environment files changed; a new process reads the configuration.");
+  if (input.bindingsModule !== undefined && files.includes(input.bindingsModule))
+    return restart("bindings", `The binding configuration ${input.bindingsModule} changed; a new process opens its providers again.`);
   const dependencies = files.filter(file => dependencyFile.test(file));
   if (dependencies.length > 0)
     return restart("dependencies", `Dependency or compiler settings changed (${list(dependencies)}).`);

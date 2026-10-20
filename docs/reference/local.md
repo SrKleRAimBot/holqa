@@ -23,6 +23,8 @@ Bun.serve({ hostname: "127.0.0.1", port: 3000, fetch: request => local.storage.h
 | --- | --- | --- |
 | `app` | required | The application: the default export of `infra.ts`. |
 | `directory` | required | The state directory: `state.sqlite` and `objects/`. Created when missing; reusing it keeps queued messages, objects, events and run records across restarts. |
+| `persistence` | `sqlite` | `memory` keeps state in the process (no `directory` needed); for tests only, never durable. |
+| `root` | working directory | The application root static sites' directories are relative to. |
 | `env` | `process.env` | Configuration values, validated like the runtime's default binding (`HOLQA_CONFIG_INVALID`). |
 | `clock` | `systemClock` | The time source of delays, leases, signed URL expiry and schedules. Use `ManualClock` in tests. |
 | `createId` | `crypto.randomUUID` | Identifiers of messages, events, runs and leases. |
@@ -67,7 +69,7 @@ const env = localEnvironment({ persistence: "sqlite", directory: ".holqa/local" 
 | `clock`, `createId`, `queues`, `storage` | as for `createLocalEnvironment` | |
 | `telemetry` | `true` | Whether the platform supplies the local telemetry store as its telemetry exporter. |
 
-Creating a provider opens nothing and validates the options (`HOLQA_BINDING_CONFIG_INVALID`). Providers from one `localEnvironment` share one state: the first to be opened opens it, the last to stop closes it, and opening it for a second application fails with `HOLQA_BINDING_CONFIG_INVALID`. `env.state()` returns the opened state for inspection (`queues`, `storage`, `scheduler`, `settle`, `telemetry`) while any of them is open. Their topology is `{ delivery: "pull", state: "host" }` (`sqlite`) or `state: "process"` (`memory`): deliveries need a long-running process, and state is not shared beyond one host.
+Creating a provider opens nothing and validates the options (`HOLQA_BINDING_CONFIG_INVALID`). Providers from one `localEnvironment` share one state: the first to be opened opens it, the last to stop closes it, and opening it for a second application fails with `HOLQA_BINDING_CONFIG_INVALID`. `env.state()` (or `localStateOf(provider)` for any of them) returns the opened state for inspection (`queues`, `storage`, `scheduler`, `settle`, `telemetry`) while any of them is open. Their topology is `{ delivery: "pull", state: "host" }` (`sqlite`) or `state: "process"` (`memory`): deliveries need a long-running process, and state is not shared beyond one host.
 
 `createLocalEnvironment` and the providers run on the same engine (`openLocalState`), and both pass the reusable conformance suite in `@holqa/conformance` in both persistence modes.
 

@@ -82,8 +82,14 @@ export interface TestAppOptions {
   readonly startTime?: number | string;
   /** Creates invocation, message, event and run identifiers. Default sequential: `id-1`, `id-2`, ... */
   readonly createId?: () => string;
-  /** The local state directory. Default a new temporary directory, removed by `dispose`. A given directory is kept. */
+  /** The local state directory. Default a new temporary directory, removed by `dispose`. A given directory is kept. Ignored with `persistence: "memory"`. */
   readonly directory?: string;
+  /**
+   * `sqlite` (default) keeps the test's state in `directory`, exactly as
+   * `holqa dev` does; `memory` keeps it in the process, which is faster and
+   * leaves no files. Behaviour is the same; only durability differs.
+   */
+  readonly persistence?: "sqlite" | "memory";
   /** Runtime limits; see `createRuntime`. */
   readonly limits?: RuntimeLimits;
   /** Delivery settings; see `createRuntime`. */
@@ -184,7 +190,7 @@ export interface TestApp {
   readonly local: LocalEnvironment;
   /** Every structured log entry written so far, in order. */
   readonly logs: readonly LogEntry[];
-  /** The state directory. */
+  /** The state directory, or `:memory:` with `persistence: "memory"`. */
   readonly directory: string;
   /**
    * Serves a request with the application's routes, procedures and local signed URLs.
@@ -335,8 +341,9 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
   const clock = new ManualClock(start);
   let sequence = 0;
   const createId = options.createId ?? (() => `id-${++sequence}`);
-  const temporary = options.directory === undefined;
-  const directory = options.directory ?? mkdtempSync(join(tmpdir(), "holqa-test-app-"));
+  const inMemory = options.persistence === "memory";
+  const temporary = options.directory === undefined && !inMemory;
+  const directory = inMemory ? ":memory:" : options.directory ?? mkdtempSync(join(tmpdir(), "holqa-test-app-"));
   const faults = new FaultPlan();
   const maxInvocations = options.maxInvocations ?? 10_000;
   if (!Number.isSafeInteger(maxInvocations) || maxInvocations < 1)
@@ -353,6 +360,7 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
     local = await createLocalEnvironment({
       app: options.app,
       directory,
+      ...inMemory ? { persistence: "memory" as const } : {},
       env: options.env ?? {},
       ...options.root === undefined ? {} : { root: options.root },
       clock,

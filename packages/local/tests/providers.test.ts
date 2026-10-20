@@ -39,7 +39,8 @@ import {
 import { ManualClock } from "@/clock";
 import {
   local,
-  localEnvironment
+  localEnvironment,
+  localStateOf
 } from "@/providers";
 
 /** A state directory shared by the SQLite-mode tests, removed at the end. */
@@ -224,5 +225,22 @@ describe("local providers", () => {
     expect(instance.telemetry?.map(exporter => exporter.name)).toEqual([env.state()!.telemetry!.exporter.name]);
     await instance.stop!({ signal: new AbortController().signal });
     expect(credentialRef("X").name).toBe("X");
+  });
+
+  it("expose their opened state through localStateOf, and nothing for other values, other environments or closed state", async () => {
+    const env = localEnvironment({ persistence: "memory" });
+    const other = localEnvironment({ persistence: "memory" });
+    const app = getAppDescriptor(application(resources))!;
+    const platform = env.platform();
+    const queues = env.queues();
+    expect(localStateOf(platform)).toBeUndefined();
+    const instance = await platform.open(contextOf(app));
+    expect(localStateOf(platform)).toBe(env.state()!);
+    expect(localStateOf(queues)).toBe(env.state()!);
+    expect(localStateOf(other.platform())).toBeUndefined();
+    for (const value of [undefined, null, "local", 42, {}, { ...platform }])
+      expect(localStateOf(value)).toBeUndefined();
+    await instance.stop!({ signal: new AbortController().signal });
+    expect(localStateOf(platform)).toBeUndefined();
   });
 });

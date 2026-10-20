@@ -26,7 +26,11 @@ import {
   randomBytes,
   timingSafeEqual
 } from "node:crypto";
-import { join } from "node:path";
+import {
+  join,
+  relative,
+  sep
+} from "node:path";
 
 import {
   serializeEntrypoints,
@@ -98,6 +102,8 @@ export interface SupervisorOptions {
   readonly onEvent: (event: DevEvent) => void;
   /** The application's environment. Defaults to `process.env`. */
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /** A binding configuration module (`--bindings`), absolute; absent runs the default local platform. Changing it restarts the application. */
+  readonly bindingsModule?: string;
   /** Starts generation processes; replaceable in tests. */
   readonly spawn?: (options: GenerationProcessOptions) => GenerationProcess;
   readonly timeouts?: SupervisorTimeouts;
@@ -422,7 +428,8 @@ export class DevSupervisor {
       next: build?.entrypoints,
       graph,
       swaps: this.current?.swaps ?? 0,
-      maxSwaps: this.options.maxSwaps ?? 50
+      maxSwaps: this.options.maxSwaps ?? 50,
+      ...this.options.bindingsModule === undefined ? {} : { bindingsModule: relative(this.options.location.root, this.options.bindingsModule).split(sep).join("/") }
     });
     if (plan.strategy === "swap" && this.current !== undefined && graph !== undefined) {
       // The manifest and entry point map are unchanged, so the build on disk stays valid: nothing is rewritten.
@@ -548,7 +555,7 @@ export class DevSupervisor {
     const url = new URL(this.server!.url.href);
     const spawn = this.options.spawn ?? GenerationProcess.spawn;
     const next = spawn({
-      request: { mode: "serve", root: location.root, buildDir: location.buildDir, stateDir: location.stateDir, publicOrigin: url.origin, generation, ...revalidateQueues.length === 0 ? {} : { revalidateQueues } },
+      request: { mode: "serve", root: location.root, buildDir: location.buildDir, stateDir: location.stateDir, publicOrigin: url.origin, generation, ...revalidateQueues.length === 0 ? {} : { revalidateQueues }, ...this.options.bindingsModule === undefined ? {} : { bindingsModule: this.options.bindingsModule } },
       ...this.options.env === undefined ? {} : { env: this.options.env },
       onLog: entry => this.emit({ type: "log", generation, entry }),
       onOutput: (stream, line) => this.emit({ type: "output", generation, stream, line })

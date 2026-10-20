@@ -835,6 +835,9 @@ importers:
         specifier: workspace:*
         version: link:../sdk
     devDependencies:
+      '@holqa/bindings':
+        specifier: workspace:*
+        version: link:../bindings
       '@types/bun':
         specifier: 'catalog:'
         version: 1.4.3

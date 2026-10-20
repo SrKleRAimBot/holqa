@@ -54,6 +54,8 @@ export interface GenerationRequest {
   readonly generation: number;
   /** Queues whose message contract changed: messages already waiting in them are checked against the new contract and reported. */
   readonly revalidateQueues?: readonly string[];
+  /** The binding configuration module (`holqa dev --bindings`), absolute. Absent: the default local platform on `stateDir`. */
+  readonly bindingsModule?: string;
 }
 
 /** Messages from the generation process to the CLI. */

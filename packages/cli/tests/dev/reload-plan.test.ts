@@ -94,7 +94,8 @@ describe("planReload", () => {
     ["the application module", { files: ["infra.ts"] }, "application-module"],
     ["a file no handler imports", { files: ["scripts/seed.ts"] }, "unreferenced-module"],
     ["a module marked for restarts", { files: ["src/d.handler.ts"] }, "restart-marker"],
-    ["the replacement limit", { swaps: 50, files: ["src/c.handler.ts"] }, "swap-limit"]
+    ["the replacement limit", { swaps: 50, files: ["src/c.handler.ts"] }, "swap-limit"],
+    ["the binding configuration", { bindingsModule: "bindings.ts", files: ["bindings.ts"] }, "bindings"]
   ] as const)("restarts for %s", (_name, overrides, reason) => {
     expect(planReload({ ...base, ...overrides } as ReloadInput)).toMatchObject({ strategy: "restart", reason });
   });
