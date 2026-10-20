@@ -34,6 +34,43 @@ Bun.serve({ hostname: "127.0.0.1", port: 3000, fetch: request => local.storage.h
 
 `createLocalEnvironment` resolves to `{ binding, clock, queues, storage, scheduler, settle, close }`. Stop runtimes that use the binding before `close()`.
 
+## Binding providers
+
+The same local state is also available as binding providers, for binding configurations ([binding contracts](bindings.md#binding-configurations)):
+
+```ts
+import { defineBindings } from "@holqa/bindings";
+import { local, localEnvironment } from "@holqa/local";
+import app from "./infra";
+
+// Everything local, persisted in .holqa/local:
+export default defineBindings(app, { name: "local", defaults: local.platform() });
+
+// Or share one state between the platform and per-kind providers:
+const env = localEnvironment({ persistence: "sqlite", directory: ".holqa/local" });
+// defineBindings(app, { defaults: env.platform(), resources: { "audit-log": env.queues() } });
+```
+
+| Factory | Provider | Role | Binds |
+| --- | --- | --- | --- |
+| `local.platform(options?)`, `env.platform()` | `holqa.local`, named `local` | `platform` | Every resource kind; the `execution` (Bun, long-running), `config` (environment variables or `options.env`), `telemetry` (the local telemetry store), `idempotency` and `operation-budgets` services. |
+| `local.queues(options?)`, `env.queues()` | `holqa.local`, named `local.queues` | `resource` | Queues. |
+| `local.buckets(options?)`, `env.buckets()` | `holqa.local`, named `local.buckets` | `resource` | Buckets and object events. |
+| `local.schedules(options?)`, `env.schedules()` | `holqa.local`, named `local.schedules` | `resource` | Schedules. |
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `persistence` | `sqlite` | `sqlite`: state in `directory` (a `state.sqlite` database and `objects/` files), kept across restarts, shared by processes on the host. `memory`: everything in the process, lost when the binding stops; for fast, isolated tests. **Memory state is not durable** and must never stand in for production durability. |
+| `directory` | `.holqa/local` | Where `sqlite` state is kept, relative to the working directory. |
+| `name` | `local` | The platform's name; per-kind providers append `.queues`, `.buckets`, `.schedules`. |
+| `env` | `process.env` | Configuration values and credentials. Without it, `settings.configSource` is `environment`, so `holqa bindings validate` checks that values are set. |
+| `clock`, `createId`, `queues`, `storage` | as for `createLocalEnvironment` | |
+| `telemetry` | `true` | Whether the platform supplies the local telemetry store as its telemetry exporter. |
+
+Creating a provider opens nothing and validates the options (`HOLQA_BINDING_CONFIG_INVALID`). Providers from one `localEnvironment` share one state: the first to be opened opens it, the last to stop closes it, and opening it for a second application fails with `HOLQA_BINDING_CONFIG_INVALID`. `env.state()` returns the opened state for inspection (`queues`, `storage`, `scheduler`, `settle`, `telemetry`) while any of them is open. Their topology is `{ delivery: "pull", state: "host" }` (`sqlite`) or `state: "process"` (`memory`): deliveries need a long-running process, and state is not shared beyond one host.
+
+`createLocalEnvironment` and the providers run on the same engine (`openLocalState`), and both pass the reusable conformance suite in `@holqa/conformance` in both persistence modes.
+
 ## Capabilities
 
 The binding advertises what it implements, and never more than common production services offer, so that an application that runs locally does not depend on guarantees it will not get elsewhere.

@@ -22,6 +22,8 @@ const neutralPackageSources = [
   "packages/integrations/opentelemetry/src/**",
   // Binding composition is pure: it selects and wires providers, which do their own I/O.
   "packages/bindings/src/**",
+  // Conformance cases only use driver and source contracts and Web APIs.
+  "packages/conformance/src/**",
   // Disposable M0 experiments that prototype neutral packages obey the same rules.
   "experiments/model/src/**",
   "experiments/sdk/src/**",

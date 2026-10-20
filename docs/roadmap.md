@@ -288,6 +288,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | Versioned binding contracts, the provider protocol (`BindingProvider`, roles, validation), classified binding failures, lifecycle and health types, per-resource capability checks ([ADR 0029](architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md), [binding contracts](reference/bindings.md)) | **Implemented** |
 | Binding configurations: `defineBindings`, deterministic resolution (resource, kind, default), independent service selection, composition into one runtime binding whose lifecycle the runtime drives ([ADR 0030](architecture/decisions/0030-binding-composition-and-resolution.md)) | **Implemented** |
 | Capability negotiation: the required-capability vocabulary on both sides, native and emulated support, quantitative limits (delays, message size, signed URL expiry, execution limits), topology checks, and `holqa bindings inspect`, `holqa bindings validate` and `holqa inspect --capabilities`, all without connecting to infrastructure | **Implemented** |
+| The local binding as providers (`local.platform`, per-kind providers, `sqlite` and `memory` persistence) on the same engine as `createLocalEnvironment`, and the reusable provider conformance suite (`@holqa/conformance`) | **Implemented** |
 
 ### Goals
 

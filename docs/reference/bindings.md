@@ -265,6 +265,19 @@ A provider may meet a capability its infrastructure lacks through a compatibilit
 
 `holqa bindings inspect`, `holqa bindings validate` and `holqa inspect --capabilities` print them ([CLI reference](cli.md#holqa-bindings-inspect-and-holqa-bindings-validate)).
 
+## Conformance
+
+`@holqa/conformance` holds the normative behaviour of the resource contracts as runnable cases, independent of any test runner:
+
+| Suite | Contract | Cases |
+| --- | --- | --- |
+| `queueConformance` | `queue` | Unchanged envelopes with identifiers and attempts, unique identifiers, leases, `max`, acknowledgement, delayed retry, lease expiry with the same identifier, stale receipts, lease extension, dead-lettering, discarding, delayed sends, trace and lineage propagation, `wait` cancellation. |
+| `bucketConformance` | `bucket` | Byte-exact reads with metadata, non-ASCII keys, missing objects, overwrites and etags, deletion, sorted, prefixed and paged listing, signed URL shape. |
+| `bucketEventsConformance` | `bucket.events` | `object.created` and `object.deleted` envelopes, type and prefix filters, independent subscriptions, redelivery with the same identifier. |
+| `scheduleConformance` | `schedule` | One run per due time with scheduled time and run identifier; no runs after stop. |
+
+A provider package supplies a harness (how to open a fresh resource, how time passes: a manual clock's `advance` or real sleeps, and optionally `now`) and registers the suite with its own test runner (`registerConformance(suite, harness, { describe, it })`) or runs it directly (`runConformance(suite, harness)`, which returns `passed`, `failed` and `skipped` results). Cases for capabilities a provider does not advertise (dead-lettering, delays, signed URLs, object events) are skipped, never weakened.
+
 ## Related
 
 - [ADR 0029: A binding provider protocol with versioned contracts](../architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md)

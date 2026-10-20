@@ -148,13 +148,14 @@ export function readStateFormat(directory: string): number | undefined {
  * The database uses write-ahead logging, so several processes can share one
  * state directory; notifications between them fall back to polling.
  *
- * @param directory - The state directory; created when missing.
+ * @param directory - The state directory, created when missing; `undefined` for an in-memory database that lives as long as the handle.
  * @returns A database handle with the current schema.
  * @throws {HolqaError} `HOLQA_LOCAL_STATE_UNSUPPORTED` when the state was written by a newer, incompatible version.
  */
-export function openStateDatabase(directory: string): Database {
-  mkdirSync(directory, { recursive: true });
-  const database = new Database(join(directory, stateFileName), { create: true, strict: true });
+export function openStateDatabase(directory: string | undefined): Database {
+  if (directory !== undefined)
+    mkdirSync(directory, { recursive: true });
+  const database = directory === undefined ? new Database(":memory:", { strict: true }) : new Database(join(directory, stateFileName), { create: true, strict: true });
   try {
     database.run("PRAGMA journal_mode = WAL");
     database.run("PRAGMA busy_timeout = 5000");

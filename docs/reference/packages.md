@@ -1,6 +1,6 @@
 # Packages
 
-> **Status:** Reference for the current repository state. Eight framework packages, two integration packages and nine example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline`, `event-safety` and `observability` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
+> **Status:** Reference for the current repository state. Nine framework packages, two integration packages and nine example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline`, `event-safety` and `observability` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
 
 All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single code entry point (`.`) through their `exports` map. `@holqa/compiler` additionally exports its JSON Schema files. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
 
@@ -22,6 +22,7 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model, HTTP routes, RPC procedures, middleware, queue, bucket and schedule operations) | Public developer-facing SDK. |
 | `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery, telemetry, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP, RPC and background transports. |
 | `@holqa/bindings` | `packages/bindings` | **Implemented** (binding configurations, resolution, composition) | Selects a provider for every resource and service and composes them into one runtime binding. |
+| `@holqa/conformance` | `packages/conformance` | **Implemented** (queue, bucket, object event and schedule suites) | Reusable provider conformance cases. |
 | `@holqa/local` | `packages/local` | **Implemented** (local binding) | Local runtime drivers: SQLite-backed queues, filesystem object storage with events and signed URLs, a clock-driven scheduler, inspection, a local telemetry store. |
 | `@holqa/testing` | `packages/testing` | **Implemented** (`createTestApp` with recording and replay, in-memory telemetry, type assertions) | Deterministic integration tests on the local environment, and compile-time type assertions. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
@@ -190,6 +191,20 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `validateBindings(resolved, options?)`, `BindingValidationOptions`, `ValidatedHandler` | Function, types | Validates a resolution without opening providers: requirements, trigger delivery, topology (`HOLQA_BINDING_TOPOLOGY_UNSUPPORTED`), execution limits and event safety stores. |
 | `inspectBindings(resolved, options?)`, `bindingReportFormat`, `BindingReport`, `ResourceReport`, `RequirementReport`, `CapabilitySupport`, `ServiceReport`, `ProviderReport` | Function, constant, types | The `holqa.bindings/1` report: providers, selections and native, emulated or unsupported requirements. |
 
+## `@holqa/conformance`
+
+- **Path:** `packages/conformance`
+- **Status:** Implemented (queue, bucket, object event and schedule suites). Private. See [conformance](bindings.md#conformance).
+- **Entry point:** `@holqa/conformance` → `dist/index.js`, `dist/index.d.ts`. Runtime-neutral and test-runner-neutral.
+- **Internal dependencies:** `@holqa/core`.
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `queueConformance`, `bucketConformance`, `bucketEventsConformance`, `scheduleConformance` | Constants | The normative cases of each contract. |
+| `QueueHarness`, `QueueFixture`, `BucketHarness`, `BucketFixture`, `ScheduleHarness`, `ScheduleFixture`, `ConformanceTime` | Types | What a provider supplies to run them. |
+| `runConformance(suite, harness)`, `registerConformance(suite, harness, runner, timeoutMs?)`, `ConformanceResult`, `ConformanceSuite`, `ConformanceCase`, `TestRunner` | Functions, types | Run a suite directly, or register it with a test runner. |
+| `ConformanceFailure`, `ConformanceSkip`, `expectThat`, `expectEqual`, `deepEqual`, `eventually` | Classes, functions | Assertions for writing cases. |
+
 ## `@holqa/local`
 
 - **Path:** `packages/local`
@@ -201,6 +216,8 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | Export | Kind | Description |
 | --- | --- | --- |
 | `createLocalEnvironment(options)`, `LocalEnvironment`, `LocalEnvironmentOptions`, `SettleOptions` | Function, types | Creates `{ binding, clock, queues, storage, scheduler, settle, close }` over a state directory. The binding provides `operationBudgets` and `idempotency`, kept in the state database. |
+| `local` (`platform`, `queues`, `buckets`, `schedules`, `environment`), `localEnvironment(options?)`, `LocalBindingOptions`, `LocalPersistence`, `LocalProviders`, `OpenedLocalState` | Constant, function, types | The local binding providers, with `sqlite` or `memory` persistence, sharing one state per environment. See [binding providers](local.md#binding-providers). |
+| `openLocalState(app, options)`, `LocalState`, `LocalStateOptions` | Function, types | The engine both `createLocalEnvironment` and the providers run on. |
 | `Clock`, `systemClock`, `ManualClock` | Type, constant, class | The injectable time source; `ManualClock` has `advance(ms)`, `jump(ms)` and `nextTimerDue()`. |
 | `LocalQueues`, `LocalQueueMessage`, `LocalMessageState`, `RedriveOptions` | Types | Queue inspection: `messages` (with the sender's `trace` and lineage), `deadLetters`, `redrive` (all, one, or `{ messageId?, limit?, newOperation? }`), `duplicate`, `purge`. |
 | `LocalStorage`, `LocalObjectEvent` | Types | Object and event inspection (`objects`, `events` with `trace` and per-delivery `visibleAt`, `redriveEvents`, `duplicateEvent`), `retainSubscriptions`, and signed URL serving (`fetch`, `handles`). |
