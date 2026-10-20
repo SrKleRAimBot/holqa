@@ -8,6 +8,7 @@ import type {
 } from "@/resources/kinds";
 import type { ResourceDescriptorOf } from "@/resources/resource-descriptor";
 
+import { resourceBindingInfo } from "@/binding/runtime-binding";
 import { diagnosticCodes } from "@/diagnostics/codes";
 import { createDiagnostic } from "@/diagnostics/diagnostic";
 import {
@@ -19,7 +20,8 @@ import { checkCapabilities } from "@/resources/capabilities";
 /**
  * Installs a runtime binding on an application instance after checking that
  * the binding supports every declared resource: it must advertise capabilities
- * that satisfy each resource's requirements and provide a driver for each kind
+ * that satisfy each resource's requirements (per resource, when the binding
+ * `describe`s resources individually) and provide a driver for each kind
  * that has operations. Rebinding a bound instance is rejected rather than
  * silently replacing the binding.
  *
@@ -37,16 +39,20 @@ export function bindApp(app: AppDescriptor, binding: RuntimeBinding): () => void
       "Remove the previous binding first, or load a fresh application instance."
     );
   }
-  const problems = app.resources.flatMap(resource => [
-    ...checkCapabilities(resource, binding.capabilities, binding.name),
-    ...isDriven(resource.kind) && binding.drivers[resource.kind] === undefined
-      ? [createDiagnostic({
-        code: diagnosticCodes.bindingCapabilityUnsupported,
-        severity: "error",
-        message: `Binding "${binding.name}" has no ${resource.kind} driver, required by "${resource.id}".`
-      })]
-      : []
-  ]);
+  const problems = app.resources.flatMap((resource) => {
+    const info = resourceBindingInfo(binding, resource);
+    return [
+      ...checkCapabilities(resource, info.capabilities, info.binding),
+      ...isDriven(resource.kind) && binding.drivers[resource.kind] === undefined
+        ? [createDiagnostic({
+          code: diagnosticCodes.bindingCapabilityUnsupported,
+          severity: "error",
+          message: `Binding "${info.binding}" has no ${resource.kind} driver, required by "${resource.id}".`,
+          details: { resource: resource.id, kind: resource.kind, binding: info.binding, requirement: resource.kind }
+        })]
+        : []
+    ];
+  });
   if (problems.length > 0)
     throw new HolqaError(problems);
 

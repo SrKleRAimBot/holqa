@@ -7,7 +7,10 @@ import type {
   ResourceKind,
   ResourceKindMap
 } from "@/resources/kinds";
-import type { ResourceDescriptorOf } from "@/resources/resource-descriptor";
+import type {
+  ResourceDescriptor,
+  ResourceDescriptorOf
+} from "@/resources/resource-descriptor";
 
 /**
  * Driver factories by resource kind. A binding returns the driver that backs
@@ -27,6 +30,18 @@ export type BindingCapabilities = {
 };
 
 /**
+ * Which implementation binds one resource, and what it advertises for it. A
+ * binding composed from several providers reports a different provider and
+ * different capabilities per resource.
+ */
+export interface ResourceBindingInfo {
+  /** The name of the provider (or binding) that fulfils the resource, for diagnostics. */
+  readonly binding: string;
+  /** What that provider advertises. Only the entry for the resource's kind is consulted. */
+  readonly capabilities: BindingCapabilities;
+}
+
+/**
  * Connects the logical resources of one loaded application instance to
  * implementations: a local emulator, a test double, or drivers for external
  * infrastructure. Declarations never open connections themselves; handles look
@@ -38,7 +53,15 @@ export type BindingCapabilities = {
 export interface RuntimeBinding {
   /** A short name used in diagnostics, for example `local` or `test`. */
   readonly name: string;
+  /** What the binding advertises, by resource kind, for resources that `describe` does not cover. */
   readonly capabilities: BindingCapabilities;
+  /**
+   * Describes the implementation behind one resource. Absent means the
+   * binding's `name` and `capabilities` apply to every resource. Composed
+   * bindings use it so that capability checks compare each resource with the
+   * provider actually selected for it.
+   */
+  readonly describe?: (resource: ResourceDescriptor) => ResourceBindingInfo;
   readonly drivers: ResourceDrivers;
   /**
    * Event sources a runtime consumes to deliver queue messages, object events
@@ -82,4 +105,17 @@ export interface BindingSlot {
  */
 export function createBindingSlot(): BindingSlot {
   return Object.seal({ current: undefined });
+}
+
+/**
+ * Returns the provider name and capabilities that apply to one resource of a
+ * binding: what `describe` reports, or the binding's own name and
+ * capabilities when it does not describe resources individually.
+ *
+ * @param binding - The installed or candidate binding.
+ * @param resource - The resource whose provider is looked up.
+ * @returns Who binds the resource and what it advertises.
+ */
+export function resourceBindingInfo(binding: RuntimeBinding, resource: ResourceDescriptor): ResourceBindingInfo {
+  return binding.describe?.(resource) ?? { binding: binding.name, capabilities: binding.capabilities };
 }
