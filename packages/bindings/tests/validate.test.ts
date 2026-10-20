@@ -152,3 +152,34 @@ describe("inspectBindings", () => {
     expect(report.resources.find(resource => resource.id === "jobs")!.requirements.at(-1)).toEqual({ capability: "queue.backoff.exponential", support: "emulated" });
   });
 });
+describe("validateBindings with replicas", () => {
+  /**
+   * Builds a provider with another topology.
+   *
+   * @param provider - The provider to copy.
+   * @param state - Where its state lives.
+   * @returns The copy.
+   */
+  const withState = <Provider extends { readonly topology?: unknown }>(provider: Provider, state: "process" | "host" | "shared"): Provider => ({ ...provider, topology: { delivery: "pull", state } });
+
+  it("rejects process-local schedules, queues and stores, and warns about state on one machine", () => {
+    const definition = defineBindings(createApp(), { replicas: 3, defaults: withState(testPlatform(), "process"), kinds: { queue: withState(testQueueProvider(), "host") } });
+    const problems = validateBindings(resolveBindings(definition), { handlers });
+    expect(problems.filter(problem => problem.code === "HOLQA_BINDING_TOPOLOGY_UNSUPPORTED").map(problem => [problem.severity, field(problem, "binding"), problem.message.split(": ")[1]])).toEqual([
+      ["warning", "broker", "a replica would not see what another one wrote."],
+      ["error", "platform", "a replica would not see what another one wrote."],
+      ["error", "platform", "every replica would start every run."],
+      ["error", "platform", "it would not be atomic across replicas."]
+    ]);
+  });
+
+  it("accepts shared state for any number of replicas, and anything for one", () => {
+    expect(validateBindings(resolveBindings(defineBindings(createApp(), { replicas: 3, defaults: withState(testPlatform(), "shared") })), { handlers })).toEqual([]);
+    expect(validateBindings(resolveBindings(defineBindings(createApp(), { defaults: withState(testPlatform(), "process") })), { handlers })).toEqual([]);
+  });
+
+  it("records the replicas in the report and rejects an invalid count", () => {
+    expect(inspectBindings(resolveBindings(defineBindings(createApp(), { replicas: 2, defaults: testPlatform() }))).replicas).toBe(2);
+    expect(() => defineBindings(createApp(), { replicas: 0, defaults: testPlatform() })).toThrow("replicas");
+  });
+});

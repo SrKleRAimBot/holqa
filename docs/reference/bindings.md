@@ -145,6 +145,8 @@ export default defineBindings(app, {
 
 `platformProvider`, `brokerQueues`, `auditQueue`, `secretFiles` and `collector` stand for provider objects created by provider factories.
 
+`replicas` (default 1) declares how many processes run the application in this environment, for example container replicas. It is recorded in the report and the binding manifest, and [validation](#validation) rejects providers whose state cannot serve that many.
+
 `defineBindings` is pure and type-checked against the application: a resource identifier or kind the application does not declare, a provider that does not bind a resource's kind, a service provider that does not supply the service, and (without `defaults`) a resource no entry covers are compile errors. Malformed settings fail at run time with `HOLQA_BINDING_CONFIG_INVALID`.
 
 ### Resolution
@@ -259,12 +261,14 @@ A provider may meet a capability its infrastructure lacks through a compatibilit
 | A background handler whose resource's provider delivers no events (`topology.delivery: "none"`), or a pull-based provider when the execution host is `request-driven`. | `HOLQA_BINDING_TOPOLOGY_UNSUPPORTED` |
 | `limits.timeoutMs` (30 000 when not set) and `limits.concurrency` within the execution host's `maxTimeoutMs` and `maxConcurrency`. | `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` (`requirement`: `execution.timeout`, `execution.concurrency`) |
 | An idempotency service when a handler declares `idempotency`; an operation budget service when `operationBudgets` is set. | `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` (`requirement`: `idempotency`, `operation-budgets`) |
+| With `replicas` above 1: schedules, queues, buckets and the idempotency and operation budget stores must be on providers whose `topology.state` is `shared`. State in one process is an error (every replica would start every run, or would not see what another wrote); state on one machine (`host`) is a warning, correct only when every replica runs there. | `HOLQA_BINDING_TOPOLOGY_UNSUPPORTED` (`details`: `binding`, `replicas`, `state`) |
 
 `inspectBindings(resolved, options)` returns the `holqa.bindings/1` report, plain JSON without credential values:
 
 | Field | Content |
 | --- | --- |
 | `name`, `application` | The configuration and application names. |
+| `replicas` | How many processes run the application. |
 | `resources` | Per resource, sorted: `id`, `kind`, `provider`, `selection` (`resource`, `kind`, `default`) and `requirements`, each `{ capability, support }` with `support` `native`, `emulated` or `unsupported`; with handlers, also `trigger.<kind>`. |
 | `services` | Per service: `providers` and `selection` (`service`, `default`, `builtin`). |
 | `providers` | Per provider, in opening order: `name`, `provider`, `role`, `contracts`, `capabilities` (provided vocabulary per kind), `limits` (advertised capabilities as declared), `services`, `emulations`, `topology`, `execution`, `settings`, `credentials` (names). |
@@ -317,6 +321,7 @@ The reference extension is `holqa.app-cache` version 1 (`appCacheExtension` in `
 | `format` | `holqa.binding-manifest/1` |
 | `name`, `application` | The configuration's and the application's names. |
 | `applicationManifest` | The `sha256:` fingerprint of the application manifest it was resolved against. |
+| `replicas` | How many processes run the application. |
 | `compatibility` | `bindingProtocol` and the `contracts` versions of the Holqa that produced it. |
 | `resources`, `services`, `extensions`, `providers` | As in the `holqa.bindings/1` report, without `diagnostics`: mappings with their selection reasons and requirement support, and every provider's contracts, capabilities, emulations, topology, non-secret settings and credential names. |
 | `credentials` | Every credential name any provider resolves, sorted. Never values. |

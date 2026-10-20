@@ -108,6 +108,8 @@ export interface BindingReport {
   /** The configuration's name. */
   readonly name: string;
   readonly application: string;
+  /** How many processes run the application. */
+  readonly replicas: number;
   /** Sorted by resource identifier. */
   readonly resources: readonly ResourceReport[];
   readonly services: readonly ServiceReport[];
@@ -160,6 +162,7 @@ export function inspectBindings(resolved: ResolvedBindings, options: BindingVali
     format: bindingReportFormat,
     name: resolved.name,
     application: resolved.app.name,
+    replicas: resolved.replicas ?? 1,
     resources,
     services: resolved.services.map(selection => ({ service: selection.service, providers: selection.providers.map(provider => provider.name), selection: selection.source })),
     extensions: resolved.extensions.map(selection => ({ id: selection.id, version: selection.version, provider: selection.provider.name, selection: selection.source, required: (resolved.app.extensions ?? []).some(requirement => requirement.id === selection.id && requirement.required) })),

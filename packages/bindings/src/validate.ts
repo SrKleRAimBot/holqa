@@ -100,6 +100,8 @@ export function validateBindings(resolved: ResolvedBindings, options: BindingVal
       diagnostics.push(createDiagnostic({ code: diagnosticCodes.extensionIncompatible, severity: "error", message: `The extension "${selection.id}" of provider "${selection.provider.name}" runs on ${runtimes.join(", ")}, but the execution host "${host!.name}" runs ${hostRuntimes.join(", ")}.`, details: { extension: selection.id, binding: selection.provider.name, requirement: "execution.runtime" } }));
   }
 
+  diagnostics.push(...replicaProblems(resolved));
+
   const services = new Set(resolved.services.map(selection => selection.service));
   const idempotent = handlers.filter(handler => handler.idempotency !== undefined);
   if (idempotent.length > 0 && !services.has("idempotency"))
@@ -130,4 +132,53 @@ function executionHost(resolved: ResolvedBindings): AnyBindingProvider | undefin
  */
 function topology(message: string, details: NonNullable<Diagnostic["details"]>, hint: string): Diagnostic {
   return createDiagnostic({ code: diagnosticCodes.bindingTopologyUnsupported, severity: "error", message, hint, details });
+}
+
+/**
+ * Checks that every selected provider can serve the configured number of
+ * replicas: schedules must be coordinated across processes (otherwise every
+ * replica starts every run), queues and buckets must keep their state where
+ * every replica reaches it (otherwise a message sent on one replica is never
+ * seen by another), and event safety stores must be shared to be atomic
+ * across processes. State on one machine (`host`) is a warning: it is
+ * correct only when every replica runs on the same machine.
+ *
+ * @param resolved - The resolution.
+ * @returns The problems; none for a single replica.
+ */
+function replicaProblems(resolved: ResolvedBindings): Diagnostic[] {
+  const replicas = resolved.replicas ?? 1;
+  if (replicas <= 1)
+    return [];
+  const problems: Diagnostic[] = [];
+  const reported = new Set<string>();
+  /**
+   * Reports one provider once, with the reason that applies.
+   *
+   * @param provider - The selected provider whose state location is checked.
+   * @param what - What it serves, for the message.
+   * @param consequence - What goes wrong with several replicas.
+   */
+  const check = (provider: AnyBindingProvider, what: string, consequence: string): void => {
+    const state = provider.topology?.state ?? "shared";
+    if (state === "shared" || reported.has(`${provider.name}:${what}`))
+      return;
+    reported.add(`${provider.name}:${what}`);
+    const details = { binding: provider.name, replicas, state };
+    const hint = state === "process" ? "Select a provider whose state is shared by every replica, or run one replica." : "Run every replica on the same machine, or select a provider whose state is shared.";
+    problems.push(createDiagnostic({ code: diagnosticCodes.bindingTopologyUnsupported, severity: state === "process" ? "error" : "warning", message: `The configuration runs ${replicas} replicas, but provider "${provider.name}" keeps ${what} ${state === "process" ? "in one process" : "on one machine"}: ${consequence}.`, hint, details }));
+  };
+  for (const { resource, provider } of resolved.resources) {
+    if (resource.kind === "schedule")
+      check(provider, "schedules", "every replica would start every run");
+    else if (resource.kind === "queue" || resource.kind === "bucket")
+      check(provider, `${resource.kind}s`, "a replica would not see what another one wrote");
+  }
+  for (const selection of resolved.services) {
+    if (selection.service === "idempotency" || selection.service === "operation-budgets") {
+      for (const provider of selection.providers)
+        check(provider, `the ${selection.service} store`, "it would not be atomic across replicas");
+    }
+  }
+  return problems;
 }

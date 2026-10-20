@@ -52,7 +52,7 @@ export interface ContainerHostOptions {
  * @returns The host provider.
  * @throws {HolqaError} `HOLQA_BINDING_CONFIG_INVALID` for invalid settings.
  */
-function host(options: ContainerHostOptions = {}): BindingProvider<"http.api" | "static.site"> {
+export function host(options: ContainerHostOptions = {}): BindingProvider<"http.api" | "static.site"> {
   const name = options.name ?? "container";
   const problems: string[] = [];
   if (options.root !== undefined && (typeof options.root !== "string" || options.root === ""))
@@ -94,6 +94,3 @@ function host(options: ContainerHostOptions = {}): BindingProvider<"http.api" | 
     })
   });
 }
-
-/** Providers of the conventional Bun container runtime. */
-export const container = Object.freeze({ host });

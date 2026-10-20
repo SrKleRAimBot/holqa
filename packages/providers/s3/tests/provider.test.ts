@@ -145,7 +145,7 @@ describe("s3.buckets", () => {
     expect(store.requests).toBeGreaterThan(0);
   });
 
-  it("propagates the writer's trace through notifications that carry user metadata", async () => {
+  it("propagates the writer's trace through notifications that carry user metadata, with or without the header prefix", async () => {
     const { store, driver, events } = await openOn();
     store.createSubscription("files.traced", "files");
     const source = await events!.subscribe({ id: "traced", types: ["object.created"] });
@@ -153,6 +153,10 @@ describe("s3.buckets", () => {
     await driver.put("a.txt", new TextEncoder().encode("x"), {}, { trace });
     const [delivery] = await source.receive({ max: 1, leaseMs: 1_000 });
     expect(delivery?.trace).toEqual(trace);
+    store.userMetadataPrefix = "";
+    await driver.put("c.txt", new TextEncoder().encode("x"), {}, { trace });
+    await store.clock.advance(2_000);
+    expect((await source.receive({ max: 5, leaseMs: 1_000 })).find(item => item.body.object.key === "c.txt")?.trace).toEqual(trace);
     store.includeUserMetadata = false;
     await driver.put("b.txt", new TextEncoder().encode("x"), {}, { trace });
     await store.clock.advance(2_000);

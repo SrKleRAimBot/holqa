@@ -13,7 +13,7 @@ import {
   expect,
   it
 } from "bun:test";
-import { container } from "@/host";
+import { container } from "@/providers";
 
 describe("container.host", () => {
   it("is a valid long-running Bun execution host for HTTP APIs and static sites", () => {

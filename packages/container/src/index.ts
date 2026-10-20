@@ -9,8 +9,10 @@ export type {
   ArtifactFile,
   VerifiedArtifact
 } from "@/artifact";
-export { container } from "@/host";
 export type { ContainerHostOptions } from "@/host";
+export { container } from "@/providers";
+export type { ContainerSchedulesOptions } from "@/schedules";
+export type { SecretFilesOptions } from "@/secret-files";
 export { readContainerSettings } from "@/settings";
 export type { ContainerEnvironment, ContainerSettings } from "@/settings";
 export {

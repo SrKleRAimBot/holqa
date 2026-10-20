@@ -30,7 +30,7 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | `@holqa/testing` | `packages/testing` | **Implemented** (`createTestApp` with recording and replay, in-memory telemetry, type assertions) | Deterministic integration tests on the local environment, and compile-time type assertions. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
 | `@holqa/zod` | `packages/integrations/zod` | **Implemented** | Zod 4 schema adapter. |
-| `@holqa/opentelemetry` | `packages/integrations/opentelemetry` | **Implemented** (OTLP/HTTP JSON export, `OTEL_*` variables) | OpenTelemetry interoperability without an OpenTelemetry SDK dependency. |
+| `@holqa/opentelemetry` | `packages/integrations/opentelemetry` | **Implemented** (OTLP/HTTP JSON export, `OTEL_*` variables, telemetry service provider) | OpenTelemetry interoperability without an OpenTelemetry SDK dependency. |
 | Valibot integration | `packages/integrations/valibot` | Planned | Valibot schema adapter. |
 | Effect integration | `packages/integrations/effect` | Planned | Effect handlers, Effect Schema, Effect HTTP. |
 | oRPC integration | `packages/integrations/orpc` | Planned | oRPC interoperability. |
@@ -253,6 +253,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | Export | Kind | Description |
 | --- | --- | --- |
 | `container.host(options?)`, `ContainerHostOptions` | Function, type | The execution host provider for `http.api` and `static.site`. |
+| `container.schedules(options?)`, `container.secretFiles(options?)`, `ContainerSchedulesOptions`, `SecretFilesOptions` | Functions, types | The in-process scheduler and the file-based configuration service. |
 | `startContainer(options)`, `runContainer(options)`, `probePaths`, `ContainerOptions`, `RunningContainer` | Functions, constant, types | Verify, resolve, start and serve with probes and signal handling; `runContainer` is the packaged entry point. |
 | `verifyArtifact(directory, bunVersion)`, `artifactFormat`, `artifactFileName`, `sha256Hex`, `ArtifactDescriptor`, `ArtifactFile`, `VerifiedArtifact` | Function, constants, types | The `holqa.artifact/1` descriptor and its verification. |
 | `readContainerSettings(env)`, `ContainerSettings`, `ContainerEnvironment` | Function, types | Settings from `PORT`, `HOST` and the shutdown variables. |
@@ -374,11 +375,12 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `createOtlpHttpExporter(options?)`, `OtlpHttpExporterOptions`, `OtlpSignals` | Function, types | A `TelemetryExporter` named `otlp-http` posting to `<endpoint>/v1/traces`, `/v1/metrics` and `/v1/logs` (default endpoint `http://localhost:4318`, time limit 10 000 ms, no retries). |
 | `readOtelEnvironment(env)`, `OtelEnvironment`, `OtelEnvironmentSettings` | Function, types | Reads the standard `OTEL_*` variables into exporter options, service name, resource attributes, sample ratio and log export; returns `HOLQA_TELEMETRY_CONFIG_INVALID` problems for unsupported values. |
 | `encodeOtlpTraces`, `encodeOtlpMetrics`, `encodeOtlpLogs`, `toAnyValue`, `toKeyValues`, `toUnixNano`, `otlpScope`, `OtlpAnyValue`, `OtlpKeyValue` | Functions, constant, types | The OTLP/JSON encoding, for custom transports. |
+| `otlp.telemetry(options)`, `OtlpTelemetryOptions` | Function, type | A telemetry service provider for binding configurations ([guide](../guides/observability.md#select-the-telemetry-destination-in-a-binding-configuration)). |
 
 ## `@holqa/cli`
 
 - **Path:** `packages/cli`
-- **Status:** Implemented (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
+- **Status:** Implemented (help, version, `--json`, `inspect` with `--cycles` and `--capabilities`, `build --manifest`, `bindings inspect`, `bindings validate`, `package`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
 - **Purpose:** Holqa developer CLI and local development supervisor.
 - **Entry points:** library `@holqa/cli` → `dist/index.js`; binary `holqa` → `dist/bin.js`; analysis process entry `dist/analyze.js` and generation process entry `dist/generation.js` (internal, spawned by the CLI). Runs on Bun, `engines.bun >= 1.3.13`.
 - **Internal dependencies:** `@holqa/core`, `@holqa/compiler`, `@holqa/local`, `@holqa/runtime-bun`, `@holqa/opentelemetry`.

@@ -1,6 +1,6 @@
 # @holqa/opentelemetry
 
-> **Status:** **Implemented** (OTLP/HTTP JSON export of traces, metrics and logs; the standard `OTEL_*` environment variables). Private and unpublished. A bridge to `@opentelemetry/api` and OTLP over protobuf or gRPC are **Planned**.
+> **Status:** **Implemented** (OTLP/HTTP JSON export of traces, metrics and logs; the standard `OTEL_*` environment variables; the `otlp.telemetry` service provider for binding configurations). Private and unpublished. A bridge to `@opentelemetry/api` and OTLP over protobuf or gRPC are **Planned**.
 
 OpenTelemetry interoperability for Holqa. Holqa's runtime records telemetry on the OpenTelemetry data model
 ([ADR 0027](../../../docs/architecture/decisions/0027-observability-telemetry-and-local-inspection.md)); this package
@@ -59,3 +59,6 @@ Tests run the exporter against a local OTLP/HTTP receiver on Bun 1.3.13; [`examp
 exercises it end to end with a runtime and with the built CLI.
 
 Boundaries: depends on `@holqa/core` only; runtime-neutral (no `bun`, `bun:*` or `node:*` imports).
+
+In a binding configuration, select the destination per environment with `services: { telemetry: otlp.telemetry({ endpoint }) }`
+(see the [observability guide](../../../docs/guides/observability.md#select-the-telemetry-destination-in-a-binding-configuration)).

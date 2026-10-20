@@ -71,6 +71,8 @@ export interface ResolvedBindings {
   readonly providers: readonly AnyBindingProvider[];
   /** Every problem found. The configuration is usable when none has `error` severity. */
   readonly diagnostics: readonly Diagnostic[];
+  /** How many processes run the application, from the configuration; absent means one. */
+  readonly replicas?: number;
 }
 
 /** The built-in configuration provider used when no other supplies configuration. One shared instance keeps resolution deterministic. */
@@ -229,7 +231,8 @@ export function resolveBindings(definition: BindingsDefinition): ResolvedBinding
     services: Object.freeze(services),
     extensions: Object.freeze(selectedExtensions),
     providers: Object.freeze(providers),
-    diagnostics: Object.freeze(diagnostics)
+    diagnostics: Object.freeze(diagnostics),
+    ...definition.replicas === undefined ? {} : { replicas: definition.replicas }
   });
 }
 
