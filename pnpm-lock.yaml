@@ -655,6 +655,9 @@ importers:
 
   packages/cli:
     dependencies:
+      '@holqa/bindings':
+        specifier: workspace:*
+        version: link:../bindings
       '@holqa/compiler':
         specifier: workspace:*
         version: link:../compiler

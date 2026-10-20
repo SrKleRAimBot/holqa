@@ -14,7 +14,9 @@ export interface ProposedCommand {
  * artifacts is planned.
  */
 export const implementedCommands: readonly ProposedCommand[] = [
-  { name: "inspect", summary: "Analyze the application and print its resources, handlers, configuration and graph; --cycles prints its event graph and cycles." },
+  { name: "inspect", summary: "Analyze the application and print its resources, handlers, configuration and graph; --cycles prints its event graph and cycles, --capabilities its required capabilities." },
+  { name: "bindings inspect", summary: "Show which provider binds each resource and service, why it was selected, and how it meets each requirement." },
+  { name: "bindings validate", summary: "Check a binding configuration: providers, contract versions, capabilities, topology and credentials." },
   { name: "build --manifest", summary: "Write the application's manifest and entry point map." },
   { name: "dev", summary: "Run the application locally with emulated resources, and rebuild on changes." },
   { name: "invoke", summary: "Invoke a queue, object event or schedule handler once with a test input." },

@@ -9,7 +9,8 @@ import type {
 
 import {
   isStandardSchema,
-  queueBackoffProblem
+  queueBackoffProblem,
+  requiredCapabilities
 } from "@holqa/core";
 
 import {
@@ -49,23 +50,18 @@ const resourceKindRules: { readonly [Kind in ResourceKind]: ResourceKindRule<Kin
     const deadLetter = reader.boolean(raw.deadLetter, "requirements.deadLetter");
     const maxAttempts = reader.optionalPositiveInteger(raw.maxAttempts, "requirements.maxAttempts");
     const backoff = raw.backoff === undefined ? undefined : readBackoff(raw.backoff, reader);
+    const normalized = { delivery, deadLetter, ...definedEntries({ maxAttempts, backoff }) };
     return {
       config: { schemaVersion: reader.positiveInteger(rawConfig.schemaVersion, "config.schemaVersion") },
-      requirements: { delivery, deadLetter, ...definedEntries({ maxAttempts, backoff }) },
-      capabilities: [
-        "queue",
-        `queue.delivery.${delivery}`,
-        ...deadLetter ? ["queue.dead-letter"] : [],
-        ...maxAttempts === undefined ? [] : ["queue.max-attempts"],
-        ...backoff === undefined ? [] : [`queue.backoff.${backoff.strategy}`]
-      ]
+      requirements: normalized,
+      capabilities: requiredCapabilities({ kind: "queue", requirements: normalized })
     };
   },
   "bucket": (config, requirements, reader) => {
     reader.object(config, "config", []);
     const raw = reader.object(requirements, "requirements", ["access"]);
     const access = reader.oneOf(raw.access, "requirements.access", ["private", "public-read"]);
-    return { config: {}, requirements: { access }, capabilities: ["bucket", `bucket.access.${access}`] };
+    return { config: {}, requirements: { access }, capabilities: requiredCapabilities({ kind: "bucket", requirements: { access } }) };
   },
   "schedule": (config, requirements, reader) => {
     const rawConfig = reader.object(config, "config", ["cron", "timezone"]);
@@ -74,7 +70,7 @@ const resourceKindRules: { readonly [Kind in ResourceKind]: ResourceKindRule<Kin
     return {
       config: { cron: reader.string(rawConfig.cron, "config.cron", cronPattern), timezone: reader.string(rawConfig.timezone, "config.timezone") },
       requirements: { overlap },
-      capabilities: ["schedule", `schedule.overlap.${overlap}`]
+      capabilities: requiredCapabilities({ kind: "schedule", requirements: { overlap } })
     };
   },
   "http.api": (config, requirements, reader) => {
@@ -82,12 +78,12 @@ const resourceKindRules: { readonly [Kind in ResourceKind]: ResourceKindRule<Kin
     reader.object(requirements, "requirements", []);
     const basePath = reader.string(rawConfig.basePath, "config.basePath", basePathPattern);
     if (rawConfig.docs === undefined)
-      return { config: { basePath }, requirements: {}, capabilities: ["http.api"] };
+      return { config: { basePath }, requirements: {}, capabilities: requiredCapabilities({ kind: "http.api", requirements: {} }) };
     const docs = reader.object(rawConfig.docs, "config.docs", ["title", "version"]);
     return {
       config: { basePath, docs: { title: reader.string(docs.title, "config.docs.title"), version: reader.string(docs.version, "config.docs.version") } },
       requirements: {},
-      capabilities: ["http.api"]
+      capabilities: requiredCapabilities({ kind: "http.api", requirements: {} })
     };
   }
 };

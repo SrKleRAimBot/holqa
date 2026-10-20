@@ -93,7 +93,8 @@ describe("diagnosticCodes", () => {
       bindingFailed: "HOLQA_BINDING_FAILED",
       bindingResourceUnknown: "HOLQA_BINDING_RESOURCE_UNKNOWN",
       bindingKindMismatch: "HOLQA_BINDING_KIND_MISMATCH",
-      bindingMissing: "HOLQA_BINDING_MISSING"
+      bindingMissing: "HOLQA_BINDING_MISSING",
+      bindingTopologyUnsupported: "HOLQA_BINDING_TOPOLOGY_UNSUPPORTED"
     });
   });
 });

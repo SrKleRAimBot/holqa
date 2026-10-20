@@ -49,7 +49,7 @@ describe("runCli", () => {
     const result = await run([]);
     expect(result.code).toBe(exitCodes.success);
     expect(result.stdout).toContain("Usage: holqa");
-    expect(result.stdout).toContain("holqa inspect [--cycles] [--app <path>]");
+    expect(result.stdout).toContain("holqa inspect [--cycles | --capabilities [--bindings <path>]] [--app <path>]");
     expect(result.stdout).toContain("not implemented yet");
     expect(result.stdout).toContain("runs their code");
     expect(result.stderr).toBe("");

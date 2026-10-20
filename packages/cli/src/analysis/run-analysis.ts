@@ -1,7 +1,12 @@
 import type {
+  BindingReport,
+  ValidatedHandler
+} from "@holqa/bindings";
+import type {
   EvaluatedModule,
   ModuleResolver
 } from "@holqa/compiler";
+
 import type {
   Diagnostic,
   SchemaAdapter
@@ -25,6 +30,11 @@ import {
 import { pathToFileURL } from "node:url";
 
 import {
+  inspectBindings,
+  isBindingsDefinition,
+  resolveBindings
+} from "@holqa/bindings";
+import {
   compileApplication,
   hasErrors,
   moduleEvaluationFailure,
@@ -47,6 +57,8 @@ export interface AnalysisRequest {
   readonly root: string;
   /** The application module's file name relative to the root, conventionally `infra.ts`. */
   readonly appModule: string;
+  /** The absolute path of a binding configuration module to resolve against the application, if any. */
+  readonly bindingsModule?: string;
 }
 
 /** Directories never searched for handler modules or sources. */
@@ -125,7 +137,36 @@ export async function runAnalysis(request: AnalysisRequest): Promise<AnalysisRep
   const all = sortDiagnostics([...diagnostics, ...result.diagnostics]);
   if (!result.ok || hasErrors(all))
     return report(false, all);
-  return { ...report(true, all), manifest: result.manifest, entrypoints: result.entrypoints, events: result.events };
+  const success = { ...report(true, all), manifest: result.manifest, entrypoints: result.entrypoints, events: result.events };
+  if (request.bindingsModule === undefined)
+    return success;
+  const bindings = await loadBindings(request.bindingsModule, app, result.manifest.handlers, request.root);
+  return "report" in bindings ? { ...success, bindings: bindings.report } : report(false, sortDiagnostics([...all, bindings.diagnostic]));
+}
+
+/**
+ * Imports a binding configuration module, checks that it binds the analyzed
+ * application, and resolves, validates and describes it.
+ *
+ * @param path - The module's absolute path.
+ * @param app - The analyzed application's default export.
+ * @param handlers - The manifest's handlers, whose triggers must be delivered.
+ * @param root - The application root, for messages.
+ * @returns The binding report, or the diagnostic that prevented it.
+ */
+async function loadBindings(path: string, app: unknown, handlers: readonly ValidatedHandler[], root: string): Promise<{ readonly report: BindingReport } | { readonly diagnostic: Diagnostic }> {
+  const display = relative(root, path).split(sep).join("/");
+  let exported: unknown;
+  try {
+    exported = (await import(pathToFileURL(path).href) as { readonly default?: unknown }).default;
+  } catch (error) {
+    return { diagnostic: moduleEvaluationFailure(display, error) };
+  }
+  if (!isBindingsDefinition(exported))
+    return { diagnostic: createDiagnostic({ code: diagnosticCodes.bindingConfigInvalid, severity: "error", message: `The module "${display}" does not export a binding configuration as its default export.`, hint: "Export default defineBindings(app, { ... }) from @holqa/bindings." }) };
+  if (exported.app !== getAppDescriptor(app))
+    return { diagnostic: createDiagnostic({ code: diagnosticCodes.bindingConfigInvalid, severity: "error", message: `The binding configuration "${exported.name}" in "${display}" binds the application "${exported.app.name}", not the analyzed application.`, hint: "Import the application from the same infra.ts module that is analyzed." }) };
+  return { report: inspectBindings(resolveBindings(exported), { handlers }) };
 }
 
 /**

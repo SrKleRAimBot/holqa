@@ -175,7 +175,9 @@ export const diagnosticCodes = {
   /** A binding configuration selects a provider that does not bind the resource's kind, or a service provider that does not supply the service. */
   bindingKindMismatch: "HOLQA_BINDING_KIND_MISMATCH",
   /** No provider is selected for a declared resource. */
-  bindingMissing: "HOLQA_BINDING_MISSING"
+  bindingMissing: "HOLQA_BINDING_MISSING",
+  /** A deployment's topology cannot deliver what the application needs, for example a provider that delivers no events for a resource with handlers, or a process-local scheduler with several replicas. */
+  bindingTopologyUnsupported: "HOLQA_BINDING_TOPOLOGY_UNSUPPORTED"
 } as const;
 
 /**

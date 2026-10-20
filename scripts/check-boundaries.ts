@@ -47,7 +47,7 @@ const allowedDependencies: Readonly<Record<string, readonly string[]>> = {
   "@holqa/bindings": ["@holqa/core"],
   "@holqa/local": ["@holqa/core", "@holqa/runtime-bun"],
   "@holqa/testing": ["@holqa/core", "@holqa/sdk", "@holqa/local", "@holqa/runtime-bun"],
-  "@holqa/cli": ["@holqa/core", "@holqa/compiler", "@holqa/local", "@holqa/runtime-bun", "@holqa/opentelemetry"]
+  "@holqa/cli": ["@holqa/core", "@holqa/bindings", "@holqa/compiler", "@holqa/local", "@holqa/runtime-bun", "@holqa/opentelemetry"]
 };
 
 /**

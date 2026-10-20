@@ -84,7 +84,7 @@ Schemas whose vendor is `holqa` (written by Holqa, such as the SDK's object-crea
 | HTTP API | `http.api` |
 | Trigger | `trigger.<trigger kind>`, for example `trigger.queue.message` |
 
-The numeric values of `maxAttempts` and `backoff` are in the queue's `requirements`. Checking capabilities against a binding at build time is **Planned**; `checkCapabilities` in `@holqa/core` does it when a binding is installed.
+The numeric values of `maxAttempts` and `backoff` are in the queue's `requirements`. `requiredCapabilities` in `@holqa/core` derives these strings; the compiler records what it returns, so the vocabulary only grows. `checkCapabilities` in `@holqa/core` compares requirements with a binding when it is installed, and `holqa bindings validate` and `holqa inspect --capabilities` compare them with a binding configuration before anything runs ([binding contracts](bindings.md#capabilities)).
 
 ## Entry point map
 

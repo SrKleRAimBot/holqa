@@ -9,10 +9,10 @@ import { runAnalysis } from "@/analysis/run-analysis";
  * @param argument - The JSON-encoded request.
  */
 async function main(argument: string | undefined): Promise<void> {
-  const request = JSON.parse(argument ?? "{}") as { readonly root?: unknown; readonly appModule?: unknown };
-  if (typeof request.root !== "string" || typeof request.appModule !== "string")
-    throw new Error("The analysis process needs a request with \"root\" and \"appModule\".");
-  const report = await runAnalysis({ root: request.root, appModule: request.appModule });
+  const request = JSON.parse(argument ?? "{}") as { readonly root?: unknown; readonly appModule?: unknown; readonly bindingsModule?: unknown };
+  if (typeof request.root !== "string" || typeof request.appModule !== "string" || (request.bindingsModule !== undefined && typeof request.bindingsModule !== "string"))
+    throw new Error("The analysis process needs a request with \"root\", \"appModule\" and optionally \"bindingsModule\".");
+  const report = await runAnalysis({ root: request.root, appModule: request.appModule, ...typeof request.bindingsModule === "string" ? { bindingsModule: request.bindingsModule } : {} });
   if (process.send === undefined)
     throw new Error("The analysis process must be started with an IPC channel.");
   process.send(JSON.stringify(report));

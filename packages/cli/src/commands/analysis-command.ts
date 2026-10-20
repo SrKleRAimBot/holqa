@@ -2,6 +2,7 @@ import type { Diagnostic } from "@holqa/core";
 
 import type {
   AnalysisSuccess,
+  AnalyzeOptions,
   CliHost
 } from "@/analysis/host";
 import type { CliIo } from "@/io";
@@ -34,11 +35,12 @@ export const defaultAppModule = "infra.ts";
  * @param io - Output streams.
  * @param json - Whether output is machine-readable.
  * @param app - The `--app` value, if any.
+ * @param options - A binding configuration module to resolve too.
  * @returns The successful analysis (diagnostic locations relative to the working directory) and the application module's absolute path, or `undefined` after reporting failure.
  */
-export async function analyzeApplication(host: CliHost, io: CliIo, json: boolean, app: string | undefined): Promise<{ readonly analysis: AnalysisSuccess; readonly appPath: string } | undefined> {
+export async function analyzeApplication(host: CliHost, io: CliIo, json: boolean, app: string | undefined, options?: AnalyzeOptions): Promise<{ readonly analysis: AnalysisSuccess; readonly appPath: string } | undefined> {
   const appPath = resolve(host.cwd, app ?? defaultAppModule);
-  const outcome = await host.analyze(appPath);
+  const outcome = options === undefined ? await host.analyze(appPath) : await host.analyze(appPath, options);
   if (!json && outcome.output !== "")
     io.stderr(outcome.output.trimEnd());
   const diagnostics = outcome.diagnostics.map(diagnostic => diagnostic.location === undefined

@@ -32,6 +32,7 @@ import {
   prepareWirePayload,
   requireBinding,
   resolveDriver,
+  resourceBindingInfo,
   validateInput
 } from "@holqa/core";
 
@@ -236,11 +237,13 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
       const app = ownerOf(handle, operation);
       const driver = resolveDriver(app, descriptor, operation);
       const delaySeconds = readDelay(sendOptions, operation);
+      // The provider selected for this queue decides its limits; composed bindings select one per resource.
+      const selected = resourceBindingInfo(requireBinding(app, operation), descriptor);
+      const capabilities = selected.capabilities.queue;
       if (delaySeconds > 0) {
-        const binding = requireBinding(app, operation);
-        const supported = binding.capabilities.queue?.maxDelaySeconds ?? 0;
+        const supported = capabilities?.maxDelaySeconds ?? 0;
         if (delaySeconds > supported)
-          failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${binding.name}" cannot delay messages for queue "${id}" by ${delaySeconds} seconds; it supports at most ${supported}.`);
+          failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${selected.binding}" cannot delay messages for queue "${id}" by ${delaySeconds} seconds; it supports at most ${supported}.`);
       }
       // Put the *input* form on the wire, as a JSON copy validated with the
       // same schema consumers decode it with. Forwarding the decoded output
@@ -248,7 +251,14 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
       // validation, and forwarding the caller's object would let later
       // mutation change what was sent.
       const payload = await prepareWirePayload(options.message, message, subject);
-      return driver.send(Object.freeze({ format: messageEnvelopeFormat, schemaVersion: options.schemaVersion, payload }), delaySeconds > 0 ? { delaySeconds } : {});
+      const envelope = Object.freeze({ format: messageEnvelopeFormat, schemaVersion: options.schemaVersion, payload });
+      const maxBytes = capabilities?.maxMessageBytes;
+      if (maxBytes !== undefined) {
+        const size = new TextEncoder().encode(JSON.stringify(envelope)).byteLength;
+        if (size > maxBytes)
+          failWith(diagnosticCodes.bindingCapabilityUnsupported, `Binding "${selected.binding}" accepts messages of at most ${maxBytes} bytes for queue "${id}"; this message is ${size} bytes.`, "Send a reference (for example an object key) instead of large content.");
+      }
+      return driver.send(envelope, delaySeconds > 0 ? { delaySeconds } : {});
     },
     consume: <const HandlerId extends string>(consumer: QueueConsumerOptions<HandlerId, InferOutput<Message>> & CheckResourceId<HandlerId>) => {
       const rawConsumer = requireOptions(consumer, `consumer of queue "${id}"`);

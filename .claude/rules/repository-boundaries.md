@@ -10,7 +10,7 @@
 | `@holqa/bindings` | core |
 | `@holqa/local` | core, runtime-bun |
 | `@holqa/testing` | core, sdk, local, runtime-bun |
-| `@holqa/cli` | core, compiler, local, runtime-bun |
+| `@holqa/cli` | core, bindings, compiler, local, runtime-bun |
 | `packages/integrations/*` | core, sdk, client |
 | `examples/*` | anything |
 

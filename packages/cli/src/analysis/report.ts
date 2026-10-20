@@ -1,3 +1,5 @@
+import type { BindingReport } from "@holqa/bindings";
+
 import type {
   Diagnostic,
   DiagnosticLocation
@@ -5,6 +7,7 @@ import type {
 
 import type { AnalysisOutcome } from "@/analysis/host";
 
+import { bindingReportFormat } from "@holqa/bindings";
 import {
   hasErrors,
   validateEntrypoints,
@@ -30,6 +33,8 @@ export interface AnalysisReport {
   readonly entrypoints?: unknown;
   /** The event dependency graph and its cycles, present only when `ok` is `true`. */
   readonly events?: unknown;
+  /** The resolved binding configuration, present only when `ok` is `true` and a bindings module was given. */
+  readonly bindings?: unknown;
   readonly diagnostics: readonly Diagnostic[];
 }
 
@@ -71,12 +76,43 @@ export async function readAnalysisReport(text: string, output: string): Promise<
   const entrypoints = await validateEntrypoints("entrypoints" in report ? report.entrypoints : undefined, manifest.value);
   if (!entrypoints.ok)
     return { ok: false, diagnostics: entrypoints.error, output };
+  let bindings: BindingReport | undefined;
+  if ("bindings" in report && report.bindings !== undefined) {
+    bindings = readBindingReport(report.bindings);
+    if (bindings === undefined)
+      return malformed(`The analysis process sent a binding report that is not in the ${bindingReportFormat} format.`, output);
+  }
+  const extra = bindings === undefined ? {} : { bindings };
   if (!("events" in report) || report.events === undefined)
-    return { ok: true, manifest: manifest.value, entrypoints: entrypoints.value, diagnostics, output };
+    return { ok: true, manifest: manifest.value, entrypoints: entrypoints.value, diagnostics, output, ...extra };
   const events = validateEventAnalysis(report.events);
   if (!events.ok)
     return { ok: false, diagnostics: events.error, output };
-  return { ok: true, manifest: manifest.value, entrypoints: entrypoints.value, events: events.value, diagnostics, output };
+  return { ok: true, manifest: manifest.value, entrypoints: entrypoints.value, events: events.value, diagnostics, output, ...extra };
+}
+
+/**
+ * Checks a binding report received from the analysis process, which ran
+ * application and provider code: it must be plain JSON in the binding report
+ * format, with lists where lists belong and only registered diagnostic codes.
+ *
+ * @param value - The received report.
+ * @returns The report, or `undefined` when it cannot be trusted.
+ */
+function readBindingReport(value: unknown): BindingReport | undefined {
+  if (!isJsonValue(value) || typeof value !== "object" || value === null || Array.isArray(value))
+    return undefined;
+  const candidate = value as { readonly format?: unknown; readonly name?: unknown; readonly application?: unknown; readonly resources?: unknown; readonly services?: unknown; readonly providers?: unknown; readonly diagnostics?: unknown };
+  if (candidate.format !== bindingReportFormat || typeof candidate.name !== "string" || typeof candidate.application !== "string")
+    return undefined;
+  if (!Array.isArray(candidate.resources) || !Array.isArray(candidate.services) || !Array.isArray(candidate.providers) || !Array.isArray(candidate.diagnostics))
+    return undefined;
+  const diagnostics = (candidate.diagnostics as readonly unknown[]).map(readDiagnostic);
+  if (diagnostics.includes(undefined))
+    return undefined;
+  const resources = candidate.resources as readonly unknown[];
+  const wellFormed = resources.every(resource => typeof resource === "object" && resource !== null && typeof (resource as { readonly id?: unknown }).id === "string" && typeof (resource as { readonly provider?: unknown }).provider === "string" && Array.isArray((resource as { readonly requirements?: unknown }).requirements));
+  return wellFormed ? { ...value, diagnostics } as unknown as BindingReport : undefined;
 }
 
 /**

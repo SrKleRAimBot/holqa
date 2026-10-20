@@ -10,7 +10,7 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | --- | --- | --- | --- |
 | `@holqa/core` | `packages/core` | **Implemented** (contracts) | Framework-neutral contracts: diagnostics, identity, descriptor protocol, resource and trigger registries, runtime binding. |
 | `@holqa/compiler` | `packages/compiler` | **Implemented** (manifest pipeline, schema contracts) | Handler discovery, graph validation, manifest version 1, schema contracts and compatibility checks. |
-| `@holqa/cli` | `packages/cli` | **Implemented** (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`) | The `holqa` command-line interface and local development supervisor. |
+| `@holqa/cli` | `packages/cli` | **Implemented** (help, version, `--json`, `inspect` with `--cycles` and `--capabilities`, `build --manifest`, `bindings inspect`, `bindings validate`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`) | The `holqa` command-line interface and local development supervisor. |
 | `@holqa/example-package-smoke` | `examples/package-smoke` | **Implemented** | Verifies built package outputs. |
 | `@holqa/example-schema-evolution` | `examples/schema-evolution` | **Implemented** | End-to-end schema contract corpus with Zod. |
 | `@holqa/example-manifest` | `examples/manifest` | **Implemented** | End-to-end compilation of SDK applications through the built CLI. |
@@ -88,6 +88,7 @@ Planned packages are directories containing only a README. They have no `package
 | `HandlerDefinition`, `Trigger`, `ResourceReference`, `InvocationContext`, `HandlerInvoke` | Types | Handler metadata (JSON) and the executable `invoke` contract. |
 | `RuntimeBinding`, `BindingCapabilities`, `ResourceDrivers`, `BindingSlot`, `createBindingSlot` | Types, function | The data-plane binding contract. `RuntimeBinding.describe(resource)` (optional) reports the provider and capabilities selected for one resource. |
 | `ResourceBindingInfo`, `resourceBindingInfo(binding, resource)` | Type, function | The provider name and capabilities that apply to one resource: `describe`'s answer, or the binding's own. |
+| `requiredCapabilities(resource)`, `providedCapabilities(kind, capabilities)`, `CapabilitySubject` | Functions, type | The required-capability vocabulary for both sides of capability negotiation. `QueueCapabilities.maxMessageBytes` limits each send. |
 | `bindingContracts`, `bindingContractNames`, `BindingContractName`, `bindingProtocolVersion`, `BindingProtocolVersion`, `mandatoryBindingContracts`, `isBindingContractName`, `contractVersionProblem` | Constants, types, functions | Versioned binding contracts and the exact-version compatibility check. See [binding contracts](bindings.md). |
 | `BindingProvider<Kinds, Services>`, `AnyBindingProvider`, `ProviderRole`, `BindingServiceName`, `ProviderContext`, `ProviderInstance`, `ConfigSource`, `ExecutionCapabilities`, `CapabilityEmulation`, `ProviderTopology`, `CredentialReference` | Types | The provider protocol. |
 | `isBindingProvider(value)`, `isProviderId(value)`, `credentialRef(name)`, `isCredentialReference(value)`, `validateProvider(value)` | Functions | Recognize and validate providers; create credential references (`HOLQA_BINDING_CONFIG_INVALID` for an invalid name). |
@@ -186,6 +187,8 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `ResolvedBindings`, `ResourceSelection`, `ResourceSelectionSource`, `ServiceSelectionResult`, `ServiceSelectionSource` | Types | Resolution results. |
 | `createBinding(resolved)` | Function | Composes a resolution into one `RuntimeBinding` with a lifecycle. |
 | `environmentConfig(options?)`, `EnvironmentConfigOptions`, `EnvironmentVariables` | Function, types | The configuration service provider for environment variables; the built-in fallback. |
+| `validateBindings(resolved, options?)`, `BindingValidationOptions`, `ValidatedHandler` | Function, types | Validates a resolution without opening providers: requirements, trigger delivery, topology (`HOLQA_BINDING_TOPOLOGY_UNSUPPORTED`), execution limits and event safety stores. |
+| `inspectBindings(resolved, options?)`, `bindingReportFormat`, `BindingReport`, `ResourceReport`, `RequirementReport`, `CapabilitySupport`, `ServiceReport`, `ProviderReport` | Function, constant, types | The `holqa.bindings/1` report: providers, selections and native, emulated or unsupported requirements. |
 
 ## `@holqa/local`
 

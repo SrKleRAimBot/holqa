@@ -39,6 +39,7 @@
     "clean": "rm -rf dist .turbo"
   },
   "dependencies": {
+    "@holqa/bindings": "workspace:*",
     "@holqa/compiler": "workspace:*",
     "@holqa/core": "workspace:*",
     "@holqa/local": "workspace:*",

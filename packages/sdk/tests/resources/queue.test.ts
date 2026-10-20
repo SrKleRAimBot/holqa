@@ -294,6 +294,31 @@ describe("queue consumers", () => {
     }
   });
 
+  it("applies the limits of the provider selected for the queue, not of the binding as a whole", async () => {
+    const jobs = queue({ id: "jobs", message: orderV1, schemaVersion: 1 });
+    const audit = queue({ id: "audit", message: orderV1, schemaVersion: 1 });
+    const app = defineApp({ name: "limits", resources: { jobs, audit } });
+    const base = createTestBinding({}, {});
+    const binding = {
+      ...base,
+      describe: (resource: { readonly id: string }) => resource.id === "jobs"
+        ? { binding: "delaying", capabilities: { queue: { delivery: ["at-least-once" as const], maxAttempts: 5, deadLetter: false, maxDelaySeconds: 60 } } }
+        : { binding: "small", capabilities: { queue: { delivery: ["at-least-once" as const], maxAttempts: 5, deadLetter: false, maxMessageBytes: 80 } } }
+    };
+    const unbind = bindApp(getAppDescriptor(app)!, binding);
+    try {
+      expect(await jobs.send({ orderId: "o" }, { delaySeconds: 60 })).toEqual({ messageId: "m-1" });
+      const delayed = await audit.send({ orderId: "o" }, { delaySeconds: 1 }).then(() => undefined, (error: HolqaError) => error.diagnostics[0]?.message);
+      expect(delayed).toBe("Binding \"small\" cannot delay messages for queue \"audit\" by 1 seconds; it supports at most 0.");
+      expect(await audit.send({ orderId: "o" })).toEqual({ messageId: "m-2" });
+      const large = await audit.send({ orderId: "o".repeat(100) }).then(() => undefined, (error: HolqaError) => error.code);
+      expect(large).toBe("HOLQA_BINDING_CAPABILITY_UNSUPPORTED");
+      expect(base.sent).toHaveLength(2);
+    } finally {
+      unbind();
+    }
+  });
+
   it("rejects malformed delays and delays the binding cannot honour, without sending", async () => {
     const jobs = queue({ id: "jobs", message: orderV1, schemaVersion: 1 });
     const app = defineApp({ name: "delays", resources: { jobs } });
