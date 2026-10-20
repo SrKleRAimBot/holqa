@@ -67,6 +67,10 @@ export interface DevRequest {
   readonly port: number;
   readonly hostname: string;
   readonly watch: boolean;
+  /** Whether implementation-only changes replace handlers in place. Default `true`. */
+  readonly hot?: boolean;
+  /** Whether to serve the development dashboard (only on loopback addresses). Default `true`. */
+  readonly dashboard?: boolean;
 }
 
 /** Settings of `holqa doctor`. */
@@ -93,6 +97,8 @@ export async function runDevSession(dependencies: LocalHostDependencies, request
     port: request.port,
     hostname: request.hostname,
     watch: request.watch,
+    ...request.hot === undefined ? {} : { hot: request.hot },
+    ...request.dashboard === undefined ? {} : { dashboard: request.dashboard },
     analyze: dependencies.analyze,
     writeFile: dependencies.writeFile,
     onEvent: (event) => {

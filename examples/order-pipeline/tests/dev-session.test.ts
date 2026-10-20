@@ -47,6 +47,9 @@ interface DevLine {
   readonly diagnostics?: unknown;
   readonly serving?: unknown;
   readonly pid?: unknown;
+  readonly reload?: unknown;
+  readonly handlers?: unknown;
+  readonly version?: unknown;
 }
 
 /** Every event it printed, parsed. */
@@ -179,11 +182,15 @@ describe("holqa dev on the order pipeline", () => {
     // File systems may report one save as several events; match the build by content, not by position.
     const build = await waitFor(event => event.type === "build", since);
     expect(build.change).toMatchObject({ kind: "implementation" });
-    await waitFor(event => event.type === "generation.ready", events.indexOf(build));
+    // Handler code is replaced in the running generation: no new process starts.
+    expect(build.reload).toMatchObject({ strategy: "swap", modules: ["src/orders.handler.ts"] });
+    const swapped = await waitFor(event => event.type === "handlers.swapped", events.indexOf(build));
+    expect(swapped.handlers).toEqual(expect.arrayContaining(["orders.process"]));
+    expect(events.slice(since).filter(event => event.type === "generation.ready")).toEqual([]);
     expect((await fetch(new URL("/api/orders/123", url))).status).toBe(200);
     const after = events.length;
     await fetch(new URL("/api/orders", url), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ orderId: "456" }) });
-    await waitForLog({ message: "order processed (v2)" }, after);
+    await waitForLog({ message: "order processed (v2)", handlerVersion: swapped.version }, after);
   });
 
   it("reports contract changes, and keeps serving when a change breaks the application", async () => {

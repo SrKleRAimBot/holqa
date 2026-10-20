@@ -4,6 +4,12 @@ import type {
   JsonValue
 } from "@holqa/core";
 
+import type {
+  SwapOutcome,
+  SwapRequest,
+  SwapVersion
+} from "@/local/hot-swap";
+
 import { isJsonValue } from "@holqa/core";
 
 import { readDiagnostic } from "@/analysis/report";
@@ -22,7 +28,8 @@ export type LocalOperation
     | { readonly kind: "storage.put"; readonly bucketId: string; readonly key: string; readonly contentType?: string; readonly body: string }
     | { readonly kind: "cron.run"; readonly scheduleId: string }
     | { readonly kind: "state" }
-    | { readonly kind: "doctor" };
+    | { readonly kind: "doctor" }
+    | { readonly kind: "handlers" };
 
 /** What an operation produced: a JSON result, or the diagnostics that explain why it failed. */
 export type OperationResponse
@@ -45,6 +52,8 @@ export interface GenerationRequest {
   readonly publicOrigin: string;
   /** The generation number, for logs. */
   readonly generation: number;
+  /** Queues whose message contract changed: messages already waiting in them are checked against the new contract and reported. */
+  readonly revalidateQueues?: readonly string[];
 }
 
 /** Messages from the generation process to the CLI. */
@@ -55,12 +64,14 @@ export type GenerationMessage
     | { readonly type: "result"; readonly id: string; readonly response: OperationResponse }
     | { readonly type: "log"; readonly entry: JsonObject }
     | { readonly type: "failed"; readonly diagnostics: readonly Diagnostic[] }
+    | { readonly type: "swap-result"; readonly id: string; readonly outcome: SwapOutcome }
     | { readonly type: "stopped" };
 
 /** Messages from the CLI to the generation process. */
 export type ControlMessage
   = | { readonly type: "activate" }
     | { readonly type: "operation"; readonly id: string; readonly operation: LocalOperation }
+    | { readonly type: "swap"; readonly id: string; readonly swap: SwapRequest }
     | { readonly type: "stop" };
 
 /**
@@ -84,6 +95,8 @@ interface RawFields {
   readonly dryRun?: unknown;
   readonly newOperation?: unknown;
   readonly messageId?: unknown;
+  readonly outcome?: unknown;
+  readonly swap?: unknown;
 }
 
 /**
@@ -117,6 +130,10 @@ export function readGenerationMessage(text: unknown): GenerationMessage | undefi
       const diagnostics = readDiagnostics(value.diagnostics);
       return diagnostics === undefined ? undefined : { type: "failed", diagnostics };
     }
+    case "swap-result": {
+      const outcome = readSwapOutcome(value.outcome);
+      return typeof value.id === "string" && outcome !== undefined ? { type: "swap-result", id: value.id, outcome } : undefined;
+    }
     default:
       return undefined;
   }
@@ -138,7 +155,80 @@ export function readControlMessage(text: unknown): ControlMessage | undefined {
     const operation = readOperation(value.operation);
     return operation === undefined ? undefined : { type: "operation", id: value.id, operation };
   }
+  if (value.type === "swap" && typeof value.id === "string") {
+    if (!isJsonObject(value.swap))
+      return undefined;
+    const { modules, shared } = value.swap as { readonly modules?: unknown; readonly shared?: unknown };
+    if (!isStringList(modules) || !isStringList(shared))
+      return undefined;
+    return { type: "swap", id: value.id, swap: { modules, shared } };
+  }
   return undefined;
+}
+
+/**
+ * Reports whether a value is a list of strings.
+ *
+ * @param value - The candidate.
+ * @returns `true` for arrays whose entries are all strings.
+ */
+function isStringList(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every(entry => typeof entry === "string");
+}
+
+/**
+ * Reads handler versions, checking every field.
+ *
+ * @param value - The candidate list.
+ * @returns The versions, or `undefined` when any is malformed.
+ */
+export function readSwapVersions(value: unknown): SwapVersion[] | undefined {
+  if (!Array.isArray(value))
+    return undefined;
+  const versions: SwapVersion[] = [];
+  /**
+   * Reports whether a value is a non-negative safe integer.
+   *
+   * @param candidate - The value.
+   * @returns `true` for counts and version numbers.
+   */
+  const count = (candidate: unknown): candidate is number => typeof candidate === "number" && Number.isSafeInteger(candidate) && candidate >= 0;
+  for (const entry of value as readonly unknown[]) {
+    const candidate = entry as { readonly handlerId?: unknown; readonly version?: unknown; readonly active?: unknown; readonly retiring?: unknown } | null;
+    if (typeof candidate !== "object" || candidate === null || typeof candidate.handlerId !== "string" || !count(candidate.version) || !count(candidate.active) || !Array.isArray(candidate.retiring))
+      return undefined;
+    const retiring: Array<{ readonly version: number; readonly active: number }> = [];
+    for (const old of candidate.retiring as readonly unknown[]) {
+      const record = old as { readonly version?: unknown; readonly active?: unknown } | null;
+      if (typeof record !== "object" || record === null || !count(record.version) || !count(record.active))
+        return undefined;
+      retiring.push({ version: record.version, active: record.active });
+    }
+    versions.push({ handlerId: candidate.handlerId, version: candidate.version, active: candidate.active, retiring });
+  }
+  return versions;
+}
+
+/**
+ * Reads the outcome of a replacement, checking every field.
+ *
+ * @param candidate - A parsed JSON value.
+ * @returns The outcome, or `undefined` when it is malformed.
+ */
+function readSwapOutcome(candidate: unknown): SwapOutcome | undefined {
+  if (!isJsonObject(candidate))
+    return undefined;
+  const value = candidate as { readonly ok?: unknown; readonly version?: unknown; readonly handlers?: unknown; readonly durationMs?: unknown; readonly versions?: unknown; readonly restart?: unknown; readonly reason?: unknown; readonly diagnostics?: unknown };
+  if (value.ok === true) {
+    const versions = readSwapVersions(value.versions);
+    if (typeof value.version !== "number" || !Number.isSafeInteger(value.version) || !isStringList(value.handlers) || typeof value.durationMs !== "number" || versions === undefined)
+      return undefined;
+    return { ok: true, version: value.version, handlers: value.handlers, durationMs: value.durationMs, versions };
+  }
+  const diagnostics = readDiagnostics(value.diagnostics);
+  if (value.ok !== false || typeof value.restart !== "boolean" || diagnostics === undefined || (value.reason !== undefined && value.reason !== "side-effects" && value.reason !== "replacement-rejected"))
+    return undefined;
+  return { ok: false, restart: value.restart, ...value.reason === undefined ? {} : { reason: value.reason }, diagnostics };
 }
 
 /**
@@ -209,6 +299,7 @@ export function readOperation(candidate: unknown): LocalOperation | undefined {
     }
     case "state":
     case "doctor":
+    case "handlers":
       return { kind: value.kind };
     default:
       return undefined;

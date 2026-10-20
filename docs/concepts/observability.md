@@ -1,6 +1,6 @@
 # Observability
 
-> **Status:** **Implemented** for structured logging with redaction, distributed tracing with W3C trace context, framework metrics, OTLP/HTTP export (`@holqa/opentelemetry`), the local telemetry store and the telemetry commands of the CLI, and in-memory telemetry for tests, in the private, unpublished packages. A graphical dashboard, an `@opentelemetry/api` bridge and OTLP over protobuf or gRPC are **Planned**. See [ADR 0027](../architecture/decisions/0027-observability-telemetry-and-local-inspection.md).
+> **Status:** **Implemented** for structured logging with redaction, distributed tracing with W3C trace context, framework metrics, OTLP/HTTP export (`@holqa/opentelemetry`), the local telemetry store and the telemetry commands of the CLI, and in-memory telemetry for tests, in the private, unpublished packages. A graphical trace timeline view, an `@opentelemetry/api` bridge and OTLP over protobuf or gRPC are **Planned**. See [ADR 0027](../architecture/decisions/0027-observability-telemetry-and-local-inspection.md).
 
 Holqa observes every execution the same way, whatever triggered it: HTTP routes, RPC procedures, queue messages, object events and scheduled runs all run through one dispatcher, which writes structured logs, records spans and updates metrics. Telemetry follows the OpenTelemetry data model and W3C Trace Context, so it can be sent to any backend that accepts OTLP. No monitoring provider is required, and local development needs no hosted account.
 
@@ -168,7 +168,7 @@ Before an entry reaches a sink or a span reaches an exporter:
 - Cumulative temporality only; no exemplars.
 - Log records are not exported unless `telemetry.exportLogs` is set, because the OpenTelemetry JavaScript logs signal is still under development.
 - Metrics restart with each runtime instance, including each `holqa dev` generation; the local store adds up instances that reported recently.
-- A graphical dashboard for traces and event timelines is **Planned**.
+- The read-only local development dashboard of `holqa dev` (**Implemented**, see [local development](local-development.md)) lists recent logs, invocations and traces from the local telemetry store. A graphical timeline or flame view of traces and event chains is **Planned**.
 
 ## Related
 

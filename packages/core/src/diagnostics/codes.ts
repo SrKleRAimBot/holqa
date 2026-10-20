@@ -153,7 +153,11 @@ export const diagnosticCodes = {
   /** A telemetry exporter rejected or timed out on a batch, or the export buffer was full; the records were dropped. Invocations are unaffected. */
   telemetryExportFailed: "HOLQA_TELEMETRY_EXPORT_FAILED",
   /** A trace, event or other telemetry record asked for by identifier was not found in the local telemetry store. */
-  telemetryNotFound: "HOLQA_TELEMETRY_NOT_FOUND"
+  telemetryNotFound: "HOLQA_TELEMETRY_NOT_FOUND",
+  /** A hot handler replacement named an unknown handler, named one twice, or changed a handler's definition; nothing was replaced. */
+  handlerReplacementInvalid: "HOLQA_HANDLER_REPLACEMENT_INVALID",
+  /** Messages already waiting in a local queue do not match the queue's changed message contract. A warning: the messages are kept. */
+  queuedMessageIncompatible: "HOLQA_QUEUED_MESSAGE_INCOMPATIBLE"
 } as const;
 
 /**

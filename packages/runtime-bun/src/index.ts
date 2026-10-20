@@ -11,6 +11,7 @@ export type {
 } from "@/dispatch/dispatcher";
 export type { EventGuardViolation, RuntimeEventLimits } from "@/dispatch/event-guard";
 export type { InvocationFailure } from "@/dispatch/failure";
+export type { HandlerRegistryStats, HandlerVersionInfo } from "@/dispatch/handler-registry";
 export type {
   EmittedEvent,
   EmittedObjectChange,
@@ -28,6 +29,8 @@ export type {
 } from "@/logging/log";
 export { createRuntime } from "@/runtime/create-runtime";
 export type {
+  HandlerReplacement,
+  ReplaceHandlersOptions,
   Runtime,
   RuntimeHttpOptions,
   RuntimeLimits,

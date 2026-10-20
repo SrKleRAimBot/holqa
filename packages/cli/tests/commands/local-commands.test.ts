@@ -166,3 +166,21 @@ describe("holqa doctor", () => {
     expect(JSON.parse(json.stderr)).toMatchObject({ diagnostics: [{ code: "HOLQA_DOCTOR_CHECK_FAILED" }, { code: "HOLQA_LOCAL_STATE_UNSUPPORTED" }] });
   });
 });
+
+describe("holqa dev options", () => {
+  it("passes --no-hot and --no-dashboard to the dev session, and defaults both on", async () => {
+    const requests: Array<{ readonly hot?: boolean; readonly dashboard?: boolean; readonly watch: boolean }> = [];
+    const base = fakeHost(await compiledOutcome());
+    const host: CliHost = {
+      ...base,
+      dev: async (request) => {
+        requests.push(request);
+        return { ok: true, value: undefined };
+      }
+    };
+    expect((await run(["dev", "--no-hot", "--no-dashboard"], host)).code).toBe(0);
+    expect((await run(["dev"], host)).code).toBe(0);
+    expect(requests.map(({ hot, dashboard, watch }) => ({ hot, dashboard, watch }))).toEqual([{ hot: false, dashboard: false, watch: true }, { hot: true, dashboard: true, watch: true }]);
+    expect((await run(["dev", "--no-hot=yes"], host)).code).toBe(2);
+  });
+});

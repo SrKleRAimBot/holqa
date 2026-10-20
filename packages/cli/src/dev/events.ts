@@ -10,6 +10,8 @@ import type {
 } from "@holqa/core";
 
 import type { ManifestChange } from "@/dev/classify";
+import type { ReloadPlan } from "@/dev/reload-plan";
+import type { SwapVersion } from "@/local/hot-swap";
 
 import {
   httpEndpoint,
@@ -48,15 +50,23 @@ export interface ApplicationSummary extends JsonObject {
 
 /**
  * Something that happened in a dev session. With `--json`, each event is
- * written to standard output as one JSON line, tagged with `type`.
+ * written to standard output as one JSON line, tagged with `type`. Consumers
+ * should ignore event types and fields they do not know: new ones are added
+ * in minor versions.
+ *
+ * `serving` names the generation that keeps running after a failure; `stale`
+ * is `true` when that generation runs code from before the failed change.
  */
 export type DevEvent
-  = | { readonly type: "dev.listening"; readonly url: string; readonly stateDirectory: string; readonly buildDirectory: string; readonly watching: boolean }
+  = | { readonly type: "dev.listening"; readonly url: string; readonly stateDirectory: string; readonly buildDirectory: string; readonly watching: boolean; readonly hot?: boolean; readonly dashboard?: string }
     | { readonly type: "change"; readonly files: readonly string[] }
-    | { readonly type: "build"; readonly generation: number; readonly change: ManifestChange; readonly fingerprint: string; readonly durationMs: number; readonly diagnostics: readonly Diagnostic[] }
-    | { readonly type: "build.failed"; readonly diagnostics: readonly Diagnostic[]; readonly serving?: number }
+    | { readonly type: "build"; readonly generation: number; readonly change: ManifestChange; readonly fingerprint: string; readonly durationMs: number; readonly diagnostics: readonly Diagnostic[]; readonly reload?: ReloadPlan }
+    | { readonly type: "build.failed"; readonly diagnostics: readonly Diagnostic[]; readonly serving?: number; readonly stale?: boolean }
+    | { readonly type: "handlers.swapped"; readonly generation: number; readonly version: number; readonly handlers: readonly string[]; readonly modules: readonly string[]; readonly durationMs: number; readonly versions: readonly SwapVersion[] }
+    | { readonly type: "handlers.swap-failed"; readonly generation: number; readonly diagnostics: readonly Diagnostic[]; readonly serving: number; readonly stale: true }
+    | { readonly type: "handlers.swap-refused"; readonly generation: number; readonly reason: string; readonly diagnostics: readonly Diagnostic[] }
     | { readonly type: "generation.ready"; readonly generation: number; readonly pid: number; readonly durationMs: number; readonly summary: ApplicationSummary }
-    | { readonly type: "generation.failed"; readonly generation: number; readonly diagnostics: readonly Diagnostic[]; readonly serving?: number }
+    | { readonly type: "generation.failed"; readonly generation: number; readonly diagnostics: readonly Diagnostic[]; readonly serving?: number; readonly stale?: boolean }
     | { readonly type: "generation.stopped"; readonly generation: number; readonly exitCode: number | null }
     | { readonly type: "generation.exited"; readonly generation: number; readonly exitCode: number | null }
     | { readonly type: "log"; readonly generation: number; readonly entry: JsonObject }

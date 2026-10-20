@@ -2,6 +2,8 @@ export { createTestApp } from "@/app/create-test-app";
 export type {
   DrainOptions,
   InvocationFilter,
+  RecordingOptions,
+  ReplayOptions,
   TestApp,
   TestAppOptions,
   TestInvokeOptions
@@ -9,6 +11,12 @@ export type {
 export type { FailureOptions } from "@/app/faults";
 export { invocationRecords } from "@/app/invocation-records";
 export type { InvocationRecord } from "@/app/invocation-records";
+export { recordingFormat } from "@/app/recording";
+export type {
+  ChainStep,
+  RecordedInvocation,
+  Recording
+} from "@/app/recording";
 export { lineageOf } from "@/app/simulation-budget";
 export { createMemoryTelemetry, spanTree } from "@/telemetry/memory-telemetry";
 export type {

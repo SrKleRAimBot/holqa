@@ -1,6 +1,6 @@
 # Observability guide
 
-> **Status:** **Implemented** in the private, unpublished packages; every command and API on this page runs today. A graphical dashboard is **Planned**. The examples come from [`examples/observability`](../../examples/observability/README.md).
+> **Status:** **Implemented** in the private, unpublished packages; every command and API on this page runs today. The local development dashboard of `holqa dev` is described in the [local development guide](local-development.md); a graphical trace timeline view is **Planned**. The examples come from [`examples/observability`](../../examples/observability/README.md).
 
 This guide shows how to read the logs, traces and metrics of a Holqa application locally, how to send them to an OpenTelemetry-compatible backend, how to configure telemetry when you run the runtime yourself, and how to assert on telemetry in tests. The concepts are in [observability](../concepts/observability.md).
 

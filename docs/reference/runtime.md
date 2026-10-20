@@ -1,6 +1,6 @@
 # Runtime
 
-> **Status:** **Implemented** in `@holqa/runtime-bun` (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, `Bun.serve` adapter), `@holqa/sdk` (`route`, `procedure`, `reply`, `middleware`, `scoped`, queue, bucket and schedule operations) and `@holqa/core` (wire contracts, delivery sources, cron evaluation), including event lineage, event limits and handler idempotency ([event safety](../concepts/event-safety.md)) and telemetry: spans, metrics, redaction and export ([observability](../concepts/observability.md)). Reloads are **Implemented** by `holqa dev` as process restarts, one process per generation ([ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md), [CLI reference](cli.md)); in-process module reloading and worker isolation are **Planned**. All packages are private and unpublished.
+> **Status:** **Implemented** in `@holqa/runtime-bun` (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, `Bun.serve` adapter), `@holqa/sdk` (`route`, `procedure`, `reply`, `middleware`, `scoped`, queue, bucket and schedule operations) and `@holqa/core` (wire contracts, delivery sources, cron evaluation), including event lineage, event limits and handler idempotency ([event safety](../concepts/event-safety.md)) and telemetry: spans, metrics, redaction and export ([observability](../concepts/observability.md)). Reloads are **Implemented** by `holqa dev` as process restarts, one process per generation ([ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md), [CLI reference](cli.md)), and as in-place handler replacement through the versioned handler registry ([ADR 0028](../architecture/decisions/0028-hot-handler-replacement.md)); module unloading and worker isolation are **Planned**. All packages are private and unpublished.
 
 This page specifies how a Holqa application executes: the invocation lifecycle shared by every trigger, the HTTP route contract, the `holqa.rpc/1` protocol, middleware ordering, and how queue messages, object events and scheduled runs are delivered. The design is recorded in [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) and [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md). The local binding that delivers them on one machine is described in the [local environment reference](local.md).
 
@@ -78,6 +78,25 @@ stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 6. removes the binding;
 7. exports the remaining telemetry and shuts exporters down, waiting at most `telemetryMs`.
 
+### Handler versions
+
+A runtime keeps a versioned registry of handler implementations. Development tools replace implementations in place with `runtime.replaceHandlers`; applications that never call it see one version per handler and logs without version fields.
+
+```ts
+const { version, handlers } = runtime.replaceHandlers([newProcessOrder], { sources: { "orders.process": "src/orders.ts#processOrder" } });
+runtime.handlerVersions(); // [{ handlerId: "orders.process", version: 2, active: 0, retiring: [{ version: 1, active: 1 }] }, ...]
+```
+
+| Aspect | Behaviour |
+| --- | --- |
+| Atomicity | One call installs every listed implementation as one new registry version (`stats().versions.version`), or none. |
+| What may change | Only the implementation. A registration that names an unknown handler, names one twice, or changes the definition (trigger, event policy, idempotency) or the schema roles fails with `HOLQA_HANDLER_REPLACEMENT_INVALID`, one diagnostic per problem. Schema contents are not compared; the caller checks contracts (`holqa dev` does, through the compiler). |
+| Pinning | An invocation runs the implementation that is current when it gets its concurrency slot, until its code finishes. In-flight invocations finish under the previous implementation or reach their time limit. |
+| Triggers | Delivery workers, schedule subscriptions, routes and concurrency limits belong to the handler and are untouched: a queue keeps one consumer. |
+| Retirement | A replaced implementation retires when its last execution (orphans included) finishes. Its view of the application scope aborts its `signal`, and scoped values that no remaining implementation used are disposed of. A later use creates a fresh value. |
+| Logs and spans | Invocations of replaced implementations carry `handlerVersion` (log field) and `holqa.handler.version` (span attribute). `handlers replaced` (info) and `handler version retired` (debug) are logged. |
+| State | `replaceHandlers` works in the `idle`, `starting` and `running` states and fails with `HOLQA_RUNTIME_NOT_RUNNING` once the runtime is stopping. |
+
 `serve(...).stop()` stops the runtime first, while the server keeps listening and answers new requests with `503`, then waits up to `forceMs` for responses that are still being written, then closes every connection.
 
 ## Invocations
@@ -110,7 +129,7 @@ if (!outcome.ok)
 
 ### Application scope and invocation context
 
-The runtime is one **application execution context**: one bound application instance, one binding, and one `ApplicationScope`. Each **invocation** gets its own context: `invocationId`, `correlationId`, `signal`, `metadata`, a logger bound to its identifiers, and the shared `scope`.
+The runtime is one **application execution context**: one bound application instance, one binding, and one `ApplicationScope`. Each **invocation** gets its own context: `invocationId`, `correlationId`, `signal`, `metadata`, a logger bound to its identifiers, and the shared `scope`. Each handler version receives its own view of the scope: values are shared by every view, but a view's `signal` also aborts when that version retires after a [replacement](#handler-versions).
 
 ```ts
 import { scoped } from "@holqa/sdk";
@@ -488,7 +507,8 @@ Loading evaluates the application's code in the current process with its permiss
 | Bindings for external queue, storage and scheduling services | Planned |
 | Topics with independent subscriptions (fan-out) | Planned |
 | Reload by process restart (`holqa dev`) | **Implemented** in `@holqa/cli` ([ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md)) |
-| In-process module reloading, worker isolation per application | Planned |
+| In-place handler replacement (`replaceHandlers`, used by `holqa dev`) | **Implemented** ([ADR 0028](../architecture/decisions/0028-hot-handler-replacement.md)) |
+| Module unloading, worker isolation per application | Planned |
 | Middleware for background triggers | Planned |
 | Queue backlog thresholds, per-operation budgets on bindings other than `@holqa/local` | Planned |
 | `@opentelemetry/api` bridge, OTLP over protobuf or gRPC, exporter retries | Planned |

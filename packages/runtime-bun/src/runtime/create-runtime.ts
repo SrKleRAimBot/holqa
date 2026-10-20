@@ -16,6 +16,10 @@ import type {
   RegisteredHandler
 } from "@/dispatch/dispatcher";
 import type { RuntimeEventLimits } from "@/dispatch/event-guard";
+import type {
+  HandlerRegistryStats,
+  HandlerVersionInfo
+} from "@/dispatch/handler-registry";
 import type { CorsOptions } from "@/http/cors";
 import type {
   LogLevel,
@@ -45,6 +49,7 @@ import {
   EventGuard,
   eventLimitProblems
 } from "@/dispatch/event-guard";
+import { HandlerRegistry } from "@/dispatch/handler-registry";
 import { InvocationTracker } from "@/dispatch/invocation-tracker";
 import { Semaphore } from "@/dispatch/semaphore";
 import { CorsPolicy } from "@/http/cors";
@@ -57,6 +62,7 @@ import {
 } from "@/logging/log";
 import { RuntimeScope } from "@/runtime/application-scope";
 import { createEnvironmentBinding } from "@/runtime/environment-binding";
+import { checkReplacements } from "@/runtime/handler-replacement";
 import { traceBinding } from "@/runtime/traced-binding";
 import {
   RuntimeTelemetry,
@@ -176,6 +182,22 @@ export interface RuntimeStats extends DispatchStats {
   readonly delivery: TransportStats;
   /** Counters of recorded, exported and dropped telemetry. */
   readonly telemetry: TelemetryStats;
+  /** The handler registry's version and how many replaced implementations are still finishing work. */
+  readonly versions: HandlerRegistryStats;
+}
+
+/** Settings of {@link Runtime.replaceHandlers}. */
+export interface ReplaceHandlersOptions {
+  /** Where each replacement is implemented, `<module>#<export>`, by handler identifier; logged with failures. */
+  readonly sources?: Readonly<Record<string, string>>;
+}
+
+/** The outcome of a successful {@link Runtime.replaceHandlers}. */
+export interface HandlerReplacement {
+  /** The new registry version, which the replaced handlers' implementations now carry. */
+  readonly version: number;
+  /** The replaced handlers' identifiers, sorted. */
+  readonly handlers: readonly string[];
 }
 
 /** Control over a runtime's telemetry. */
@@ -221,6 +243,25 @@ export interface Runtime {
   readonly fetch: (request: Request) => Promise<Response>;
   readonly stats: () => RuntimeStats;
   readonly telemetry: RuntimeTelemetryControl;
+  /**
+   * Replaces the implementations of registered handlers in place, atomically,
+   * as one new registry version: invocations that start afterwards run the
+   * new code, while invocations already running finish under the code they
+   * started with (or reach their time limit). Triggers, delivery workers,
+   * concurrency limits and local state are untouched, so a queue keeps
+   * exactly one consumer. A replaced implementation retires once its last
+   * invocation finishes: its scope view's signal aborts and scoped values
+   * that only it used are disposed of.
+   *
+   * Intended for development tools such as `holqa dev`. Definitions
+   * (trigger, event policy, idempotency, schema roles) must not change; the
+   * caller is responsible for checking that schema contents did not change.
+   *
+   * @throws {HolqaError} `HOLQA_HANDLER_REPLACEMENT_INVALID`, one per problem, and nothing is replaced; `HOLQA_RUNTIME_NOT_RUNNING` once the runtime is stopping.
+   */
+  readonly replaceHandlers: (handlers: readonly unknown[], options?: ReplaceHandlersOptions) => HandlerReplacement;
+  /** Describes every handler's current implementation and the replaced ones still running, sorted by identifier. */
+  readonly handlerVersions: () => readonly HandlerVersionInfo[];
 }
 
 /** Default limits. */
@@ -286,6 +327,14 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   });
   logger = new StructuredLogger({ sink: options.log ?? jsonLineSink(), clock: wallClock, level: options.logLevel ?? "debug", redactor, onRecord: record => telemetry.log(record) }, { application: app.name });
   const scope = new RuntimeScope(logger);
+  const sources = readSources(options.handlerSources);
+  const registry = new HandlerRegistry(handlers, {
+    open: owner => scope.open(owner),
+    release: owner => scope.release(owner),
+    retired: (handlerId, version, error) => error === undefined
+      ? logger!.write("debug", "handler version retired", { handlerId, handlerVersion: version })
+      : logger!.write("error", "releasing a retired handler version failed", { handlerId, handlerVersion: version, error: error instanceof Error ? error.message : String(error) })
+  }, sources);
   const tracker = new InvocationTracker();
   const guard = new EventGuard(app, [...handlers.values()].map(handler => handler.definition), options.events);
   let state: RuntimeState = "idle";
@@ -302,7 +351,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     scope: scope.scope,
     accepting: () => state === "running",
     tracker,
-    sources: readSources(options.handlerSources),
+    registry,
+    sources,
     telemetry
   });
   telemetry.gauge(frameworkMetrics.activeInvocations, () => {
@@ -387,7 +437,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         // Settle (acknowledge, retry or release) every delivery before the binding goes away.
         await transports.settled();
       }
-      // Scoped values stay usable while in-flight invocations drain.
+      // Scoped values stay usable while in-flight invocations drain; releases of retired handler versions finish first.
+      await registry.released();
       await scope.dispose();
       unbind?.();
       unbind = undefined;
@@ -410,8 +461,19 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // Lineage is assigned by the runtime: a direct invocation is always a root.
     invoke: ({ rootId: _rootId, depth: _depth, ...request }: InvocationRequest) => dispatcher.dispatch(request),
     fetch,
-    stats: () => Object.freeze({ state, ...dispatcher.stats(), delivery: transports.stats(), telemetry: telemetry.stats() }),
-    telemetry: Object.freeze({ enabled: telemetry.enabled, flush: () => telemetry.flush() })
+    stats: () => Object.freeze({ state, ...dispatcher.stats(), delivery: transports.stats(), telemetry: telemetry.stats(), versions: registry.stats() }),
+    telemetry: Object.freeze({ enabled: telemetry.enabled, flush: () => telemetry.flush() }),
+    replaceHandlers: (replacements: readonly unknown[], replaceOptions: ReplaceHandlersOptions = {}): HandlerReplacement => {
+      if (state === "stopping" || state === "stopped")
+        throw new HolqaError(createDiagnostic({ code: diagnosticCodes.runtimeNotRunning, severity: "error", message: `The runtime for "${app.name}" is ${state}; its handlers cannot be replaced.` }));
+      const { entries, problems: replacementProblems } = checkReplacements(handlers, replacements, replaceOptions.sources);
+      if (replacementProblems.length > 0)
+        throw new HolqaError(replacementProblems);
+      const replacement = registry.replace(entries);
+      logger.write("info", "handlers replaced", { handlerVersion: replacement.version, handlers: [...replacement.handlers] });
+      return Object.freeze(replacement);
+    },
+    handlerVersions: () => registry.snapshot()
   });
 }
 

@@ -26,6 +26,11 @@ import type {
 
 import type { FailureOptions } from "@/app/faults";
 import type { InvocationRecord } from "@/app/invocation-records";
+import type {
+  ChainStep,
+  RecordedInvocation,
+  Recording
+} from "@/app/recording";
 import type { MemoryTelemetry } from "@/telemetry/memory-telemetry";
 import {
   mkdtempSync,
@@ -37,6 +42,7 @@ import { join } from "node:path";
 import {
   checkObjectKey,
   createDiagnostic,
+  createRedactor,
   diagnosticCodes,
   failWith,
   getAppDescriptor,
@@ -48,6 +54,12 @@ import { createRuntime } from "@holqa/runtime-bun";
 
 import { FaultPlan } from "@/app/faults";
 import { invocationRecords } from "@/app/invocation-records";
+import {
+  chainSteps,
+  createRecording,
+  InvocationRecorder,
+  readRecordedInvocations
+} from "@/app/recording";
 import {
   lineageOf,
   SimulationBudget
@@ -120,6 +132,34 @@ export interface TestInvokeOptions {
 export interface DrainOptions {
   /** The most virtual time to move forward, in milliseconds. Default one hour. */
   readonly maxMs?: number;
+}
+
+/** Settings of {@link TestApp.recording}. */
+export interface RecordingOptions {
+  /**
+   * Redact fields with sensitive names, the extra `redact.keys` of the test
+   * app and the values of declared secrets from inputs and metadata, as logs
+   * are redacted. Default `true`: recordings are meant to be stored. Redaction
+   * can change what a replay does.
+   */
+  readonly sanitize?: boolean;
+  /** Only invocations of this handler. */
+  readonly handlerId?: string;
+  /** Only invocations that descend from this root operation. */
+  readonly rootId?: string;
+}
+
+/** Settings of {@link TestApp.replay}. */
+export interface ReplayOptions {
+  /**
+   * For a whole recording: replay only its root invocations (depth 0) and let
+   * the application's code cause the rest again, which is what a regression
+   * test usually wants. `false` replays every recorded invocation
+   * individually. Default `true`. Ignored for single invocations and lists.
+   */
+  readonly rootsOnly?: boolean;
+  /** Run the work each replayed invocation causes before the next one starts. Default `true`. */
+  readonly flush?: boolean;
 }
 
 /** Which invocations {@link TestApp.invocations} returns. */
@@ -216,6 +256,28 @@ export interface TestApp {
   /** Every finished invocation that descends from one root operation, the root included, in order. */
   readonly operation: (rootId: string) => InvocationRecord[];
   /**
+   * Returns what handlers received so far, as a JSON recording that can be
+   * stored and replayed. HTTP requests are recorded but not replayable.
+   */
+  readonly recording: (options?: RecordingOptions) => Recording;
+  /**
+   * Replays recorded invocations: each one runs its handler again with the
+   * recorded input and trigger metadata through `runtime.invoke`, followed by
+   * the work it causes. With the test app's virtual clock and identifiers the
+   * replay is deterministic, as far as handler code is: external side effects
+   * (network calls, other databases, real time) are reproduced only through
+   * explicit mocks or fixtures.
+   *
+   * @throws {HolqaError} `HOLQA_OPERATION_INVALID` for a malformed recording or an invocation that is not replayable; `HOLQA_HANDLER_NOT_FOUND` comes back as a failed outcome.
+   */
+  readonly replay: (source: Recording | RecordedInvocation | readonly RecordedInvocation[], options?: ReplayOptions) => Promise<InvocationOutcome[]>;
+  /**
+   * Steps through one root operation's causal chain: every finished
+   * invocation that descends from it, depth first in causal order, each with
+   * its recorded input and the step that caused it.
+   */
+  readonly chain: (rootId: string) => ChainStep[];
+  /**
    * Spans, metrics and exported log records, recorded in memory. Call
    * `flushTelemetry` before asserting on them: exports run in the background.
    */
@@ -278,6 +340,7 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
   if (!Number.isSafeInteger(maxInvocations) || maxInvocations < 1)
     failWith(diagnosticCodes.declarationInvalid, `"maxInvocations" must be a positive integer, not ${JSON.stringify(options.maxInvocations)}.`);
   const budget = new SimulationBudget(maxInvocations);
+  const recorder = new InvocationRecorder();
   const logs: LogEntry[] = [];
   const memory = createMemoryTelemetry();
   let spanSequence = 0;
@@ -297,7 +360,7 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
     });
     runtime = createRuntime({
       app: options.app,
-      handlers: options.handlers.map(handler => budget.instrument(faults.instrument(handler))),
+      handlers: options.handlers.map(handler => recorder.instrument(budget.instrument(faults.instrument(handler)))),
       ...options.handlerSources === undefined ? {} : { handlerSources: options.handlerSources },
       binding: local.binding,
       ...options.limits === undefined ? {} : { limits: options.limits },
@@ -531,6 +594,29 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
     trace: (correlationId: string) => invocations({ correlationId }),
     lineage: (invocationId: string) => lineageOf(invocationRecords(logs), invocationId),
     operation: (rootId: string) => invocationRecords(logs).filter(record => record.rootId === rootId),
+    recording: (recordingOptions: RecordingOptions = {}) => {
+      const selected = recorder.invocations().filter(entry =>
+        (recordingOptions.handlerId === undefined || entry.handlerId === recordingOptions.handlerId)
+        && (recordingOptions.rootId === undefined || entry.lineage.rootId === recordingOptions.rootId));
+      const secrets = descriptor.config.filter(entry => entry.sensitive).map(entry => options.env?.[entry.name]).filter((value): value is string => typeof value === "string");
+      const redactor = recordingOptions.sanitize === false ? undefined : createRedactor({ ...options.redact?.keys === undefined ? {} : { keys: options.redact.keys }, values: secrets });
+      return createRecording(descriptor.name, selected, redactor);
+    },
+    replay: async (source: Recording | RecordedInvocation | readonly RecordedInvocation[], replayOptions: ReplayOptions = {}) => {
+      const { invocations: entries, whole } = readRecordedInvocations(source);
+      const selected = whole && replayOptions.rootsOnly !== false ? entries.filter(entry => entry.lineage.depth === 0) : entries;
+      const unreplayable = selected.find(entry => !entry.replayable);
+      if (unreplayable !== undefined)
+        failWith(diagnosticCodes.operationInvalid, `The recorded invocation ${unreplayable.invocationId} of "${unreplayable.handlerId}" (${unreplayable.triggerKind}) has no JSON input and cannot be replayed.`, "Replay HTTP handlers by sending the request again with fetch.");
+      const outcomes: InvocationOutcome[] = [];
+      for (const entry of selected) {
+        outcomes.push(await runtime.invoke({ handlerId: entry.handlerId, ...entry.input === undefined ? {} : { input: entry.input }, metadata: entry.metadata }));
+        if (replayOptions.flush !== false)
+          await flush();
+      }
+      return outcomes;
+    },
+    chain: (rootId: string) => chainSteps(invocationRecords(logs), recorder.invocations(), rootId),
     telemetry: memory,
     flushTelemetry: () => runtime.telemetry.flush(),
     dispose,

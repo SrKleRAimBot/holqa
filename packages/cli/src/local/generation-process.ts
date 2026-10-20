@@ -5,6 +5,10 @@ import type {
 import type { Subprocess } from "bun";
 
 import type {
+  SwapOutcome,
+  SwapRequest
+} from "@/local/hot-swap";
+import type {
   ControlMessage,
   GenerationMessage,
   GenerationRequest,
@@ -57,6 +61,8 @@ export class GenerationProcess {
   private readonly reached = new Map<Phase, number>();
   /** Pending operation responses by request identifier. */
   private readonly pending = new Map<string, (response: OperationResponse) => void>();
+  /** Pending replacement outcomes by request identifier. */
+  private readonly swaps = new Map<string, (outcome: SwapOutcome) => void>();
   /** The diagnostics of a reported failure. */
   private failure: readonly Diagnostic[] | undefined;
   /** Operation request identifiers. */
@@ -104,6 +110,9 @@ export class GenerationProcess {
       for (const resolve of this.pending.values())
         resolve({ ok: false, diagnostics });
       this.pending.clear();
+      for (const resolve of this.swaps.values())
+        resolve({ ok: false, restart: true, diagnostics });
+      this.swaps.clear();
       return code;
     });
   }
@@ -161,6 +170,31 @@ export class GenerationProcess {
     this.post({ type: "operation", id, operation });
     try {
       return await response;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Asks a serving process to replace the handlers of some modules in place.
+   *
+   * @param swap - The modules to rebuild and the modules to share.
+   * @param timeoutMs - How long to wait for the outcome.
+   * @returns The outcome; a failure that asks for a restart when the process exits or does not answer in time.
+   */
+  async swap(swap: SwapRequest, timeoutMs: number): Promise<SwapOutcome> {
+    const id = String(++this.sequence);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const outcome = new Promise<SwapOutcome>((resolve) => {
+      this.swaps.set(id, resolve);
+      timer = setTimeout(() => {
+        this.swaps.delete(id);
+        resolve({ ok: false, restart: true, diagnostics: [createDiagnostic({ code: diagnosticCodes.reloadFailed, severity: "error", message: `The application did not replace its handlers within ${timeoutMs} ms.` })] });
+      }, timeoutMs);
+    });
+    this.post({ type: "swap", id, swap });
+    try {
+      return await outcome;
     } finally {
       clearTimeout(timer);
     }
@@ -266,6 +300,12 @@ export class GenerationProcess {
         }
         this.phases.clear();
         break;
+      case "swap-result": {
+        const resolve = this.swaps.get(message.id);
+        this.swaps.delete(message.id);
+        resolve?.(message.outcome);
+        break;
+      }
       case "stopped":
         break;
     }

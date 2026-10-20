@@ -13,6 +13,7 @@ import type {
 
 import type { EventGuardViolation } from "@/dispatch/event-guard";
 import type { InvocationFailure } from "@/dispatch/failure";
+import type { PinnedVersion } from "@/dispatch/handler-registry";
 import type {
   ActiveInvocation,
   EmittedEvent,
@@ -32,6 +33,7 @@ import {
   InvocationAbort,
   runtimeFailure
 } from "@/dispatch/failure";
+import { HandlerRegistry } from "@/dispatch/handler-registry";
 import {
   Semaphore,
   SemaphoreFullError
@@ -151,6 +153,11 @@ export interface DispatchStats {
 /** Settings of a {@link Dispatcher}. */
 export interface DispatcherOptions {
   readonly handlers: ReadonlyMap<string, RegisteredHandler>;
+  /**
+   * The versioned registry that holds the handlers' current implementations.
+   * Defaults to a registry of `handlers` whose versions all share `scope`.
+   */
+  readonly registry?: HandlerRegistry;
   /** Maximum concurrent executions across all handlers. */
   readonly concurrency: number;
   /** Maximum invocations waiting for a slot before new ones are rejected with `HOLQA_RUNTIME_OVERLOADED`. */
@@ -186,6 +193,8 @@ export class Dispatcher {
   private readonly options: DispatcherOptions;
   /** The environment-wide concurrency gate. */
   private readonly gate: Semaphore;
+  /** The handlers' current and retiring implementations. */
+  private readonly registry: HandlerRegistry;
   /** Abort functions of invocations whose caller is still waiting. */
   private readonly live = new Set<(cause: "shutdown") => void>();
   /** Resolvers waiting for every execution to finish. */
@@ -207,6 +216,7 @@ export class Dispatcher {
   constructor(options: DispatcherOptions) {
     this.options = options;
     this.gate = new Semaphore(options.concurrency, options.queueLimit);
+    this.registry = options.registry ?? new HandlerRegistry(options.handlers, { open: () => options.scope, release: async () => {} }, options.sources);
   }
 
   /**
@@ -232,7 +242,7 @@ export class Dispatcher {
     const rootId = typeof request.rootId === "string" && request.rootId !== "" ? request.rootId : invocationId;
     const lineage: InvocationLineage = Object.freeze({ correlationId, ...request.causationId === undefined ? {} : { causationId: request.causationId }, rootId, depth });
     const started = options.now();
-    const handler = options.handlers.get(request.handlerId);
+    const handler = this.registry.get(request.handlerId);
     const trigger = handler?.definition.trigger;
     const ownsSpan = instrumentation.span === undefined;
     const span = instrumentation.span ?? options.telemetry.startSpan({
@@ -251,7 +261,7 @@ export class Dispatcher {
       ...request.causationId === undefined ? {} : { "holqa.lineage.causation_id": request.causationId },
       ...trigger === undefined ? {} : { "holqa.trigger.kind": trigger.kind, "holqa.resource.id": trigger.resource.id }
     });
-    const log = options.logger.child({
+    let log = options.logger.child({
       handlerId: request.handlerId,
       invocationId,
       correlationId,
@@ -263,7 +273,7 @@ export class Dispatcher {
       ...request.logFields
     });
     const base = { invocationId, correlationId, handlerId: request.handlerId, lineage };
-    const source = options.sources.get(request.handlerId);
+    let source = this.registry.source(request.handlerId) ?? options.sources.get(request.handlerId);
 
     /**
      * Records and logs a finished invocation.
@@ -372,7 +382,16 @@ export class Dispatcher {
           release();
         return finish({ failure: failureFromError(controller.signal.reason) });
       }
-      return await this.execute(handler, request, controller.signal, releases, log, finish, {
+      // Pinned once the slot is granted: work that waited for a slot runs the newest implementation.
+      const pinned = this.registry.pin(request.handlerId);
+      releases.push(pinned.release);
+      if (pinned.version > 1) {
+        // Only replaced implementations are labelled, so applications that never hot-swap log what they always did.
+        log = log.child({ handlerVersion: pinned.version });
+        span?.setAttribute("holqa.handler.version", pinned.version);
+        source = this.registry.source(request.handlerId) ?? source;
+      }
+      return await this.execute(handler, pinned, request, controller.signal, releases, log, finish, {
         invocationId,
         correlationId,
         lineage,
@@ -380,7 +399,7 @@ export class Dispatcher {
         metadata: (request.metadata ?? {}) as never,
         log: log.forHandler(),
         ...span === undefined ? {} : { telemetry: Object.freeze({ traceId: span.context.traceId, spanId: span.context.spanId, sampled: span.context.sampled, traceparent: span.traceparent }) },
-        scope: options.scope
+        scope: pinned.scope
       }, span);
     } finally {
       clearTimeout(timer);
@@ -394,6 +413,7 @@ export class Dispatcher {
    * Runs the handler and races it against the invocation's signal.
    *
    * @param handler - The handler to run.
+   * @param pinned - The implementation the execution is pinned to.
    * @param request - The invocation request.
    * @param signal - The invocation's signal.
    * @param releases - Releases the concurrency slots; called when the handler's code finishes.
@@ -403,7 +423,7 @@ export class Dispatcher {
    * @param span - The invocation's span, parent of the spans of the resource operations it performs.
    * @returns The outcome.
    */
-  private async execute(handler: RegisteredHandler, request: InvocationRequest, signal: AbortSignal, releases: ReadonlyArray<() => void>, log: StructuredLogger, finish: (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[], blocked?: EventGuardViolation) => InvocationOutcome, context: InvocationContext<never> & { readonly lineage: InvocationLineage }, span: ActiveSpan | undefined): Promise<InvocationOutcome> {
+  private async execute(handler: RegisteredHandler, pinned: PinnedVersion, request: InvocationRequest, signal: AbortSignal, releases: ReadonlyArray<() => void>, log: StructuredLogger, finish: (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[], blocked?: EventGuardViolation) => InvocationOutcome, context: InvocationContext<never> & { readonly lineage: InvocationLineage }, span: ActiveSpan | undefined): Promise<InvocationOutcome> {
     this.running += 1;
     let settled = false;
     let orphan = false;
@@ -411,7 +431,7 @@ export class Dispatcher {
     const active: ActiveInvocation = { invocationId: context.invocationId, correlationId: context.correlationId ?? context.invocationId, handlerId: handler.definition.id, lineage: context.lineage, publications: 0, emitted: [], ...span === undefined ? {} : { span } };
     // A handler that throws synchronously becomes a rejected execution, like an async one.
     // Running it inside the tracker attributes its resource operations to this invocation.
-    const execution = Promise.resolve().then(() => this.options.tracker.run(active, () => handler.invoke(request.input, context)));
+    const execution = Promise.resolve().then(() => this.options.tracker.run(active, () => pinned.invoke(request.input, context)));
     /** Releases the slots once the handler's code has finished, whether or not its caller is still waiting. */
     const onSettled = (): void => {
       settled = true;

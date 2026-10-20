@@ -11,6 +11,7 @@ import type {
   Runtime
 } from "@holqa/runtime-bun";
 
+import type { SwapRequest } from "@/local/hot-swap";
 import type { OperationContext } from "@/local/operations";
 import type {
   ControlMessage,
@@ -25,7 +26,10 @@ import {
   rmSync
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import {
+  dirname,
+  join
+} from "node:path";
 
 import {
   checkCapabilities,
@@ -34,7 +38,8 @@ import {
   diagnosticCodes,
   getAppDescriptor,
   getHandlerDescriptor,
-  HolqaError
+  HolqaError,
+  validateInput
 } from "@holqa/core";
 import { createLocalEnvironment } from "@holqa/local";
 import {
@@ -42,6 +47,7 @@ import {
   loadCompiledApplication
 } from "@holqa/runtime-bun";
 
+import { HotSwapper } from "@/local/hot-swap";
 import {
   executeOperation,
   LogCapture,
@@ -74,6 +80,9 @@ let waiter: ((message: ControlMessage) => void) | undefined;
 /** Handles operations while serving; set once the generation is ready. */
 let onOperation: ((id: string, operation: LocalOperation) => void) | undefined;
 
+/** Handles handler replacements while serving; set once the generation is ready. */
+let onSwap: ((id: string, swap: SwapRequest) => void) | undefined;
+
 /**
  * Stops the generation; replaced once there is something to stop.
  *
@@ -87,6 +96,10 @@ process.on("message", (raw: unknown) => {
     return;
   if (message.type === "operation" && onOperation !== undefined) {
     onOperation(message.id, message.operation);
+    return;
+  }
+  if (message.type === "swap" && onSwap !== undefined) {
+    onSwap(message.id, message.swap);
     return;
   }
   if (message.type === "stop" && waiter === undefined) {
@@ -135,6 +148,8 @@ function readRequest(argument: string | undefined): GenerationRequest {
   const request = JSON.parse(argument ?? "{}") as Partial<GenerationRequest>;
   if ((request.mode !== "serve" && request.mode !== "once") || typeof request.root !== "string" || typeof request.buildDir !== "string" || typeof request.stateDir !== "string" || typeof request.publicOrigin !== "string" || typeof request.generation !== "number")
     throw new Error("The generation process needs a request with mode, root, buildDir, stateDir, publicOrigin and generation.");
+  if (request.revalidateQueues !== undefined && !(Array.isArray(request.revalidateQueues) && request.revalidateQueues.every(queueId => typeof queueId === "string")))
+    throw new Error("The generation request's revalidateQueues must be a list of queue identifiers.");
   return request as GenerationRequest;
 }
 
@@ -187,6 +202,7 @@ async function serve(request: GenerationRequest): Promise<void> {
     telemetry = openProcessTelemetry(request.stateDir, process.env);
     runtime = createRuntime({ ...compiled, binding: local.binding, log: sink, telemetry: telemetry.options });
     precheck(compiled, runtime, local);
+    await revalidateQueues(compiled, local, request.revalidateQueues ?? [], sink);
   } catch (error) {
     telemetry?.store.close();
     local?.close();
@@ -232,16 +248,32 @@ async function serve(request: GenerationRequest): Promise<void> {
       return environment.storage.handles(forwarded) ? environment.storage.fetch(forwarded) : runtime.fetch(forwarded);
     }
   });
+  const swapper = new HotSwapper({
+    root: request.root,
+    outDir: join(dirname(request.buildDir), "hot", String(request.generation)),
+    handlers: Object.entries(compiled.handlerSources).map(([id, source]) => {
+      const separator = source.lastIndexOf("#");
+      return { id, module: source.slice(0, separator), export: source.slice(separator + 1) };
+    }),
+    runtime
+  });
+  let swapping = Promise.resolve();
+  onSwap = (id, swap) => {
+    // One replacement at a time, in the order they were asked for.
+    swapping = swapping.then(async () => send({ type: "swap-result", id, outcome: await swapper.swap(swap) }));
+  };
   let stopping: Promise<void> | undefined;
   shutdown = () => {
     stopping ??= (async () => {
       onOperation = undefined;
+      onSwap = undefined;
       try {
         await runtime.stop({ graceMs: 5_000, forceMs: 1_000 });
       } finally {
         await server.stop(true);
         store.close();
         environment.close();
+        swapper.dispose();
         send({ type: "stopped" });
         process.exit(0);
       }
@@ -281,6 +313,58 @@ function retireStaleSubscriptions(compiled: CompiledApplication, runtime: Runtim
     const removed = local.storage.retainSubscriptions(resource.id, current);
     if (removed.length > 0)
       sink({ level: "warn", time: new Date().toISOString(), message: "removed object event subscriptions of handlers that no longer exist", application: descriptor.name, resourceId: resource.id, subscriptions: removed });
+  }
+}
+
+/**
+ * Checks the messages waiting in queues whose message contract changed
+ * against the new contract, and logs a `HOLQA_QUEUED_MESSAGE_INCOMPATIBLE`
+ * warning per queue with messages the new consumer would reject. Messages are
+ * never changed or removed: during development they can be redriven,
+ * replaced or left to fail.
+ *
+ * @param compiled - The loaded application.
+ * @param local - The local environment.
+ * @param queueIds - The queues whose contract changed.
+ * @param sink - Where the warnings go.
+ */
+async function revalidateQueues(compiled: CompiledApplication, local: LocalEnvironment, queueIds: readonly string[], sink: LogSink): Promise<void> {
+  const descriptor = getAppDescriptor(compiled.app)!;
+  for (const queueId of queueIds) {
+    const queue = descriptor.resources.find(resource => resource.kind === "queue" && resource.id === queueId);
+    if (queue === undefined || queue.kind !== "queue")
+      continue;
+    const waiting = local.queues.messages(queue.id, ["ready", "delayed", "in-flight"]);
+    const rejected: string[] = [];
+    const otherVersion: string[] = [];
+    let firstProblem: string | undefined;
+    for (const message of waiting) {
+      if (message.schemaVersion !== queue.config.schemaVersion) {
+        otherVersion.push(message.messageId);
+        continue;
+      }
+      try {
+        await validateInput(queue.schemas.message, message.payload, `message for queue "${queue.id}"`);
+      } catch (error) {
+        rejected.push(message.messageId);
+        firstProblem ??= error instanceof Error ? error.message : String(error);
+      }
+    }
+    if (rejected.length === 0 && otherVersion.length === 0)
+      continue;
+    sink({
+      level: "warn",
+      time: new Date().toISOString(),
+      message: "messages waiting in a queue do not match its changed message contract",
+      application: descriptor.name,
+      code: diagnosticCodes.queuedMessageIncompatible,
+      resourceId: queue.id,
+      waiting: waiting.length,
+      incompatible: rejected.length,
+      otherSchemaVersion: otherVersion.length,
+      messageIds: [...rejected, ...otherVersion].slice(0, 10),
+      ...firstProblem === undefined ? {} : { problem: firstProblem }
+    });
   }
 }
 

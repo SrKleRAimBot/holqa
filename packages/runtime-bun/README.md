@@ -1,6 +1,6 @@
 # @holqa/runtime-bun
 
-> **Status:** Implemented (invocation dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve` adapter, queue, object event and schedule delivery, event lineage and limits, telemetry). Private; not published. `holqa dev` reloads by restarting one process per generation ([ADR 0025](../../docs/architecture/decisions/0025-dev-supervisor-and-process-generations.md)); worker isolation is planned.
+> **Status:** Implemented (invocation dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve` adapter, queue, object event and schedule delivery, event lineage and limits, telemetry). Private; not published. `holqa dev` reloads by restarting one process per generation ([ADR 0025](../../docs/architecture/decisions/0025-dev-supervisor-and-process-generations.md)), or replaces handler implementations in place through the runtime's versioned handler registry (`runtime.replaceHandlers`, [ADR 0028](../../docs/architecture/decisions/0028-hot-handler-replacement.md)); worker isolation and module unloading are planned.
 
 Runs a Holqa application on Bun. Every invocation, whatever triggered it, goes through one dispatcher that assigns
 invocation and correlation identifiers, applies time limits, cancellation and concurrency limits, normalizes errors

@@ -42,7 +42,7 @@ pnpm exec holqa state --app app/infra.ts
 | Test | Asserts |
 | --- | --- |
 | [`tests/pipeline.test.ts`](tests/pipeline.test.ts) | With `createTestApp`: an order flows from the request to the receipt as one trace; a failed attempt is retried after its 5-second backoff in virtual time; an order whose attempts all fail is dead-lettered and processed after a redrive; duplicate messages and object events are tolerated; the hourly schedule removes old uploads over 25 virtual hours; invalid orders are rejected at every boundary. |
-| [`tests/dev-session.test.ts`](tests/dev-session.test.ts) | Runs the built `holqa dev --json` on a copy of the application: it serves without credentials, the operation commands run in the session with JSON output and exit codes, an edited handler changes the next execution while local state is kept, a schema change reports `HOLQA_SCHEMA_CHANGE_BREAKING`, a broken edit keeps the previous generation serving, and `SIGTERM` stops everything without leftovers. |
+| [`tests/dev-session.test.ts`](tests/dev-session.test.ts) | Runs the built `holqa dev --json` on a copy of the application: it serves without credentials, the operation commands run in the session with JSON output and exit codes, an edited handler is replaced in the running generation (no restart) and changes the next execution while local state is kept, a schema change reports `HOLQA_SCHEMA_CHANGE_BREAKING`, a broken edit keeps the previous generation serving, and `SIGTERM` stops everything without leftovers. |
 
 ```bash
 pnpm turbo run test --filter=@holqa/example-order-pipeline

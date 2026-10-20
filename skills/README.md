@@ -18,10 +18,10 @@ Holqa is at the bootstrap stage. What exists today is limited to:
 | `@holqa/sdk` (`defineApp`, `http.api` with routes, RPC procedures and middleware, `queue`, `bucket`, `schedule`, `secret`, `variable`) | **Implemented** (private, unpublished); `staticSite` is proposed |
 | `@holqa/runtime-bun` (serving HTTP routes and RPC procedures of a compiled application; delivering queue messages, object events and scheduled runs with retries and dead-lettering) | **Implemented** (private, unpublished) |
 | `@holqa/local` (local queues, object storage with events and signed URLs, a clock-driven scheduler, inspection) | **Implemented** (private, unpublished) |
-| `holqa inspect` (with `--cycles`), `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor` | **Implemented** |
-| `@holqa/testing` (`createTestApp`, type assertions) | **Implemented** (private, unpublished) |
+| `holqa inspect` (with `--cycles`), `build --manifest`, `dev` (with hot handler replacement and a local development dashboard), `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor` | **Implemented** |
+| `@holqa/testing` (`createTestApp` with recording and replay, type assertions) | **Implemented** (private, unpublished) |
 | `holqa build` (bundling), `openapi generate` | Proposed — each reports `HOLQA_CLI_NOT_IMPLEMENTED` |
-| `@holqa/client`, integrations other than `@holqa/zod`, module hot-swapping | Planned |
+| `@holqa/client`, integrations other than `@holqa/zod`, module unloading, worker isolation | Planned |
 
 Every skill therefore starts with a preview notice and separates **Works today** from **Planned workflow**. Code in the skills is illustrative and uses the proposed API style shown in [`docs/concepts/application-model.md`](../docs/concepts/application-model.md); names may change before release. When a skill and the implementation disagree, the implementation and the reference documentation win.
 

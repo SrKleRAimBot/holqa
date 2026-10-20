@@ -102,8 +102,9 @@ export function consumer(handlerId: string, queueId: string): Described<HandlerD
 }
 
 /**
- * A schema of vendor `fixture` that accepts any value and describes itself
- * as the given JSON Schema type, so a test can change a contract.
+ * A schema of vendor `fixture` that describes itself as the given JSON
+ * Schema type, so a test can change a contract. For `string` and `number` it
+ * also rejects values of other types; any other type accepts every value.
  *
  * @param type - The JSON Schema type it reports.
  * @returns The schema.
@@ -113,7 +114,7 @@ export function described(type: string): StandardSchemaV1 {
     "~standard": {
       version: 1,
       vendor: "fixture",
-      validate: value => ({ value }),
+      validate: value => (type === "string" && typeof value !== "string") || (type === "number" && typeof value !== "number") ? { issues: [{ message: `Expected a ${type}.` }] } : { value },
       jsonSchema: { input: () => ({ type }), output: () => ({ type }) }
     } as StandardSchemaV1["~standard"]
   };

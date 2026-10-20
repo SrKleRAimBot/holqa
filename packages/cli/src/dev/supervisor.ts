@@ -2,16 +2,24 @@ import type {
   EntrypointMap,
   Manifest
 } from "@holqa/compiler";
-import type { Diagnostic } from "@holqa/core";
+import type {
+  Diagnostic,
+  JsonObject,
+  JsonValue
+} from "@holqa/core";
 import type { Server } from "bun";
 
 import type { AnalysisOutcome } from "@/analysis/host";
 import type { ManifestChange } from "@/dev/classify";
+import type { DashboardSource } from "@/dev/dashboard";
 import type { DevEvent } from "@/dev/events";
+import type { ModuleGraph } from "@/dev/module-graph";
+import type { ReloadPlan } from "@/dev/reload-plan";
 import type {
   GenerationProcessOptions,
   PhaseResult
 } from "@/local/generation-process";
+import type { SwapVersion } from "@/local/hot-swap";
 import type { AppLocation } from "@/local/locations";
 import type { OperationResponse } from "@/local/protocol";
 import {
@@ -28,10 +36,21 @@ import {
   createDiagnostic,
   diagnosticCodes
 } from "@holqa/core";
+import { openLocalTelemetryReader } from "@holqa/local";
 
 import { displayPath } from "@/commands/analysis-command";
 import { classifyChange } from "@/dev/classify";
+import {
+  dashboardPath,
+  isLoopbackHost,
+  serveDashboard
+} from "@/dev/dashboard";
 import { summarize } from "@/dev/events";
+import { buildModuleGraph } from "@/dev/module-graph";
+import {
+  planReload,
+  sharedModules
+} from "@/dev/reload-plan";
 import {
   activeSession,
   operationsPath,
@@ -59,6 +78,8 @@ export interface SupervisorTimeouts {
   readonly requestWaitMs?: number;
   /** How long an operation may take. Default 120 000. */
   readonly operationMs?: number;
+  /** How long a handler replacement may take. Default 30 000. */
+  readonly swapMs?: number;
 }
 
 /** Settings of a {@link DevSupervisor}. */
@@ -82,6 +103,20 @@ export interface SupervisorOptions {
   readonly timeouts?: SupervisorTimeouts;
   /** Watch debounce period in milliseconds. Default 100. */
   readonly debounceMs?: number;
+  /**
+   * Whether implementation-only changes replace handlers in the running
+   * process instead of restarting it. Default `true`. With `false`, every
+   * change restarts the generation process (the fallback path).
+   */
+  readonly hot?: boolean;
+  /** After how many replacements a generation process is restarted, to release old module copies. Default 50. */
+  readonly maxSwaps?: number;
+  /**
+   * Whether to serve the read-only development dashboard at
+   * `/_holqa/dashboard`. Default `true`. It is only served when the session
+   * listens on a loopback address.
+   */
+  readonly dashboard?: boolean;
 }
 
 /** A successful build: what the next generation loads. */
@@ -96,7 +131,36 @@ interface Current {
   readonly process: GenerationProcess;
   readonly port: number;
   /** What it runs; reloads are classified against it. */
-  readonly build: Build;
+  build: Build;
+  /** How many handler replacements it made. */
+  swaps: number;
+  /** Its handlers' versions after the last replacement; empty before the first. */
+  versions: readonly SwapVersion[];
+}
+
+/** Why the running code is behind the source files. */
+export interface StaleState {
+  /** When the running code became stale (ISO 8601). */
+  readonly since: string;
+  /** The changed files the running code does not include. */
+  readonly files: readonly string[];
+  readonly diagnostics: readonly Diagnostic[];
+}
+
+/** One reload, as the session remembers it for its dashboard. */
+export interface ReloadRecord {
+  /** When it finished (ISO 8601). */
+  readonly at: string;
+  readonly files: readonly string[];
+  /** `swapped`: handlers replaced in place; `restarted`: a new generation serves; `failed`: the running code is unchanged. */
+  readonly outcome: "swapped" | "restarted" | "failed";
+  /** The plan, when the build succeeded. */
+  readonly plan?: ReloadPlan;
+  readonly generation?: number;
+  /** The handler registry version after a replacement. */
+  readonly version?: number;
+  readonly durationMs: number;
+  readonly diagnostics: readonly Diagnostic[];
 }
 
 /** Counters of a session, for tests and diagnostics. */
@@ -107,6 +171,8 @@ export interface SupervisorStats {
   readonly started: number;
   /** How many generation processes are alive now. */
   readonly alive: number;
+  /** How many handler replacements succeeded in the session. */
+  readonly swaps: number;
 }
 
 /**
@@ -157,6 +223,16 @@ export class DevSupervisor {
   private alive = 0;
   /** Set once the session stops. */
   private stopping: Promise<void> | undefined;
+  /** Successful handler replacements. */
+  private swaps = 0;
+  /** Why the running code is behind, if it is. */
+  private staleState: StaleState | undefined;
+  /** The most recent reloads, oldest first. */
+  private readonly reloads: ReloadRecord[] = [];
+  /** The most recent log entries of the serving generations, oldest first, for the dashboard. */
+  private readonly recentLogs: JsonObject[] = [];
+  /** The warnings of the last successful build, for the dashboard. */
+  private buildDiagnostics: readonly Diagnostic[] = [];
 
   /**
    * Creates a supervisor; nothing runs until {@link start}.
@@ -178,7 +254,27 @@ export class DevSupervisor {
    * @returns A snapshot.
    */
   stats(): SupervisorStats {
-    return { serving: this.current?.generation, started: this.started, alive: this.alive };
+    return { serving: this.current?.generation, started: this.started, alive: this.alive, swaps: this.swaps };
+  }
+
+  /**
+   * Describes what the session runs, for its dashboard: the serving
+   * generation and its handler versions, whether the running code is stale,
+   * and the most recent reloads.
+   *
+   * @returns A JSON-compatible snapshot.
+   */
+  status(): { readonly url: string | undefined; readonly hot: boolean; readonly serving?: { readonly generation: number; readonly pid: number; readonly swaps: number; readonly versions: readonly SwapVersion[] }; readonly stale?: StaleState; readonly summary?: ReturnType<typeof summarize>; readonly reloads: readonly ReloadRecord[]; readonly diagnostics: readonly Diagnostic[] } {
+    const current = this.current;
+    return {
+      url: this.url,
+      hot: this.options.hot ?? true,
+      diagnostics: this.buildDiagnostics,
+      ...current === undefined ? {} : { serving: { generation: current.generation, pid: current.process.pid, swaps: current.swaps, versions: current.versions } },
+      ...this.staleState === undefined ? {} : { stale: this.staleState },
+      ...current === undefined ? {} : { summary: summarize(current.build.manifest, current.build.entrypoints, Date.now()) },
+      reloads: [...this.reloads]
+    };
   }
 
   /**
@@ -214,7 +310,8 @@ export class DevSupervisor {
     const session = { format: sessionFormat, pid: process.pid, url, token: this.token, stateDir: location.stateDir, startedAt: new Date().toISOString() } as const;
     writeSession(location.sessionPath, session);
     writeSession(stateLockPath(location.stateDir), session);
-    this.emit({ type: "dev.listening", url, stateDirectory: this.path(location.stateDir), buildDirectory: this.path(location.buildDir), watching: this.options.watch });
+    const dashboard = this.dashboardEnabled() ? new URL(dashboardPath, url).href : undefined;
+    this.emit({ type: "dev.listening", url, stateDirectory: this.path(location.stateDir), buildDirectory: this.path(location.buildDir), watching: this.options.watch, hot: this.options.hot ?? true, ...dashboard === undefined ? {} : { dashboard } });
     if (this.options.watch) {
       this.unwatch = watchFiles({
         root: location.root,
@@ -290,6 +387,7 @@ export class DevSupervisor {
     let build = this.built;
     let change: ManifestChange;
     let diagnostics: readonly Diagnostic[] = [];
+    let graph: ModuleGraph | undefined;
     if (build !== undefined && files.length > 0 && files.every(isEnvironmentFile)) {
       // Only `.env` files changed: the analysis never sees them, so only the application process restarts.
       change = { kind: "environment", resources: { added: [], removed: [], changed: [] }, handlers: { added: [], removed: [], changed: [] }, config: { added: [], removed: [], changed: [] }, contracts: [] };
@@ -298,26 +396,141 @@ export class DevSupervisor {
       for (const line of outcome.output.split("\n").filter(text => text !== ""))
         this.emit({ type: "output", generation: this.generations + 1, stream: "stderr", line });
       if (!outcome.ok) {
-        this.fail("build.failed", undefined, [this.reloadFailed("The application no longer analyzes."), ...this.located(outcome.diagnostics)]);
+        const failure = [this.reloadFailed("The application no longer analyzes."), ...this.located(outcome.diagnostics)];
+        this.markStale(files, failure);
+        this.fail("build.failed", undefined, failure);
+        this.remember({ files, outcome: "failed", durationMs: Math.round(performance.now() - started), diagnostics: failure });
         return;
       }
       const { manifest, entrypoints } = outcome;
-      try {
-        await this.options.writeFile(join(this.options.location.buildDir, "manifest.json"), `${serializeManifest(manifest)}\n`);
-        await this.options.writeFile(join(this.options.location.buildDir, "entrypoints.json"), `${serializeEntrypoints(entrypoints)}\n`);
-      } catch (error) {
-        this.fail("build.failed", undefined, [createDiagnostic({ code: diagnosticCodes.buildOutputFailed, severity: "error", message: `Could not write the dev build to "${this.path(this.options.location.buildDir)}": ${error instanceof Error ? error.message : String(error)}` })]);
-        return;
-      }
       // Compare with what runs, not with a build that failed to start: queued messages were written under the running contracts.
       change = classifyChange(this.current?.build.manifest ?? this.built?.manifest, manifest);
       diagnostics = [...this.located(outcome.diagnostics), ...change.contracts];
+      this.buildDiagnostics = diagnostics;
       build = { manifest, entrypoints };
-      this.built = build;
+      if (this.options.hot ?? true)
+        graph = this.graph(entrypoints);
     }
+    // Files whose changes never reached the running code are planned again, so a later swap cannot leave them stale.
+    const pending = [...new Set([...files, ...this.staleState?.files ?? []])].sort();
+    let plan = planReload({
+      files: pending,
+      change,
+      hot: this.options.hot ?? true,
+      serving: this.current !== undefined,
+      previous: this.current?.build.entrypoints,
+      next: build?.entrypoints,
+      graph,
+      swaps: this.current?.swaps ?? 0,
+      maxSwaps: this.options.maxSwaps ?? 50
+    });
+    if (plan.strategy === "swap" && this.current !== undefined && graph !== undefined) {
+      // The manifest and entry point map are unchanged, so the build on disk stays valid: nothing is rewritten.
+      this.emit({ type: "build", generation: this.current.generation, change, fingerprint: build!.entrypoints.manifest, durationMs: Math.round(performance.now() - started), diagnostics, reload: plan });
+      const fallback = await this.swap(this.current, build!, plan, graph, files, started);
+      if (fallback === undefined)
+        return;
+      // The change cannot be applied in place: restart instead, with the plan that says why.
+      plan = fallback;
+    }
+    if (change.kind !== "environment" && !await this.write(build!))
+      return;
+    this.built = build;
     const generation = ++this.generations;
-    this.emit({ type: "build", generation, change, fingerprint: build!.entrypoints.manifest, durationMs: Math.round(performance.now() - started), diagnostics });
-    await this.replace(generation, build!, started);
+    if (plan.strategy === "restart")
+      this.emit({ type: "build", generation, change, fingerprint: build!.entrypoints.manifest, durationMs: Math.round(performance.now() - started), diagnostics, reload: plan });
+    const revalidate = change.resources.changed.filter(entry => entry.startsWith("queue ")).map(entry => entry.slice("queue ".length));
+    await this.replace(generation, build!, started, files, plan.strategy === "restart" ? plan : undefined, revalidate);
+  }
+
+  /**
+   * Writes a build for the next generation process.
+   *
+   * @param build - The manifest and entry point map.
+   * @returns `true` once written; `false` after reporting a failure.
+   */
+  private async write(build: Build): Promise<boolean> {
+    try {
+      await this.options.writeFile(join(this.options.location.buildDir, "manifest.json"), `${serializeManifest(build.manifest)}\n`);
+      await this.options.writeFile(join(this.options.location.buildDir, "entrypoints.json"), `${serializeEntrypoints(build.entrypoints)}\n`);
+      return true;
+    } catch (error) {
+      this.fail("build.failed", undefined, [createDiagnostic({ code: diagnosticCodes.buildOutputFailed, severity: "error", message: `Could not write the dev build to "${this.path(this.options.location.buildDir)}": ${error instanceof Error ? error.message : String(error)}` })]);
+      return false;
+    }
+  }
+
+  /**
+   * Builds the import graph of the application and its handler modules.
+   *
+   * @param entrypoints - The entry point map of the new build.
+   * @returns The imports of every application module the build reaches.
+   */
+  private graph(entrypoints: EntrypointMap): ModuleGraph {
+    const { root } = this.options.location;
+    return buildModuleGraph(root, [entrypoints.application.module, ...entrypoints.handlers.map(entry => entry.module)].map(module => join(root, module)));
+  }
+
+  /**
+   * Replaces handlers in the serving generation.
+   *
+   * @param current - The serving generation.
+   * @param build - The new build (same manifest and entry point map).
+   * @param plan - The modules and handlers to replace.
+   * @param graph - The import graph, for the modules to share.
+   * @param files - The changed files.
+   * @param started - When the rebuild began.
+   * @returns `undefined` when the reload is finished (replaced, or failed with the old code serving); otherwise the restart plan that replaces it.
+   */
+  private async swap(current: Current, build: Build, plan: Extract<ReloadPlan, { readonly strategy: "swap" }>, graph: ModuleGraph, files: readonly string[], started: number): Promise<ReloadPlan | undefined> {
+    const outcome = await current.process.swap({ modules: plan.modules, shared: sharedModules(graph, build.entrypoints.application.module) }, this.timeout("swapMs", 30_000));
+    const durationMs = Math.round(performance.now() - started);
+    if (outcome.ok) {
+      current.swaps += 1;
+      current.versions = outcome.versions;
+      current.build = build;
+      this.built = build;
+      this.swaps += 1;
+      this.staleState = undefined;
+      this.emit({ type: "handlers.swapped", generation: current.generation, version: outcome.version, handlers: outcome.handlers, modules: plan.modules, durationMs, versions: outcome.versions });
+      this.remember({ files, outcome: "swapped", plan, generation: current.generation, version: outcome.version, durationMs, diagnostics: [] });
+      return undefined;
+    }
+    if (outcome.restart) {
+      const reason = outcome.reason ?? "replacement-rejected";
+      const diagnostics = this.located(outcome.diagnostics);
+      this.emit({ type: "handlers.swap-refused", generation: current.generation, reason, diagnostics });
+      return { strategy: "restart", reason, detail: diagnostics[0]?.message ?? "The handlers could not be replaced in place." };
+    }
+    const failure = [this.reloadFailed("The changed handlers could not be loaded."), ...this.located(outcome.diagnostics)];
+    this.markStale(files, failure);
+    this.emit({ type: "handlers.swap-failed", generation: current.generation, diagnostics: failure, serving: current.generation, stale: true });
+    this.remember({ files, outcome: "failed", plan, generation: current.generation, durationMs, diagnostics: failure });
+    return undefined;
+  }
+
+  /**
+   * Records that the running code does not include some changes.
+   *
+   * @param files - The changed files.
+   * @param diagnostics - Why.
+   */
+  private markStale(files: readonly string[], diagnostics: readonly Diagnostic[]): void {
+    if (this.current === undefined)
+      return;
+    const previous = this.staleState?.files ?? [];
+    this.staleState = { since: this.staleState?.since ?? new Date().toISOString(), files: [...new Set([...previous, ...files])].sort(), diagnostics };
+  }
+
+  /**
+   * Remembers a finished reload for the dashboard, keeping the most recent 50.
+   *
+   * @param record - The reload, without its time.
+   */
+  private remember(record: Omit<ReloadRecord, "at">): void {
+    this.reloads.push({ at: new Date().toISOString(), ...record });
+    if (this.reloads.length > 50)
+      this.reloads.shift();
   }
 
   /**
@@ -326,13 +539,16 @@ export class DevSupervisor {
    * @param generation - The new generation's number.
    * @param build - What it loads.
    * @param started - When the rebuild began, for its duration.
+   * @param files - The changed files, for the reload history.
+   * @param plan - Why the process restarts.
+   * @param revalidateQueues - Queues whose waiting messages are checked against their changed contract.
    */
-  private async replace(generation: number, build: Build, started: number): Promise<void> {
+  private async replace(generation: number, build: Build, started: number, files: readonly string[] = [], plan?: ReloadPlan, revalidateQueues: readonly string[] = []): Promise<void> {
     const { location } = this.options;
     const url = new URL(this.server!.url.href);
     const spawn = this.options.spawn ?? GenerationProcess.spawn;
     const next = spawn({
-      request: { mode: "serve", root: location.root, buildDir: location.buildDir, stateDir: location.stateDir, publicOrigin: url.origin, generation },
+      request: { mode: "serve", root: location.root, buildDir: location.buildDir, stateDir: location.stateDir, publicOrigin: url.origin, generation, ...revalidateQueues.length === 0 ? {} : { revalidateQueues } },
       ...this.options.env === undefined ? {} : { env: this.options.env },
       onLog: entry => this.emit({ type: "log", generation, entry }),
       onOutput: (stream, line) => this.emit({ type: "output", generation, stream, line })
@@ -347,8 +563,12 @@ export class DevSupervisor {
       const prepared = await next.prepared(this.timeout("prepareMs", 30_000));
       if (!prepared.ok || this.stopping !== undefined) {
         await next.kill();
-        if (!prepared.ok)
-          this.fail("generation.failed", generation, [this.reloadFailed(`Generation ${generation} could not start.`), ...this.located(prepared.diagnostics)]);
+        if (!prepared.ok) {
+          const failure = [this.reloadFailed(`Generation ${generation} could not start.`), ...this.located(prepared.diagnostics)];
+          this.markStale(files, failure);
+          this.fail("generation.failed", generation, failure);
+          this.remember({ files, outcome: "failed", ...plan === undefined ? {} : { plan }, generation, durationMs: Math.round(performance.now() - started), diagnostics: failure });
+        }
         return;
       }
       const previous = this.current;
@@ -367,8 +587,10 @@ export class DevSupervisor {
         await next.stop(this.timeout("stopMs", 10_000));
         return;
       }
-      this.current = { generation, process: next, port: ready.value, build };
+      this.current = { generation, process: next, port: ready.value, build, swaps: 0, versions: [] };
       this.failure = undefined;
+      this.staleState = undefined;
+      this.remember({ files, outcome: "restarted", ...plan === undefined ? {} : { plan }, generation, durationMs: Math.round(performance.now() - started), diagnostics: [] });
       void next.exited.then((exitCode) => {
         if (this.current?.process !== next || this.stopping !== undefined)
           return;
@@ -395,10 +617,12 @@ export class DevSupervisor {
       this.failure = diagnostics;
       this.release();
     }
+    const serving = this.serving();
+    const stale = serving.serving === undefined ? {} : { stale: true };
     if (type === "build.failed")
-      this.emit({ type, diagnostics, ...this.serving() });
+      this.emit({ type, diagnostics, ...serving, ...stale });
     else
-      this.emit({ type, generation: generation!, diagnostics, ...this.serving() });
+      this.emit({ type, generation: generation!, diagnostics, ...serving, ...stale });
   }
 
   /**
@@ -464,7 +688,62 @@ export class DevSupervisor {
    * @param event - The event to report.
    */
   private emit(event: DevEvent): void {
+    if (event.type === "log") {
+      this.recentLogs.push(event.entry);
+      if (this.recentLogs.length > 500)
+        this.recentLogs.shift();
+    }
     this.options.onEvent(event);
+  }
+
+  /**
+   * Reports whether the dashboard is served: enabled, and the session listens on a loopback address.
+   *
+   * @returns `true` when it is served.
+   */
+  private dashboardEnabled(): boolean {
+    return (this.options.dashboard ?? true) && isLoopbackHost(this.options.hostname);
+  }
+
+  /**
+   * Builds the dashboard's view of the session.
+   *
+   * @returns The sources the dashboard presents.
+   */
+  private dashboardSource(): DashboardSource {
+    const { stateDir } = this.options.location;
+    /**
+     * Reads the local telemetry store, which may not exist yet.
+     *
+     * @param read - What to read from it.
+     * @returns The value, or `undefined` without a store.
+     */
+    function withReader<Value>(read: (reader: NonNullable<ReturnType<typeof openLocalTelemetryReader>>) => Value): Value | undefined {
+      const reader = openLocalTelemetryReader(stateDir);
+      if (reader === undefined)
+        return undefined;
+      try {
+        return read(reader);
+      } finally {
+        reader.close();
+      }
+    }
+    return {
+      status: () => JSON.parse(JSON.stringify(this.status())) as JsonObject,
+      state: async () => {
+        const current = this.current;
+        if (current === undefined)
+          return undefined;
+        const response = await current.process.operate({ kind: "state" }, this.timeout("operationMs", 120_000));
+        return response.ok ? response.result : undefined;
+      },
+      logs: () => this.recentLogs,
+      traces: () => (withReader(reader => reader.traces(50)) ?? []) as unknown as JsonValue,
+      trace: (traceId) => {
+        const spans = withReader(reader => reader.trace(traceId));
+        return spans === undefined || spans.length === 0 ? undefined : spans as unknown as JsonValue;
+      }
+    };
   }
 
   /** Releases everyone waiting for a generation. */
@@ -503,6 +782,11 @@ export class DevSupervisor {
     const url = new URL(request.url);
     if (url.pathname === operationsPath)
       return this.control(request);
+    if (url.pathname === dashboardPath || url.pathname.startsWith(`${dashboardPath}/`)) {
+      if (!this.dashboardEnabled())
+        return new Response("The holqa dev dashboard is disabled for this session.", { status: 404 });
+      return serveDashboard(request, this.dashboardSource());
+    }
     const current = await this.generation();
     if (current === undefined) {
       const failure = this.failure?.[0];

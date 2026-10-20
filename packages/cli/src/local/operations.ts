@@ -30,6 +30,7 @@ import {
 } from "@holqa/core";
 import { manualTriggerMetadata } from "@holqa/local";
 
+import { swapVersions } from "@/local/hot-swap";
 import { toJson } from "@/local/protocol";
 
 /** The most bytes `holqa storage put` sends in one operation. */
@@ -119,6 +120,9 @@ export async function executeOperation(context: OperationContext, operation: Loc
       return state(context);
     case "doctor":
       return { checks: doctorChecks(context) };
+    case "handlers":
+      // Handler versions only exist in a running generation; a standalone process reports the initial ones.
+      return { versions: toJson(context.runtime === undefined ? [] : swapVersions(context.runtime.handlerVersions())) };
   }
 }
 

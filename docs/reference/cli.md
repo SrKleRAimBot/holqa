@@ -19,7 +19,7 @@ Within the workspace, packages that depend on `@holqa/cli` (such as `examples/pa
 holqa [--help] [--version] [--json]
 holqa inspect [--cycles] [--app <path>] [--json]
 holqa build --manifest [--app <path>] [--out-dir <dir>] [--json]
-holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--json]
+holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--no-hot] [--no-dashboard] [--json]
 holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]
 holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]
 holqa queue redrive <queue> [--message <id>] [--limit <n>] [--dry-run] [--new-operation] [--app <path>] [--state-dir <dir>] [--json]
@@ -49,6 +49,8 @@ holqa metrics [--app <path>] [--state-dir <dir>] [--json]
 | `--port <port>` | `dev`, `doctor`: the dev server's port, `0` to `65535`. Default `3000`; `0` picks a free port. | — |
 | `--host <host>` | `dev`, `doctor`: the interface to listen on. Default `127.0.0.1`. | — |
 | `--no-watch` | `dev`: do not rebuild on file changes. | — |
+| `--no-hot` | `dev`: restart the generation process on every change instead of replacing handlers in place. | — |
+| `--no-dashboard` | `dev`: do not serve the development dashboard. | — |
 | `--cycles` | `inspect`: print the event dependency graph and its cycles instead of the summary. | — |
 | `--follow` | `logs`: keep printing new entries until the process receives `SIGINT` or `SIGTERM`. | — |
 | `--handler <id>`, `--trace <trace-id>`, `--level <level>` | `logs`: only entries of one handler, of one trace, or at `debug`, `info`, `warn` or `error` and more severe. | — |
@@ -108,7 +110,7 @@ interface BuildJsonOutput {
 
 ### `holqa dev`
 
-Runs the application locally with the `@holqa/local` binding and rebuilds it when files change. The design is recorded in [ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md); the [local development guide](../guides/local-development.md) walks through it.
+Runs the application locally with the `@holqa/local` binding and rebuilds it when files change. The design is recorded in [ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md) and, for hot handler replacement, [ADR 0028](../architecture/decisions/0028-hot-handler-replacement.md); the [local development guide](../guides/local-development.md) walks through it.
 
 | Aspect | Behaviour |
 | --- | --- |
@@ -116,7 +118,12 @@ Runs the application locally with the `@holqa/local` binding and rebuilds it whe
 | Generations | Each build runs in a fresh Bun process (a generation) that loads the build from `.holqa/dev/build`, opens the local state in `.holqa/local` and runs one runtime. At most one generation consumes queues, events and schedules. |
 | Watching | Changes to `.ts`, `.tsx`, `.mts`, `.cts`, `.js`, `.jsx`, `.mjs`, `.cjs` and `.json` files outside `node_modules` and dot directories, and to `.env` files in the root, trigger a rebuild after 100 ms without further changes. Changes during a rebuild are collected into one more rebuild. |
 | Reloads | Analyze, write the build, prepare the next generation (load, create the runtime, check configuration and capabilities) while the current one serves, then stop the current one gracefully and activate the next. A failure before activation reports `HOLQA_RELOAD_FAILED` and its causes; the current generation keeps serving. |
-| Change kinds | `implementation` (manifest unchanged), `handlers`, `resources` (resources or configuration), `environment` (only `.env` files; no analysis), `initial`. Each restarts the generation; none recreates local state. |
+| Change kinds | `implementation` (manifest unchanged), `handlers`, `resources` (resources or configuration), `environment` (only `.env` files; no analysis), `initial`. None recreates local state. |
+| Hot replacement | An `implementation` change whose files are only imported by handler modules (not by the application module), with an unchanged entry point map, is applied in the running generation: the affected handler modules are rebundled into `.holqa/dev/hot/` and their handlers replaced atomically (`handlers.swapped`). Running invocations finish under the previous implementation. Every other change restarts the generation; the `build` event's `reload` says which and why. See the [guide](../guides/local-development.md#how-reloads-work). |
+| Restart reasons | `initial`, `requested`, `hot-disabled`, `no-generation`, `environment`, `dependencies` (package manifests, lockfiles, `tsconfig`, `bunfig`), `contract` (manifest changed), `entrypoints` (a handler moved), `application-module`, `unreferenced-module`, `restart-marker` (a module contains `holqa:restart-on-change`), `swap-limit` (50 replacements per process), and, from `handlers.swap-refused`, `side-effects` (new code created timers, listeners, servers or globals while loading) and `replacement-rejected`. |
+| Stale code | When a change fails, the last working code keeps serving. Failure events carry `stale: true` while a generation serves, and text output prints a `STALE` line. |
+| Queued messages | When a queue's contract changed, the new generation checks the messages waiting in it against the new contract and logs a `HOLQA_QUEUED_MESSAGE_INCOMPATIBLE` warning with counts and up to ten message identifiers. Messages are never changed. |
+| Dashboard | A read-only page at `/_holqa/dashboard` with JSON endpoints under `/_holqa/dashboard/api/` (`status`, `state` without message payloads, `logs`, `traces`, `traces/<id>`). Served only when `--host` is a loopback address, only to requests whose `Host` is one, and only for `GET`. `--no-dashboard` turns it off. |
 | Contracts | Changed queue message and HTTP request and response schemas are compared with the [compatibility checker](schema-contracts.md); its diagnostics (for example `HOLQA_SCHEMA_CHANGE_BREAKING`) are reported with the build. Compiler errors fail the reload. |
 | Requests during a swap | Wait up to 15 seconds for the next generation. Without a running generation they receive `503` with `{ "error": { "code", "message" } }`. |
 | Session | `.holqa/dev/session.json` in the application root records the process, address and a bearer token for the control endpoint (mode `0600`). The same record is written to `dev-session.json` in the state directory. A second `holqa dev` for the same application or the same state directory fails with `HOLQA_DEV_SESSION_ACTIVE`. Both files are removed on exit. |
@@ -129,16 +136,21 @@ With `--json`, standard output receives one JSON object per line, tagged with `t
 
 | `type` | Fields |
 | --- | --- |
-| `dev.listening` | `url`, `stateDirectory`, `buildDirectory`, `watching` |
+| `dev.listening` | `url`, `stateDirectory`, `buildDirectory`, `watching`, `hot`, `dashboard` (its URL, when served) |
 | `change` | `files` (relative to the application root) |
-| `build` | `generation`, `change` (`kind`, `resources`, `handlers` and `config` as `{ added, removed, changed }`, `contracts`), `fingerprint`, `durationMs`, `diagnostics` (warnings) |
-| `build.failed` | `diagnostics` (first `HOLQA_RELOAD_FAILED`), `serving` (the generation that keeps serving, when there is one) |
+| `build` | `generation`, `change` (`kind`, `resources`, `handlers` and `config` as `{ added, removed, changed }`, `contracts`), `fingerprint`, `durationMs`, `diagnostics` (warnings), `reload` (`{ strategy: "swap", modules, handlers }` or `{ strategy: "restart", reason, detail }`) |
+| `build.failed` | `diagnostics` (first `HOLQA_RELOAD_FAILED`), `serving` (the generation that keeps serving, when there is one), `stale` |
+| `handlers.swapped` | `generation`, `version` (the new registry version), `handlers`, `modules`, `durationMs`, `versions` (every handler's `{ handlerId, version, active, retiring }`) |
+| `handlers.swap-failed` | `generation`, `diagnostics`, `serving`, `stale` (the new code failed to load; the previous code keeps serving) |
+| `handlers.swap-refused` | `generation`, `reason`, `diagnostics` (the change is valid but cannot be applied in place; a restart follows) |
 | `generation.ready` | `generation`, `pid`, `durationMs`, `summary` (`application`, `fingerprint`, `resources`, `handlers`, `schedules`) |
-| `generation.failed` | `generation`, `diagnostics`, `serving` |
+| `generation.failed` | `generation`, `diagnostics`, `serving`, `stale` |
 | `generation.stopped`, `generation.exited` | `generation`, `exitCode` (`exited` means the process ended on its own) |
 | `log` | `generation`, `entry` (a runtime log entry, see [logs](runtime.md#logs)) |
 | `output` | `generation`, `stream`, `line` |
 | `dev.stopped` | — |
+
+Consumers should ignore event types and fields they do not know; new ones are added in minor versions. A `build` is no longer always followed by `generation.ready` or `generation.failed`: when its `reload.strategy` is `"swap"`, it repeats the serving generation's number and is followed by `handlers.swapped` or `handlers.swap-failed`, or by `handlers.swap-refused` and then a second `build` with `reload.strategy: "restart"` for the new generation. Tools that waited for `generation.ready` after every `build` must check `reload.strategy`. Log entries of replaced implementations carry `handlerVersion`, shown as `orders.process v2` in text output.
 
 `holqa dev` exits with `1` and diagnostics on standard error when it cannot start (`HOLQA_DEV_SESSION_ACTIVE`, `HOLQA_DEV_START_FAILED` for a port in use). A failing first build does not end the session: it is reported, and the next change rebuilds.
 
@@ -305,3 +317,4 @@ const code = await runCli(["openapi", "generate", "--json"], {
 - [Local development guide](../guides/local-development.md)
 - [Observability guide](../guides/observability.md)
 - [ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md)
+- [ADR 0028](../architecture/decisions/0028-hot-handler-replacement.md)

@@ -82,7 +82,9 @@ describe("diagnosticCodes", () => {
       simulationBudgetExceeded: "HOLQA_SIMULATION_BUDGET_EXCEEDED",
       telemetryConfigInvalid: "HOLQA_TELEMETRY_CONFIG_INVALID",
       telemetryExportFailed: "HOLQA_TELEMETRY_EXPORT_FAILED",
-      telemetryNotFound: "HOLQA_TELEMETRY_NOT_FOUND"
+      telemetryNotFound: "HOLQA_TELEMETRY_NOT_FOUND",
+      handlerReplacementInvalid: "HOLQA_HANDLER_REPLACEMENT_INVALID",
+      queuedMessageIncompatible: "HOLQA_QUEUED_MESSAGE_INCOMPATIBLE"
     });
   });
 });

@@ -9,6 +9,7 @@ import {
   readGenerationMessage,
   readOperation,
   readOperationResponse,
+  readSwapVersions,
   toJson
 } from "@/local/protocol";
 
@@ -37,6 +38,18 @@ describe("generation protocol", () => {
     expect(readOperation({ kind: "storage.put", bucketId: "b", key: "k", body: "aGk=", contentType: 3 })).toBeUndefined();
     expect(readOperation({ kind: "cron.run" })).toBeUndefined();
     expect(readOperation({ kind: "delete-everything" })).toBeUndefined();
+  });
+
+  it("reads handler replacement requests and outcomes, checking every field", () => {
+    expect(readControlMessage(JSON.stringify({ type: "swap", id: "2", swap: { modules: ["src/a.ts"], shared: ["/app/infra.ts"] } }))).toEqual({ type: "swap", id: "2", swap: { modules: ["src/a.ts"], shared: ["/app/infra.ts"] } });
+    expect(readControlMessage(JSON.stringify({ type: "swap", id: "2", swap: { modules: "src/a.ts", shared: [] } }))).toBeUndefined();
+    const versions = [{ handlerId: "a", version: 2, active: 0, retiring: [{ version: 1, active: 1 }] }];
+    expect(readGenerationMessage(JSON.stringify({ type: "swap-result", id: "2", outcome: { ok: true, version: 2, handlers: ["a"], durationMs: 12, versions } }))).toEqual({ type: "swap-result", id: "2", outcome: { ok: true, version: 2, handlers: ["a"], durationMs: 12, versions } });
+    expect(readGenerationMessage(JSON.stringify({ type: "swap-result", id: "2", outcome: { ok: false, restart: true, reason: "side-effects", diagnostics: [{ code: "HOLQA_RELOAD_FAILED", severity: "info", message: "m" }] } }))).toMatchObject({ outcome: { ok: false, restart: true, reason: "side-effects" } });
+    expect(readGenerationMessage(JSON.stringify({ type: "swap-result", id: "2", outcome: { ok: false, restart: true, reason: "anything", diagnostics: [] } }))).toBeUndefined();
+    expect(readGenerationMessage(JSON.stringify({ type: "swap-result", id: "2", outcome: { ok: true, version: 2, handlers: ["a"], durationMs: 1, versions: [{ handlerId: "a", version: -1, active: 0, retiring: [] }] } }))).toBeUndefined();
+    expect(readSwapVersions([{ handlerId: "a", version: 1, active: 0, retiring: [{ version: 0.5, active: 0 }] }])).toBeUndefined();
+    expect(readOperation({ kind: "handlers" })).toEqual({ kind: "handlers" });
   });
 
   it("requires failed responses to carry diagnostics", () => {
