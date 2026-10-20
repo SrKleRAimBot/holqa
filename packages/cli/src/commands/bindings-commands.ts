@@ -122,7 +122,7 @@ export async function bindingsCommand(host: CliHost, io: CliIo, json: boolean, n
 function checkEnvironment(report: BindingReport, manifest: Manifest, environment: Readonly<Record<string, string | undefined>>): Diagnostic[] | undefined {
   const config = report.services.find(service => service.service === "config");
   const sources = report.providers.filter(provider => config?.providers.includes(provider.name));
-  if (sources.length === 0 || sources.some(provider => (provider.settings as { readonly source?: unknown }).source !== "environment"))
+  if (sources.length === 0 || sources.some(provider => (provider.settings as { readonly configSource?: unknown }).configSource !== "environment"))
     return undefined;
   /**
    * Reports whether an environment variable has a value.

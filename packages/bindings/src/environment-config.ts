@@ -20,7 +20,7 @@ export interface EnvironmentConfigOptions {
  * A configuration service provider that reads configuration values and
  * credentials from environment variables, by name. It is what a binding
  * configuration uses when neither `services.config` nor the default provider
- * supplies configuration. Without `env`, its `settings.source` is `environment`, which
+ * supplies configuration. Without `env`, its `settings.configSource` is `environment`, which
  * tells tools such as `holqa bindings validate` that they can check whether
  * credentials and configuration values are set.
  *
@@ -43,7 +43,7 @@ export function environmentConfig(options: EnvironmentConfigOptions = {}): Bindi
     services: Object.freeze({ config: true }),
     topology: Object.freeze({ delivery: "none", state: "process" }),
     // With the process environment, tools can check that credentials and configuration are set before starting.
-    settings: Object.freeze({ source: options.env === undefined ? "environment" : "values" }),
+    settings: Object.freeze({ configSource: options.env === undefined ? "environment" : "values" }),
     open: async (): Promise<ProviderInstance> => {
       const env = options.env ?? (globalThis as { readonly process?: { readonly env?: EnvironmentVariables } }).process?.env ?? {};
       return Object.freeze({ config: Object.freeze({ lookup: (name: string) => env[name] }) });

@@ -95,8 +95,8 @@ export interface TelemetryRetention {
 
 /** Settings of {@link createLocalTelemetryStore}. */
 export interface LocalTelemetryStoreOptions {
-  /** The local state directory; the store is `telemetry.sqlite` inside it. Created when missing. */
-  readonly directory: string;
+  /** The local state directory; the store is `telemetry.sqlite` inside it. Created when missing. `undefined` keeps telemetry in memory. */
+  readonly directory: string | undefined;
   readonly retention?: TelemetryRetention;
   /** The time source for retention. Defaults to the wall clock. */
   readonly clock?: Clock;
@@ -188,20 +188,21 @@ const logFlushMs = 200;
 /**
  * Opens the telemetry database, creating it and its tables.
  *
- * @param directory - The local state directory.
+ * @param directory - The local state directory, or `undefined` for memory.
  * @returns The open database in write-ahead logging mode.
  * @throws {HolqaError} `HOLQA_LOCAL_STATE_UNSUPPORTED` when a newer version wrote the store.
  */
-function openTelemetryDatabase(directory: string): Database {
-  mkdirSync(directory, { recursive: true });
-  const database = new Database(join(directory, telemetryFileName), { create: true, strict: true });
+function openTelemetryDatabase(directory: string | undefined): Database {
+  if (directory !== undefined)
+    mkdirSync(directory, { recursive: true });
+  const database = directory === undefined ? new Database(":memory:", { strict: true }) : new Database(join(directory, telemetryFileName), { create: true, strict: true });
   try {
     database.run("PRAGMA journal_mode = WAL");
     // Several processes write; a short wait keeps a locked store from stalling them. A batch that cannot get the lock fails and is dropped.
     database.run("PRAGMA busy_timeout = 100");
     const version = database.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version ?? 0;
     if (version > telemetryStoreVersion)
-      failWith(diagnosticCodes.localStateUnsupported, `The telemetry store in "${directory}" has format ${version}; this version of @holqa/local reads format ${telemetryStoreVersion}.`, `Delete "${join(directory, telemetryFileName)}"; it only holds development telemetry.`);
+      failWith(diagnosticCodes.localStateUnsupported, `The telemetry store in "${directory}" has format ${version}; this version of @holqa/local reads format ${telemetryStoreVersion}.`, `Delete "${join(directory ?? ".", telemetryFileName)}"; it only holds development telemetry.`);
     database.transaction(() => {
       database.run(schema);
       database.run(`PRAGMA user_version = ${telemetryStoreVersion}`);

@@ -58,7 +58,8 @@ Invariants to preserve in every design:
 | `@holqa/client` | Browser-safe generated-client runtime | Planned | core |
 | `@holqa/runtime-bun` | Invocation dispatcher, lifecycle, HTTP, RPC, queue, object event and schedule transports, event lineage and limits, telemetry (spans, metrics, redaction, bounded export), `Bun.serve` adapter ([runtime reference](../../../docs/reference/runtime.md)) | **Implemented** (worker isolation planned) | core |
 | `@holqa/bindings` | Binding configurations (`defineBindings`), deterministic provider resolution per resource, kind and service, composition into one runtime binding ([binding contracts](../../../docs/reference/bindings.md)) | **Implemented** | core |
-| `@holqa/local` | Local drivers and sources: SQLite-backed queues, filesystem object storage, clock-driven scheduler, inspection, local telemetry store ([local environment](../../../docs/reference/local.md)) | **Implemented** | core, runtime-bun |
+| `@holqa/conformance` | Reusable provider conformance suites for the queue, bucket, object event and schedule contracts ([conformance](../../../docs/reference/bindings.md#conformance)) | **Implemented** | core |
+| `@holqa/local` | Local drivers and sources: SQLite-backed queues, filesystem object storage, clock-driven scheduler, inspection, local telemetry store ([local environment](../../../docs/reference/local.md)) | **Implemented** | core, runtime-bun (conformance for tests) |
 | `@holqa/testing` | Test utilities: `createTestApp` (virtual clock, flushing, failure injection, duplicates) and type assertions | **Implemented** | core, sdk, local, runtime-bun |
 | `packages/integrations/*` | Zod, OpenTelemetry (OTLP export), Valibot, Effect, oRPC, TanStack Query adapters | **Implemented** for Zod (`@holqa/zod`) and OTLP export (`@holqa/opentelemetry`); others Planned (names undecided) | core, sdk, client |
 

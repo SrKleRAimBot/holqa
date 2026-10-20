@@ -1,4 +1,5 @@
 import type {
+  AppDescriptor,
   BindingCapabilities,
   Diagnostic,
   RuntimeBinding
@@ -28,6 +29,10 @@ import {
   createLocalIdempotencyStore,
   createLocalOperationBudgets
 } from "@/state/safety-stores";
+import {
+  filesystemBlobs,
+  memoryBlobs
+} from "@/storage/blob-store";
 import { createLocalStorage } from "@/storage/local-storage";
 
 /** Settings of {@link createLocalEnvironment}. */
@@ -92,7 +97,7 @@ export interface LocalEnvironment {
 }
 
 /** What the local binding advertises. It never promises more than common production services do. */
-const localCapabilities: BindingCapabilities = Object.freeze({
+export const localCapabilities: BindingCapabilities = Object.freeze({
   "queue": Object.freeze({ delivery: Object.freeze(["at-least-once" as const]), maxAttempts: 100, deadLetter: true, backoff: Object.freeze(["fixed" as const, "exponential" as const]), maxDelaySeconds: 900 }),
   "bucket": Object.freeze({ access: Object.freeze(["private" as const, "public-read" as const]), events: Object.freeze(["object.created" as const, "object.deleted" as const]), signedUrls: Object.freeze({ maxExpiresInSeconds: 604_800 }) }),
   "schedule": Object.freeze({ overlap: Object.freeze(["skip" as const, "allow" as const]) }),
@@ -123,6 +128,63 @@ export async function createLocalEnvironment(options: LocalEnvironmentOptions): 
     throw new HolqaError(createDiagnostic({ code: diagnosticCodes.appInvalid, severity: "error", message: "The local environment was given a value that is not a Holqa application." }));
   checkOptions(options);
   const configuration = await createEnvironmentBinding(app, options.env ?? process.env);
+  const state = openLocalState(app, options);
+  const binding: RuntimeBinding = Object.freeze({
+    name: "local",
+    capabilities: localCapabilities,
+    drivers: state.drivers,
+    sources: state.sources,
+    operationBudgets: state.operationBudgets,
+    idempotency: state.idempotency,
+    config: configuration.config
+  });
+  return Object.freeze({
+    binding,
+    clock: state.clock,
+    queues: state.queues,
+    storage: state.storage,
+    scheduler: state.scheduler,
+    settle: state.settle,
+    close: state.close
+  });
+}
+
+/** Settings of {@link openLocalState}: the local environment's options without the application and configuration. */
+export type LocalStateOptions = Omit<LocalEnvironmentOptions, "app" | "env" | "directory"> & {
+  /** Where state is kept; `undefined` keeps everything in memory for the life of the process. */
+  readonly directory: string | undefined;
+};
+
+/**
+ * The opened local state of one application: drivers and sources for its
+ * queues, buckets and schedules, the event safety stores, and inspection. It
+ * is what both `createLocalEnvironment` and the local binding providers run on.
+ */
+export interface LocalState {
+  readonly clock: Clock;
+  readonly drivers: RuntimeBinding["drivers"];
+  readonly sources: NonNullable<RuntimeBinding["sources"]>;
+  readonly operationBudgets: NonNullable<RuntimeBinding["operationBudgets"]>;
+  readonly idempotency: NonNullable<RuntimeBinding["idempotency"]>;
+  readonly queues: LocalQueues;
+  readonly storage: LocalStorage;
+  readonly scheduler: LocalScheduler;
+  readonly settle: LocalEnvironment["settle"];
+  readonly close: () => void;
+}
+
+/**
+ * Opens the local state of an application: the state database (a SQLite
+ * file in `directory`, or memory), object bytes (files under
+ * `directory/objects`, or memory), and the queues, storage, scheduler and
+ * event safety stores built on them.
+ *
+ * @param app - The application descriptor.
+ * @param options - Directory, clock, identifiers and settings; validated by the caller.
+ * @returns The opened state.
+ * @throws {HolqaError} `HOLQA_LOCAL_STATE_UNSUPPORTED` when the directory holds state of a newer format.
+ */
+export function openLocalState(app: AppDescriptor, options: LocalStateOptions): LocalState {
   const clock = options.clock ?? systemClock;
   const createId = options.createId ?? (() => crypto.randomUUID());
   const database = openStateDatabase(options.directory);
@@ -140,26 +202,18 @@ export async function createLocalEnvironment(options: LocalEnvironmentOptions): 
     store,
     clock,
     createId,
-    directory: join(options.directory, "objects"),
+    blobs: options.directory === undefined ? memoryBlobs() : filesystemBlobs(join(options.directory, "objects")),
     signedUrlBase: options.storage?.signedUrlBase ?? "http://127.0.0.1:3000/_holqa/storage",
     maxUploadBytes: options.storage?.maxUploadBytes ?? 100 * 1024 * 1024,
     access
   });
   const scheduler = createLocalScheduler({ database, clock, createId });
-
-  const binding: RuntimeBinding = Object.freeze({
-    name: "local",
-    capabilities: localCapabilities,
+  return Object.freeze({
+    clock,
     drivers: Object.freeze({ queue: queues.driver, bucket: storage.driver }),
     sources: Object.freeze({ queue: queues.source, bucket: storage.source, schedule: scheduler.source }),
     operationBudgets: createLocalOperationBudgets({ database, clock, createId }),
     idempotency: createLocalIdempotencyStore({ database, clock, createId }),
-    config: configuration.config
-  });
-
-  return Object.freeze({
-    binding,
-    clock,
     queues: queues.queues,
     storage: storage.storage,
     scheduler: scheduler.scheduler,

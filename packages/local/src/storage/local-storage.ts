@@ -21,19 +21,13 @@ import type {
   DeliveryState,
   LeaseStore
 } from "@/state/lease-store";
+import type { BlobStore } from "@/storage/blob-store";
 import {
   createHash,
   createHmac,
   randomBytes,
   timingSafeEqual
 } from "node:crypto";
-import {
-  mkdirSync,
-  renameSync,
-  rmSync
-} from "node:fs";
-
-import { join } from "node:path";
 import {
   checkObjectKey,
   diagnosticCodes,
@@ -98,8 +92,8 @@ export interface LocalStorageSettings {
   readonly store: LeaseStore;
   readonly clock: Clock;
   readonly createId: () => string;
-  /** Where object bytes are kept. */
-  readonly directory: string;
+  /** Where object bytes are kept: files for persistent state, memory for tests. */
+  readonly blobs: BlobStore;
   /** The absolute URL signed URLs start with, for example `http://127.0.0.1:3000/_holqa/storage`. */
   readonly signedUrlBase: string;
   /** The largest body a signed `PUT` accepts, in bytes. */
@@ -144,18 +138,10 @@ export function createLocalStorage(settings: LocalStorageSettings): {
   readonly source: (resource: ResourceDescriptorOf<"bucket">) => ObjectEventSource;
   readonly storage: LocalStorage;
 } {
-  const { database, store, clock, createId, directory } = settings;
+  const { database, store, clock, createId, blobs } = settings;
   const signingKey = loadSigningKey(database);
   const base = new URL(settings.signedUrlBase);
   const basePath = base.pathname.replace(/\/$/, "");
-
-  /**
-   * Returns the directory of a bucket's object files.
-   *
-   * @param bucketId - The bucket's logical identifier.
-   * @returns The directory path; bucket identifiers are safe path segments.
-   */
-  const bucketDirectory = (bucketId: string): string => join(directory, bucketId);
 
   /**
    * Reads one object's metadata row.
@@ -205,13 +191,9 @@ export function createLocalStorage(settings: LocalStorageSettings): {
    * @returns The stored object's metadata.
    */
   const put = async (bucketId: string, key: string, body: Uint8Array, options: PutObjectOptions, trace?: DeliveryTrace): Promise<ObjectMetadata> => {
-    const folder = bucketDirectory(bucketId);
-    mkdirSync(folder, { recursive: true });
     const etag = createHash("sha256").update(body).digest("hex");
     const blob = `${createHash("sha256").update(key).digest("hex").slice(0, 32)}.${createId()}`;
-    const temporary = join(folder, `${blob}.partial`);
-    await Bun.write(temporary, body);
-    renameSync(temporary, join(folder, blob));
+    await blobs.write(bucketId, blob, body);
     const lastModified = clock.now();
     let previous: string | undefined;
     let channels: string[];
@@ -223,11 +205,11 @@ export function createLocalStorage(settings: LocalStorageSettings): {
         return emit(bucketId, "object.created", { key, size: body.length, ...options.contentType === undefined ? {} : { contentType: options.contentType }, etag }, trace);
       })();
     } catch (error) {
-      rmSync(join(folder, blob), { force: true });
+      blobs.remove(bucketId, blob);
       throw error;
     }
     if (previous !== undefined)
-      rmSync(join(folder, previous), { force: true });
+      blobs.remove(bucketId, previous);
     for (const channel of channels)
       store.notify(channel);
     return metadataOf({ key, size: body.length, content_type: options.contentType ?? null, etag, last_modified: lastModified, blob });
@@ -242,7 +224,7 @@ export function createLocalStorage(settings: LocalStorageSettings): {
    */
   const get = async (bucketId: string, key: string): Promise<Uint8Array | undefined> => {
     const found = row(bucketId, key);
-    return found === null ? undefined : Bun.file(join(bucketDirectory(bucketId), found.blob)).bytes();
+    return found === null ? undefined : blobs.read(bucketId, found.blob);
   };
 
   /**
@@ -315,7 +297,7 @@ export function createLocalStorage(settings: LocalStorageSettings): {
     if (found === null)
       return failure(404, diagnosticCodes.objectNotFound, "The object does not exist.");
     const headers = { "content-type": found.content_type ?? "application/octet-stream", "etag": `"${found.etag}"`, "content-length": String(found.size) };
-    return new Response(request.method === "HEAD" ? null : Bun.file(join(bucketDirectory(bucketId), found.blob)), { headers });
+    return new Response(request.method === "HEAD" ? null : blobs.body(bucketId, found.blob), { headers });
   };
 
   return {
@@ -336,7 +318,7 @@ export function createLocalStorage(settings: LocalStorageSettings): {
         })();
         if (result === undefined)
           return false;
-        rmSync(join(bucketDirectory(resource.id), result.blob), { force: true });
+        blobs.remove(resource.id, result.blob);
         for (const channel of result.channels)
           store.notify(channel);
         return true;

@@ -6,8 +6,17 @@ export type {
   LocalEnvironmentOptions,
   SettleOptions
 } from "@/environment";
+export { openLocalState } from "@/environment";
+export type { LocalState, LocalStateOptions } from "@/environment";
 export { manualTriggerMetadata } from "@/manual-trigger";
 export type { ManualTriggerOptions } from "@/manual-trigger";
+export { local, localEnvironment } from "@/providers";
+export type {
+  LocalBindingOptions,
+  LocalPersistence,
+  LocalProviders,
+  OpenedLocalState
+} from "@/providers";
 export type {
   LocalMessageState,
   LocalQueueMessage,

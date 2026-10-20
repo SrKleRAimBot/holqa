@@ -7,8 +7,8 @@
 | --- | --- |
 | `@holqa/core` | nothing |
 | `@holqa/sdk`, `@holqa/client`, `@holqa/compiler`, `@holqa/runtime-bun` | `@holqa/core` |
-| `@holqa/bindings` | core |
-| `@holqa/local` | core, runtime-bun |
+| `@holqa/bindings`, `@holqa/conformance` | core |
+| `@holqa/local` | core, runtime-bun (conformance for tests) |
 | `@holqa/testing` | core, sdk, local, runtime-bun |
 | `@holqa/cli` | core, bindings, compiler, local, runtime-bun |
 | `packages/integrations/*` | core, sdk, client |

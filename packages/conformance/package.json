@@ -1,0 +1,46 @@
+{
+  "name": "@holqa/conformance",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A reusable conformance suite for Holqa binding providers: the normative behaviour of the queue, bucket, object event and schedule contracts, runnable with any test runner or from the CLI.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SrKleRAimBot/holqa.git",
+    "directory": "packages/conformance"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@holqa/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}
