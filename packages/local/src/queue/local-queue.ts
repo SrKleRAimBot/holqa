@@ -155,7 +155,8 @@ export function createLocalQueues(settings: LocalQueueSettings): {
     }),
     source: resource => Object.freeze({
       ...store.source<MessageEnvelope>(queueChannel(resource.id), body => decodeMessageEnvelope(body, `message for queue "${resource.id}"`)),
-      defaultMaxAttempts
+      defaultMaxAttempts,
+      pending: async () => store.pending(queueChannel(resource.id))
     }),
     queues: Object.freeze({
       messages: (queueId: string, states?: readonly LocalMessageState[]) => {

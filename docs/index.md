@@ -13,15 +13,16 @@ What exists today:
 - A pnpm + Turborepo monorepo with strict TypeScript, ESLint, Bun tests, and enforced package boundaries.
 - `@holqa/core`: `Result`, structured `Diagnostic` values, a diagnostic code registry, validated `ResourceId`s, and the descriptor protocol and runtime binding contract behind the resource model.
 - `@holqa/sdk`: `defineApp`, resource declarations (`queue`, `bucket`, `schedule`, `http.api`), configuration (`secret`, `variable`), typed resource handles inferred from source, handlers for queues, buckets (object created and deleted) and schedules, queue sends with delays, object operations with bounded listings and signed URLs, and HTTP routes, RPC procedures and typed middleware.
-- `@holqa/testing`: compile-time type assertions and `createTestApp` for deterministic integration tests (virtual clock, event flushing, failure injection, duplicate delivery, a simulation budget and publication chain inspection).
+- `@holqa/testing`: compile-time type assertions and `createTestApp` for deterministic integration tests (virtual clock, event flushing, failure injection, duplicate delivery, a simulation budget, publication chain inspection and in-memory telemetry).
 - `@holqa/compiler`: deterministic canonical JSON, schema contracts, compilation of an application into a validated resource graph and a deterministic manifest (version 1) with an entry point map, and an event dependency graph with cycle detection. See the [compiler specification](reference/compiler-specification.md) and [event safety](concepts/event-safety.md).
-- `@holqa/runtime-bun`: an invocation dispatcher with lifecycle, limits, cancellation and structured logs that executes compiled applications' HTTP routes and RPC procedures on Bun, and delivers queue messages, object events and scheduled runs with retries, backoff, dead-lettering, event lineage, depth and budget limits and graceful shutdown. See the [runtime reference](reference/runtime.md).
-- `@holqa/local`: a local binding with SQLite-backed queues, filesystem object storage with events and development signed URLs, and a clock-driven scheduler, plus inspection. See the [local environment reference](reference/local.md).
-- `@holqa/cli`: a `holqa` binary that prints help and version information, inspects an application and its event cycles (`holqa inspect`, `--cycles`), writes its manifest (`holqa build --manifest`), runs it locally with reloads (`holqa dev`), invokes handlers and sends events (`holqa invoke`, `queue send`, `storage put`, `cron run`), redrives dead letters (`holqa queue redrive`), prints local state (`holqa state`), checks the project (`holqa doctor`), and reports structured diagnostics (with `--json`). See the [local development guide](guides/local-development.md).
+- `@holqa/runtime-bun`: an invocation dispatcher with lifecycle, limits, cancellation and structured logs that executes compiled applications' HTTP routes and RPC procedures on Bun, and delivers queue messages, object events and scheduled runs with retries, backoff, dead-lettering, event lineage, depth and budget limits and graceful shutdown; it records traces and metrics on the OpenTelemetry model and redacts secrets from logs and telemetry. See the [runtime reference](reference/runtime.md) and [observability](concepts/observability.md).
+- `@holqa/opentelemetry`: an OTLP/HTTP JSON exporter for traces, metrics and logs, and the standard `OTEL_*` variables.
+- `@holqa/local`: a local binding with SQLite-backed queues, filesystem object storage with events and development signed URLs, and a clock-driven scheduler, plus inspection and a local telemetry store. See the [local environment reference](reference/local.md).
+- `@holqa/cli`: a `holqa` binary that prints help and version information, inspects an application and its event cycles (`holqa inspect`, `--cycles`), writes its manifest (`holqa build --manifest`), runs it locally with reloads (`holqa dev`), invokes handlers and sends events (`holqa invoke`, `queue send`, `storage put`, `cron run`), redrives dead letters (`holqa queue redrive`), prints local state (`holqa state`), checks the project (`holqa doctor`), prints logs, traces, event histories and metrics of local runs (`holqa logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`), and reports structured diagnostics (with `--json`). See the [local development guide](guides/local-development.md).
 
 Disposable prototypes from the [M0 milestone](milestones/m0/index.md) live in [`experiments/`](../experiments/README.md); they are not part of the framework.
 
-Everything else (`holqa openapi generate`, module hot-swapping, worker isolation, bundling, client generation, clients, integrations, and providers for external services) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
+Everything else (`holqa openapi generate`, module hot-swapping, worker isolation, bundling, client generation, clients, integrations other than Zod and OTLP export, a telemetry dashboard, and providers for external services) is **Accepted design**, **Proposed**, or **Planned**. The [status model](architecture/status-model.md) defines these terms; the [roadmap](roadmap.md) shows the order of work.
 
 ## Where to start
 
@@ -32,6 +33,7 @@ Everything else (`holqa openapi generate`, module hot-swapping, worker isolation
 | Try the repository or contribute | [Getting started](getting-started/index.md), [Development setup](contributing/development.md) |
 | Run, debug and test an application locally | [Local development guide](guides/local-development.md) |
 | Find event cycles and bound event-driven work | [Event safety guide](guides/event-safety.md) |
+| Read logs, traces and metrics, or export them to an OTLP backend | [Observability guide](guides/observability.md) |
 | Understand the architecture | [Architecture overview](architecture/overview.md) |
 | Look up a package, CLI flag, or diagnostic code | [Reference](#reference) |
 
@@ -47,6 +49,7 @@ Everything else (`holqa openapi generate`, module hot-swapping, worker isolation
 | [Type safety and schemas](concepts/type-safety-and-schemas.md) | Source-based inference, Standard Schema, runtime validation, compatibility. |
 | [Triggers and execution](concepts/triggers-and-execution.md) | HTTP, RPC, queues, storage events, schedules, and the Bun execution model. |
 | [Event safety](concepts/event-safety.md) | Event cycle analysis, event lineage, runtime limits, idempotency and replay (**Implemented**). |
+| [Observability](concepts/observability.md) | Structured logging, tracing, metrics, exporters and local execution history (**Implemented**; dashboard Planned). |
 | [Infrastructure providers](concepts/infrastructure-providers.md) | Contracts, runtime drivers, provisioning providers, capability negotiation. |
 | [Local development](concepts/local-development.md) | The local environment: `@holqa/local` drivers, `holqa dev`, reloads and `createTestApp` (**Implemented**). |
 | [Agent-native development](concepts/agent-native-development.md) | Structured output, stable diagnostics, skills, and safe automation. |

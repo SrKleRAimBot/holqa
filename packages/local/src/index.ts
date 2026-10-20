@@ -24,5 +24,26 @@ export {
   stateFileName,
   stateVersion
 } from "@/state/database";
+export { readDeliveryHistory } from "@/state/delivery-history";
+export type {
+  DeliveryHistory,
+  DeliveryRecord,
+  ObjectEventSummary
+} from "@/state/delivery-history";
 export type { DeliveryError, DeliveryState } from "@/state/lease-store";
 export type { LocalObjectEvent, LocalStorage } from "@/storage/local-storage";
+export {
+  createLocalTelemetryStore,
+  openLocalTelemetryReader,
+  telemetryFileName,
+  telemetryStoreVersion
+} from "@/telemetry/telemetry-store";
+export type {
+  LocalTelemetryReader,
+  LocalTelemetryStore,
+  LocalTelemetryStoreOptions,
+  LogQuery,
+  StoredLogEntry,
+  TelemetryRetention,
+  TraceSummary
+} from "@/telemetry/telemetry-store";

@@ -6,6 +6,7 @@ import type {
   InvocationContext,
   InvocationLineage,
   InvocationLogger,
+  InvocationTelemetry,
   ListObjectsOptions,
   ObjectEventMetadata,
   ObjectList,
@@ -107,6 +108,8 @@ export interface ObjectCreatedContext {
   readonly lineage?: InvocationLineage;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
+  /** The invocation's telemetry trace context, for example to pass a `traceparent` header to an outgoing call. Absent when the runtime records no telemetry. */
+  readonly telemetry?: InvocationTelemetry;
 }
 
 /** What an object-deleted handler receives. */
@@ -117,6 +120,8 @@ export interface ObjectDeletedContext {
   readonly lineage?: InvocationLineage;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
+  /** The invocation's telemetry trace context, for example to pass a `traceparent` header to an outgoing call. Absent when the runtime records no telemetry. */
+  readonly telemetry?: InvocationTelemetry;
 }
 
 /**
@@ -351,7 +356,7 @@ export function bucket<const Id extends string>(options: BucketOptions<Id> & Che
     },
     onObjectCreated: <const HandlerId extends string>(registration: ObjectCreatedOptions<HandlerId> & CheckResourceId<HandlerId>) => {
       const { handlerId, events, idempotency } = readEventRegistration<ObjectInfo>(registration, `object-created handler`, id);
-      const invoke: HandlerInvoke<"bucket.object-created"> = eventInvoke(objectInfoSchema, `object event for bucket "${id}"`, { handle, handlerId, idempotency }, (object, event, context) => registration.handler({ object, event, ...context.lineage === undefined ? {} : { lineage: context.lineage }, signal: context.signal, log: context.log }));
+      const invoke: HandlerInvoke<"bucket.object-created"> = eventInvoke(objectInfoSchema, `object event for bucket "${id}"`, { handle, handlerId, idempotency }, (object, event, context) => registration.handler({ object, event, ...context.lineage === undefined ? {} : { lineage: context.lineage }, signal: context.signal, log: context.log, ...context.telemetry === undefined ? {} : { telemetry: context.telemetry } }));
       const handler: ObjectCreatedHandler<Id, HandlerId> = Object.freeze({
         [descriptorKey]: Object.freeze({
           protocol: descriptorProtocol,
@@ -372,7 +377,7 @@ export function bucket<const Id extends string>(options: BucketOptions<Id> & Che
     },
     onObjectDeleted: <const HandlerId extends string>(registration: ObjectDeletedOptions<HandlerId> & CheckResourceId<HandlerId>) => {
       const { handlerId, events, idempotency } = readEventRegistration<DeletedObjectInfo>(registration, `object-deleted handler`, id);
-      const invoke: HandlerInvoke<"bucket.object-deleted"> = eventInvoke(deletedObjectSchema, `object event for bucket "${id}"`, { handle, handlerId, idempotency }, (object, event, context) => registration.handler({ object, event, ...context.lineage === undefined ? {} : { lineage: context.lineage }, signal: context.signal, log: context.log }));
+      const invoke: HandlerInvoke<"bucket.object-deleted"> = eventInvoke(deletedObjectSchema, `object event for bucket "${id}"`, { handle, handlerId, idempotency }, (object, event, context) => registration.handler({ object, event, ...context.lineage === undefined ? {} : { lineage: context.lineage }, signal: context.signal, log: context.log, ...context.telemetry === undefined ? {} : { telemetry: context.telemetry } }));
       const handler: ObjectDeletedHandler<Id, HandlerId> = Object.freeze({
         [descriptorKey]: Object.freeze({
           protocol: descriptorProtocol,

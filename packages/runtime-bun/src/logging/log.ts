@@ -1,8 +1,12 @@
 import type {
   InvocationLogger,
   JsonObject,
-  JsonValue
+  JsonValue,
+  Redactor,
+  TelemetryLogRecord
 } from "@holqa/core";
+
+import { createRedactor } from "@holqa/core";
 
 /** Log severities, from least to most severe. */
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -40,28 +44,56 @@ export function jsonLineSink(write: (line: string) => void = line => process.std
 /** A sink that drops every entry, for tests and embedding. */
 export const silentSink: LogSink = () => {};
 
+/** Severity order, for level filtering. */
+const severity: Readonly<Record<LogLevel, number>> = { debug: 0, info: 1, warn: 2, error: 3 };
+
 /**
- * Writes structured entries with fixed context fields to a sink.
+ * Reports whether a value is a log level.
+ *
+ * @param value - The candidate.
+ * @returns `true` for `debug`, `info`, `warn` and `error`.
+ */
+export function isLogLevel(value: unknown): value is LogLevel {
+  return typeof value === "string" && Object.hasOwn(severity, value);
+}
+
+/** What every logger derived from one root logger shares. */
+export interface LogSettings {
+  /** Where entries go. */
+  readonly sink: LogSink;
+  /** Returns the current wall-clock time. */
+  readonly clock: () => Date;
+  /** The least severe level written. Default `debug`. */
+  readonly level?: LogLevel;
+  /** Removes sensitive fields and secret values from every entry. Default: the default sensitive field names. */
+  readonly redactor?: Redactor;
+  /** Also receives every written entry as a telemetry log record, for example to export it. */
+  readonly onRecord?: (record: TelemetryLogRecord) => void;
+}
+
+/**
+ * Writes structured entries with fixed context fields to a sink. Entries
+ * below the configured level are dropped; every entry's message and fields
+ * are redacted (sensitive field names, known secret values) before the sink
+ * sees them.
  */
 export class StructuredLogger {
-  /** Where entries go. */
-  private readonly sink: LogSink;
+  /** Shared settings. */
+  private readonly settings: Required<Omit<LogSettings, "onRecord">> & Pick<LogSettings, "onRecord">;
   /** Fields added to every entry. */
   private readonly context: JsonObject;
-  /** Returns the current wall-clock time. */
-  private readonly clock: () => Date;
 
   /**
    * Creates a logger.
    *
-   * @param sink - Where entries go.
+   * @param sink - Where entries go, or the complete settings.
    * @param context - Fields added to every entry, for example `{ handlerId, invocationId }`.
-   * @param clock - Returns the current time; injectable for deterministic tests.
+   * @param clock - Returns the current time; injectable for deterministic tests. Ignored when `sink` is settings.
    */
-  constructor(sink: LogSink, context: JsonObject = {}, clock: () => Date = () => new Date()) {
-    this.sink = sink;
+  constructor(sink: LogSink | LogSettings, context: JsonObject = {}, clock: () => Date = () => new Date()) {
+    const settings: LogSettings = typeof sink === "function" ? { sink, clock } : sink;
+    this.settings = { ...settings, level: settings.level ?? "debug", redactor: settings.redactor ?? createRedactor() };
     this.context = context;
-    this.clock = clock;
   }
 
   /**
@@ -71,7 +103,17 @@ export class StructuredLogger {
    * @returns The new logger.
    */
   child(context: JsonObject): StructuredLogger {
-    return new StructuredLogger(this.sink, { ...this.context, ...context }, this.clock);
+    return new StructuredLogger(this.settings, { ...this.context, ...context });
+  }
+
+  /**
+   * Reports whether entries of a level are written.
+   *
+   * @param level - The severity.
+   * @returns `true` when the level is at or above the configured level.
+   */
+  enabled(level: LogLevel): boolean {
+    return severity[level] >= severity[this.settings.level];
   }
 
   /**
@@ -83,17 +125,29 @@ export class StructuredLogger {
    * @param fields - Structured data; keys named `level`, `time` or `message` are ignored.
    */
   write(level: LogLevel, message: string, fields: JsonObject = {}): void {
-    const entry: Record<string, JsonValue> = { level, time: this.clock().toISOString(), message };
+    if (!this.enabled(level))
+      return;
+    const { redactor, sink, onRecord } = this.settings;
+    const time = this.settings.clock();
+    const safeMessage = redactor.text(message);
+    const merged: Record<string, JsonValue> = {};
     for (const source of [this.context, fields]) {
       for (const [key, value] of Object.entries(source)) {
         if (!reservedKeys.has(key))
-          entry[key] = value;
+          merged[key] = value;
       }
     }
+    // Only the message and the fields are redacted: a secret that happens to
+    // equal a level name or part of a timestamp must not corrupt them.
+    const redacted: LogEntry = { level, time: time.toISOString(), message: safeMessage, ...redactor.object(merged) };
     try {
-      this.sink(entry as LogEntry);
+      sink(redacted);
     } catch (error) {
-      process.stderr.write(`holqa: the log sink failed (${error instanceof Error ? error.message : String(error)}) while writing: ${message}\n`);
+      process.stderr.write(`holqa: the log sink failed (${error instanceof Error ? error.message : String(error)}) while writing: ${safeMessage}\n`);
+    }
+    if (onRecord !== undefined) {
+      const { level: _level, time: _time, message: _message, traceId, spanId, ...attributes } = redacted;
+      onRecord({ time: time.getTime(), severity: level, body: safeMessage, attributes, ...typeof traceId === "string" ? { traceId } : {}, ...typeof spanId === "string" ? { spanId } : {} });
     }
   }
 
@@ -104,6 +158,7 @@ export class StructuredLogger {
    */
   forHandler(): InvocationLogger {
     return Object.freeze({
+      debug: (message: string, fields?: JsonObject) => this.write("debug", message, fields),
       info: (message: string, fields?: JsonObject) => this.write("info", message, fields),
       warn: (message: string, fields?: JsonObject) => this.write("warn", message, fields),
       error: (message: string, fields?: JsonObject) => this.write("error", message, fields)

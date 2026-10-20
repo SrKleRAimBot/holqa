@@ -17,15 +17,22 @@ import type {
 } from "@/dispatch/dispatcher";
 import type { RuntimeEventLimits } from "@/dispatch/event-guard";
 import type { CorsOptions } from "@/http/cors";
-import type { LogSink } from "@/logging/log";
+import type {
+  LogLevel,
+  LogSink
+} from "@/logging/log";
 import type { EnvironmentVariables } from "@/runtime/environment-binding";
+import type { TelemetryStats } from "@/telemetry/pipeline";
+import type { RuntimeTelemetryOptions } from "@/telemetry/runtime-telemetry";
 
 import {
   bindApp,
   checkTriggerDelivery,
   createDiagnostic,
+  createRedactor,
   diagnosticCodes,
   diagnosticsOf,
+  frameworkMetrics,
   getAppDescriptor,
   getHandlerDescriptor,
   HolqaError,
@@ -44,12 +51,17 @@ import { CorsPolicy } from "@/http/cors";
 import { createHttpHandler } from "@/http/http-handler";
 import { buildRouteTable } from "@/http/router";
 import {
+  isLogLevel,
   jsonLineSink,
   StructuredLogger
 } from "@/logging/log";
 import { RuntimeScope } from "@/runtime/application-scope";
 import { createEnvironmentBinding } from "@/runtime/environment-binding";
 import { traceBinding } from "@/runtime/traced-binding";
+import {
+  RuntimeTelemetry,
+  telemetryOptionProblems
+} from "@/telemetry/runtime-telemetry";
 
 /** Where a runtime is in its lifecycle. */
 export type RuntimeState = "idle" | "starting" | "running" | "stopping" | "stopped";
@@ -119,6 +131,26 @@ export interface RuntimeOptions {
   readonly manualTriggers?: boolean;
   /** Where structured logs go. Defaults to JSON lines on standard output. */
   readonly log?: LogSink;
+  /** The least severe log level written. Default `debug`: every entry. */
+  readonly logLevel?: LogLevel;
+  /**
+   * Redaction of logs and telemetry. Values of fields whose names contain
+   * `password`, `secret`, `token`, `authorization`, `cookie`, `apikey`,
+   * `accesskey`, `privatekey`, `credential` or `signature` are always
+   * replaced, and so is every occurrence of a declared secret's value (of
+   * at least four characters) in any text.
+   */
+  readonly redact?: {
+    /** More field names to redact, matched case-insensitively as substrings, ignoring punctuation. */
+    readonly keys?: readonly string[];
+  };
+  /**
+   * Traces, metrics and exported logs. Disabled unless exporters are given
+   * or `enabled` is `true`. Telemetry never affects invocations: exports
+   * are buffered, bounded and time-limited, and a failing exporter only
+   * loses its own data.
+   */
+  readonly telemetry?: RuntimeTelemetryOptions;
   /** Creates invocation identifiers. Defaults to `crypto.randomUUID`. */
   readonly createId?: () => string;
   /** A monotonic millisecond clock for durations. Defaults to `performance.now`. */
@@ -133,6 +165,8 @@ export interface StopOptions {
   readonly graceMs?: number;
   /** How long to wait after cancelling for handler code that ignores its signal, in milliseconds. Default 1 000. */
   readonly forceMs?: number;
+  /** How long to wait for the final telemetry export, in milliseconds. Default 5 000. */
+  readonly telemetryMs?: number;
 }
 
 /** A snapshot of a runtime's state and counters. */
@@ -140,6 +174,16 @@ export interface RuntimeStats extends DispatchStats {
   readonly state: RuntimeState;
   /** Counters of queue, object event and schedule deliveries. */
   readonly delivery: TransportStats;
+  /** Counters of recorded, exported and dropped telemetry. */
+  readonly telemetry: TelemetryStats;
+}
+
+/** Control over a runtime's telemetry. */
+export interface RuntimeTelemetryControl {
+  /** Whether spans and metrics are recorded. */
+  readonly enabled: boolean;
+  /** Exports everything recorded so far and waits for the exporters; never rejects. Useful in tests and before a process exits. */
+  readonly flush: () => Promise<void>;
 }
 
 /**
@@ -176,10 +220,11 @@ export interface Runtime {
   /** Serves one HTTP request with the application's routes and procedures; never rejects. */
   readonly fetch: (request: Request) => Promise<Response>;
   readonly stats: () => RuntimeStats;
+  readonly telemetry: RuntimeTelemetryControl;
 }
 
 /** Default limits. */
-const defaults = { concurrency: 256, queue: 1024, timeoutMs: 30_000, graceMs: 10_000, forceMs: 1_000 } as const;
+const defaults = { concurrency: 256, queue: 1024, timeoutMs: 30_000, graceMs: 10_000, forceMs: 1_000, telemetryMs: 5_000 } as const;
 
 /**
  * Creates a runtime for an application and its handlers. Creation is
@@ -210,6 +255,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   checkDeliveryOptions(options.delivery, problems);
   for (const problem of eventLimitProblems(options.events))
     problems.push(createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: problem }));
+  problems.push(...telemetryOptionProblems(options.telemetry));
+  if (options.logLevel !== undefined && !isLogLevel(options.logLevel))
+    problems.push(createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: "\"logLevel\" must be \"debug\", \"info\", \"warn\" or \"error\"." }));
+  const redactKeys = options.redact?.keys;
+  if (redactKeys !== undefined && !(Array.isArray(redactKeys) && redactKeys.every(key => typeof key === "string")))
+    problems.push(createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: "\"redact.keys\" must be a list of field names." }));
   const { table, problems: routeProblems } = buildRouteTable(app, [...handlers.values()].map(handler => handler.definition));
   problems.push(...routeProblems);
   let cors: CorsPolicy | undefined;
@@ -221,11 +272,22 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   if (problems.length > 0)
     throw new HolqaError(problems);
 
-  const logger = new StructuredLogger(options.log ?? jsonLineSink(), { application: app.name }, options.clock);
+  const wallClock = options.clock ?? (() => new Date());
+  const monotonicNow = options.now ?? (() => performance.now());
+  const redactor = createRedactor(redactKeys === undefined ? {} : { keys: redactKeys });
+  // Created before the logger, which reports to it; it reports export problems through the logger.
+  let logger: StructuredLogger | undefined;
+  const telemetry = new RuntimeTelemetry(options.telemetry, {
+    appName: app.name,
+    wallNow: () => wallClock().getTime(),
+    monotonicNow,
+    redactor,
+    report: problem => logger?.write("warn", "telemetry export failed; the records were dropped", { code: diagnosticCodes.telemetryExportFailed, exporter: problem.exporter, signal: problem.signal, failures: problem.failures, error: problem.message })
+  });
+  logger = new StructuredLogger({ sink: options.log ?? jsonLineSink(), clock: wallClock, level: options.logLevel ?? "debug", redactor, onRecord: record => telemetry.log(record) }, { application: app.name });
   const scope = new RuntimeScope(logger);
   const tracker = new InvocationTracker();
   const guard = new EventGuard(app, [...handlers.values()].map(handler => handler.definition), options.events);
-  const wallClock = options.clock ?? (() => new Date());
   let state: RuntimeState = "idle";
   let unbind: (() => void) | undefined;
   let stopping: Promise<void> | undefined;
@@ -236,24 +298,30 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     timeoutMs: limits.timeoutMs,
     logger,
     createId: options.createId ?? (() => crypto.randomUUID()),
-    now: options.now ?? (() => performance.now()),
+    now: monotonicNow,
     scope: scope.scope,
     accepting: () => state === "running",
     tracker,
-    sources: readSources(options.handlerSources)
+    sources: readSources(options.handlerSources),
+    telemetry
+  });
+  telemetry.gauge(frameworkMetrics.activeInvocations, () => {
+    const { running, waiting } = dispatcher.stats();
+    return [{ value: running, attributes: { "holqa.invocation.state": "running" } }, { value: waiting, attributes: { "holqa.invocation.state": "waiting" } }];
   });
   const transports = new Transports({
     app,
     handlers,
     delivery: options.delivery ?? {},
     timeoutMs: limits.timeoutMs,
-    dispatch: request => dispatcher.dispatch(request),
     stopping: () => state !== "running",
     logger,
     guard,
+    telemetry,
+    dispatch: (request, instrumentation) => dispatcher.dispatch(request, instrumentation),
     now: () => wallClock().getTime()
   });
-  const fetch = createHttpHandler({ table, dispatcher, logger, ...cors === undefined ? {} : { cors }, trustCorrelationHeader: options.http?.trustCorrelationHeader ?? true });
+  const fetch = createHttpHandler({ table, dispatcher, logger, ...cors === undefined ? {} : { cors }, trustCorrelationHeader: options.http?.trustCorrelationHeader ?? true, telemetry, now: monotonicNow });
 
   /**
    * Starts the runtime: validates configuration and installs the binding.
@@ -266,7 +334,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     state = "starting";
     try {
       // Handler code's sends and writes carry the invocation's trace and are recorded as emitted.
-      const binding = traceBinding(options.binding ?? await createEnvironmentBinding(app, options.env ?? process.env), tracker, guard);
+      const binding = traceBinding(options.binding ?? await createEnvironmentBinding(app, options.env ?? process.env), tracker, guard, telemetry);
       if (state !== "starting")
         throw new HolqaError(createDiagnostic({ code: diagnosticCodes.runtimeNotRunning, severity: "error", message: `The runtime for "${app.name}" was stopped while it was starting.` }));
       const unsupported = checkEventSafetySupport(binding, [...handlers.values()].map(handler => handler.definition), guard.needsOperationBudgets);
@@ -278,7 +346,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         if (undeliverable.length > 0)
           throw new HolqaError(undeliverable);
       }
+      // Values of declared secrets never reach logs or telemetry.
+      redactor.addValues(secretValues(app, binding));
       unbind = bindApp(app, binding);
+      telemetry.start();
       state = "running";
       if (options.manualTriggers !== true)
         await transports.start(binding);
@@ -323,6 +394,7 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       state = "stopped";
       if (wasRunning)
         logger.write("info", "runtime stopped", { ...dispatcher.stats() });
+      await telemetry.shutdown(stopOptions.telemetryMs ?? defaults.telemetryMs);
     })();
     return stopping;
   };
@@ -338,8 +410,41 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     // Lineage is assigned by the runtime: a direct invocation is always a root.
     invoke: ({ rootId: _rootId, depth: _depth, ...request }: InvocationRequest) => dispatcher.dispatch(request),
     fetch,
-    stats: () => Object.freeze({ state, ...dispatcher.stats(), delivery: transports.stats() })
+    stats: () => Object.freeze({ state, ...dispatcher.stats(), delivery: transports.stats(), telemetry: telemetry.stats() }),
+    telemetry: Object.freeze({ enabled: telemetry.enabled, flush: () => telemetry.flush() })
   });
+}
+
+/**
+ * Reads the values of the application's declared secrets from a binding,
+ * so that they can be redacted from logs and telemetry. Non-string values
+ * contribute their string leaves.
+ *
+ * @param app - The application.
+ * @param binding - The installed binding.
+ * @returns The secret strings.
+ */
+function secretValues(app: AppDescriptor, binding: RuntimeBinding): string[] {
+  const values: string[] = [];
+  /**
+   * Collects the strings of a value.
+   *
+   * @param value - A configuration value.
+   * @param depth - How deep the value is nested.
+   */
+  const collect = (value: unknown, depth: number): void => {
+    if (typeof value === "string")
+      values.push(value);
+    else if (typeof value === "number" || typeof value === "bigint")
+      values.push(String(value));
+    else if (typeof value === "object" && value !== null && depth < 8)
+      Object.values(value).forEach(item => collect(item, depth + 1));
+  };
+  for (const entry of app.config) {
+    if (entry.sensitive)
+      collect(binding.config(entry), 0);
+  }
+  return values;
 }
 
 /**

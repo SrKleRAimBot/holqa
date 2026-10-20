@@ -85,7 +85,7 @@ Bindings for external storage services validate their own signatures and documen
 | --- | --- |
 | `queues.messages(queueId, states?)` | Lists messages with `messageId`, `state` (`ready`, `delayed`, `in-flight`, `acknowledged`, `dead-lettered`), `attempts`, `schemaVersion`, `payload`, times, the last failure and the sender's `trace`, when one was recorded. |
 | `queues.deadLetters(queueId)` | Lists dead-lettered messages. |
-| `queues.redrive(queueId, selection?)` | Makes dead-lettered messages due again with a fresh attempt count, oldest first, in one transaction: all of them, the one a message identifier (a string) names, or the ones `{ messageId?, limit?, newOperation? }` selects. Messages keep their trace and lineage unless `newOperation` gives each a new root operation (depth 0, a fresh budget, a new send time, the same correlation). Returns how many. |
+| `queues.redrive(queueId, selection?)` | Makes dead-lettered messages due again with a fresh attempt count, oldest first, in one transaction: all of them, the one a message identifier (a string) names, or the ones `{ messageId?, limit?, newOperation? }` selects. Messages keep their trace and lineage unless `newOperation` gives each a new root operation (depth 0, a fresh budget, a new send time, the same correlation) and a new telemetry trace (the stored `traceparent` is cleared). Returns how many. |
 | `queues.duplicate(queueId, messageId)` | Delivers a known message once more, with the same message identifier. |
 | `queues.purge(queueId)` | Deletes every message that is not in flight. |
 | `storage.events(bucketId)` | Lists events with their `trace` (when the writing invocation recorded one and a subscription received the event) and each subscription's delivery `state`, `attempts`, `visibleAt` (when it is due again or its lease ends) and last failure. |
@@ -94,6 +94,8 @@ Bindings for external storage services validate their own signatures and documen
 | `storage.redriveEvents(bucketId, subscription, eventId?)`, `storage.duplicateEvent(bucketId, subscription, eventId)` | The same for object events, per subscription. |
 | `scheduler.trigger(scheduleId)` | Starts a manual run through the runtime and resolves with its record. Fails with `HOLQA_RUNTIME_NOT_RUNNING` when no runtime receives the schedule. |
 | `scheduler.runs(scheduleId, limit?)`, `scheduler.nextRun(scheduleId)` | Recorded runs (`running`, `succeeded`, `failed`, `skipped`, `missed`), newest first, and the next cron run. |
+| `binding.sources.queue(resource).pending()` | Counts a queue's messages that are ready, delayed or in flight (`QueueSource.pending`); the runtime reports it as the `holqa.queue.pending` metric. |
+| `readDeliveryHistory(directory, id)` | Reads, read-only and without an environment, what the state records about one message or object event: one `DeliveryRecord` per channel (`kind`, `resourceId`, `subscription`, `state`, `attempts`, times, `lastError`, `trace` with lineage and `traceparent`) and, for an object event, its bucket, type, key and time. `undefined` when nothing has the identifier or the directory has no state. `holqa events inspect` uses it. |
 | `settle({ timeoutMs? })` | Waits until no message or event that a runtime receives is due or in flight and no run is in progress. Work waiting for the clock does not count. Fails with `HOLQA_INVOCATION_TIMEOUT` after `timeoutMs` (default 10 000 real milliseconds). |
 
 ## Deterministic tests
@@ -122,14 +124,41 @@ expect(local.queues.deadLetters("document-jobs")).toEqual([]);
 
 `manualTriggerMetadata(app, definition, { now, createId, attempt?, messageId?, eventId? })` builds the trusted metadata `runtime.invoke` requires for one invocation of a background handler, as if its trigger had fired: a first delivery of a new message (with the queue's `schemaVersion`), a first delivery of a new object event at `now`, or a manual run (`trigger: "manual"`) scheduled at `now`. Nothing is stored, so the invocation does not appear in queue, event or schedule history. HTTP handlers are refused with `HOLQA_OPERATION_INVALID`, because they are invoked with a request; so is an attempt that is not a positive integer. `holqa invoke` and `createTestApp().invoke` use it.
 
+## Telemetry store
+
+`createLocalTelemetryStore({ directory, retention?, clock? })` opens `telemetry.sqlite` in a state directory: a bounded store of recent spans, log entries and metric series, separate from the resource state, that `holqa logs`, `holqa traces`, `holqa events inspect` and `holqa metrics` read. Several processes may write to it.
+
+```ts
+import { createLocalTelemetryStore } from "@holqa/local";
+
+const store = createLocalTelemetryStore({ directory: ".holqa/local" });
+const runtime = createRuntime({ app, handlers, binding: local.binding, log: store.writeLog, telemetry: { exporters: [store.exporter] } });
+```
+
+| API | What it does |
+| --- | --- |
+| `exporter` | A `TelemetryExporter` named `local` that stores spans and the latest point of every metric series, per runtime instance (`service.instance.id`), writing asynchronously. |
+| `writeLog(entry)` | Queues one runtime log entry; use it from a log sink. Entries are written in batches every 200 ms, off the caller's stack. At most 2 048 entries wait; further ones are dropped and reported on standard error at most once a minute. |
+| `flushLogs()` | Writes the queued log entries now. |
+| `increment(metric, attributes?, by?)` | Adds to a counter reported by a process outside a runtime, in an immediate transaction; the dev session counts `holqa.dev.reload.failures` this way. |
+| `logs({ after?, limit?, level?, handlerId?, traceId?, correlationId?, deliveryId? })` | Log entries with their position (`seq`), oldest first: the newest `limit` (default 100), or those after a position. |
+| `traces(limit?)` | The most recent traces (default 20), newest first: `traceId`, root span name, start, duration, span count, errors. |
+| `trace(traceId)`, `matchTraceIds(prefix)` | One trace's spans by start time; the stored trace identifiers starting with a prefix (at most two). |
+| `spansOfDelivery(id)` | The spans that processed or published one message or object event. |
+| `metrics()` | Framework metrics, aggregated per name and type: counters and histograms of the instances that reported them are added up (histograms only when their bucket boundaries are equal); gauges come from the latest report. |
+| `close()` | Writes the queued log entries and closes the store. |
+
+Retention (`retention`): at most `maxSpans` spans (default 20 000) and `maxLogs` log entries (default 20 000), and nothing older than `maxAgeMs` (default 24 hours), enforced every 200 writes. Invalid settings fail with `HOLQA_DECLARATION_INVALID`. `openLocalTelemetryReader(directory)` opens the same queries read-only, or returns `undefined` when nothing was recorded yet. Rows that cannot be read (damaged or written by something else) are skipped. The store has its own format (`telemetryStoreVersion`, 1); a newer format fails with `HOLQA_LOCAL_STATE_UNSUPPORTED`, for writers and readers alike, and the file can be deleted at any time. The store waits at most 100 ms for a lock: a batch that cannot get it is dropped rather than slowing the application down.
+
 ## State format
 
-The state directory has format version 3 (`stateVersion`). Format 2 added the sender's trace to deliveries; format 3 adds their lineage (`root_id`, `depth`) and the `operation_budgets` and `idempotency_keys` tables. Format 1 and 2 directories are upgraded in place when they are opened; their existing deliveries have no lineage, so each starts a new root operation when it is delivered. Opening a directory written by a newer format fails with `HOLQA_LOCAL_STATE_UNSUPPORTED`; after an upgrade, older versions of the local drivers therefore refuse the directory. The format is not a public contract: it can change before 1.0, and inspection should go through the APIs above.
+The state directory has format version 4 (`stateVersion`). Format 2 added the sender's trace to deliveries; format 3 added their lineage (`root_id`, `depth`) and the `operation_budgets` and `idempotency_keys` tables; format 4 adds the publishing span's telemetry context (`traceparent`). Format 1 to 3 directories are upgraded in place when they are opened; deliveries written before format 3 have no lineage, so each starts a new root operation when it is delivered, and deliveries written before format 4 start a new telemetry trace. Opening a directory written by a newer format fails with `HOLQA_LOCAL_STATE_UNSUPPORTED`; after an upgrade, older versions of the local drivers therefore refuse the directory. The format is not a public contract: it can change before 1.0, and inspection should go through the APIs above.
 
 ## Related
 
 - [Runtime reference](runtime.md)
 - [Event safety](../concepts/event-safety.md)
+- [Observability](../concepts/observability.md)
 - [Local development](../concepts/local-development.md)
 - [Local development guide](../guides/local-development.md)
 - [CLI reference](cli.md)

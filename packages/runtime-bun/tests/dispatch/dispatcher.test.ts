@@ -1,5 +1,6 @@
 import type { RegisteredHandler } from "@/dispatch/dispatcher";
 
+import { createRedactor } from "@holqa/core";
 import {
   application,
   latch,
@@ -17,6 +18,7 @@ import { Dispatcher } from "@/dispatch/dispatcher";
 import { InvocationTracker } from "@/dispatch/invocation-tracker";
 import { StructuredLogger } from "@/logging/log";
 import { RuntimeScope } from "@/runtime/application-scope";
+import { RuntimeTelemetry } from "@/telemetry/runtime-telemetry";
 
 /**
  * Creates a dispatcher for schedule handlers.
@@ -42,7 +44,8 @@ function dispatcherFor(handle: (context: { readonly signal: AbortSignal }) => Pr
     scope: new RuntimeScope(logger).scope,
     accepting: () => true,
     tracker: new InvocationTracker(),
-    sources: new Map()
+    sources: new Map(),
+    telemetry: new RuntimeTelemetry(undefined, { appName: "test", wallNow: () => 0, monotonicNow: () => 0, redactor: createRedactor(), report: () => {} })
   });
 }
 

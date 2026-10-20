@@ -7,7 +7,7 @@ description: Design rules for integrating Holqa with existing TypeScript librari
 
 ## Purpose
 
-Holqa must compose with the TypeScript ecosystem rather than replace it. Every integration is **Planned**: no integration package exists yet (`packages/integrations/{zod,valibot,effect,orpc,tanstack-query}` contain READMEs only, and final npm names are undecided). This skill sets the rules for designing them so they stay thin, optional, and correctly layered.
+Holqa must compose with the TypeScript ecosystem rather than replace it. Two integrations are **Implemented**: the Zod schema adapter (`@holqa/zod`) and OTLP/HTTP JSON export of telemetry (`@holqa/opentelemetry`, no OpenTelemetry SDK dependency). Every other integration is **Planned** (`packages/integrations/{valibot,effect,orpc,tanstack-query}` contain READMEs only, and final npm names are undecided). This skill sets the rules for designing them so they stay thin, optional, and correctly layered.
 
 ## When to use
 
@@ -26,7 +26,7 @@ Holqa must compose with the TypeScript ecosystem rather than replace it. Every i
 6. **Explicit capability gaps.** If a library feature cannot map to a Holqa contract, emit a diagnostic or document the limitation; do not approximate silently.
 7. **Honest status.** Every doc and README describes integrations as Planned (or Proposed once designed) until code and tests exist.
 
-## Integration map (all Planned)
+## Integration map (Planned unless noted)
 
 | Library | Category | Intended shape | Must not |
 | --- | --- | --- | --- |
@@ -40,7 +40,7 @@ Holqa must compose with the TypeScript ecosystem rather than replace it. Every i
 | TanStack Start | Full-stack hosting | Future integration only | Be an initial requirement |
 | Vite | Dev server and static builds | Reuse Vite HMR; single-origin dev via proxy where possible; static builds as `staticSite` resources | Build a competing frontend dev server |
 | Drizzle, Prisma, native PostgreSQL clients | Data access | Bring your own client; Holqa provides connection configuration through `secret`/`variable` (illustrative) | Introduce a Holqa SQL/ORM abstraction or promise automatic reactivity |
-| OpenTelemetry | Observability | Emit traces/logs from the runtime | Require a specific vendor backend |
+| OpenTelemetry | Observability | OTLP/HTTP export of runtime traces, metrics and logs (**Implemented**, `@holqa/opentelemetry`); an `@opentelemetry/api` bridge (Planned) | Require a specific vendor backend, or depend on the OpenTelemetry SDK from core packages |
 
 ## Instructions
 

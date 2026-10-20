@@ -34,7 +34,9 @@ const knownFields: ReadonlySet<string> = new Set([
   "source",
   "transport",
   "method",
-  "path"
+  "path",
+  "traceId",
+  "spanId"
 ]);
 
 /**
@@ -115,6 +117,9 @@ export function formatLogEntry(entry: JsonObject, root: string): string {
   const causationId = text(entry, "causationId");
   if (causationId !== undefined)
     parts.push(`from ${short(causationId)}`);
+  const traceId = text(entry, "traceId");
+  if (traceId !== undefined)
+    parts.push(`otel ${traceId.slice(0, 8)}`);
   const emitted = entry["emitted"];
   if (Array.isArray(emitted) && emitted.length > 0)
     parts.push(`-> ${emitted.map(describeEmitted).join(", ")}`);

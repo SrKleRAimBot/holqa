@@ -14,23 +14,26 @@ import { Database } from "bun:sqlite";
  * The state format this version of the local drivers reads and writes.
  * Format 2 adds the sender's trace to deliveries; format 3 adds the event
  * lineage (root operation and depth) to deliveries, per-operation budgets
- * and idempotency keys. Older directories are upgraded in place when they
- * are opened; deliveries written before format 3 start a new lineage.
+ * and idempotency keys; format 4 adds the publisher's telemetry trace
+ * context (`traceparent`) to deliveries. Older directories are upgraded in
+ * place when they are opened; deliveries written before format 3 start a
+ * new lineage, and deliveries written before format 4 start a new telemetry trace.
  */
-export const stateVersion = 3;
+export const stateVersion = 4;
 
 /** The file the state lives in, inside the state directory. */
 export const stateFileName = "state.sqlite";
 
 /**
- * The tables of state version 3. Every time is epoch milliseconds of the
+ * The tables of state version 4. Every time is epoch milliseconds of the
  * environment's clock.
  *
  * - `deliveries`: leased deliveries of queue messages and object events. A
  *   row is due when its `state` is `ready` or `leased` and `visible_at` has
  *   passed; a leased row's `visible_at` is the end of its lease.
  *   `correlation_id`, `causation_id`, `root_id` and `depth` record the
- *   sender's trace and lineage.
+ *   sender's trace and lineage; `traceparent` the publishing span's
+ *   telemetry context.
  * - `operation_budgets`: events published per root operation, for
  *   `maxEventsPerOperation`; updated in transactions, so every process that
  *   shares the directory sees one count.
@@ -60,7 +63,8 @@ CREATE TABLE IF NOT EXISTS deliveries (
   correlation_id TEXT,
   causation_id TEXT,
   root_id TEXT,
-  depth INTEGER
+  depth INTEGER,
+  traceparent TEXT
 ) STRICT;
 CREATE INDEX IF NOT EXISTS deliveries_due ON deliveries (channel, state, visible_at);
 CREATE INDEX IF NOT EXISTS deliveries_identity ON deliveries (channel, delivery_id);
@@ -165,9 +169,9 @@ export function openStateDatabase(directory: string): Database {
     }
     database.transaction(() => {
       database.run(schema);
-      // Formats 1 and 2 lack trace and lineage columns; `CREATE TABLE IF NOT EXISTS` does not add them to an existing table.
+      // Formats 1 to 3 lack trace, lineage or telemetry columns; `CREATE TABLE IF NOT EXISTS` does not add them to an existing table.
       const columns = new Set(database.query<{ name: string }, []>("PRAGMA table_info(deliveries)").all().map(column => column.name));
-      for (const [column, type] of [["correlation_id", "TEXT"], ["causation_id", "TEXT"], ["root_id", "TEXT"], ["depth", "INTEGER"]] as const) {
+      for (const [column, type] of [["correlation_id", "TEXT"], ["causation_id", "TEXT"], ["root_id", "TEXT"], ["depth", "INTEGER"], ["traceparent", "TEXT"]] as const) {
         if (!columns.has(column))
           database.run(`ALTER TABLE deliveries ADD COLUMN ${column} ${type}`);
       }

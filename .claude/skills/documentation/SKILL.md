@@ -60,7 +60,7 @@ Mixed docs summarize in the status line and label individual rows or sections.
 
   > The following code is illustrative. The API is proposed, not implemented, and may change.
 
-- CLI: `holqa --help`, `--version`, `--json`, `inspect` (with `--cycles`), `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state` and `doctor` work. `build` without `--manifest` and `openapi generate` exit 1 with `HOLQA_CLI_NOT_IMPLEMENTED`; unknown commands exit 2 with `HOLQA_CLI_UNKNOWN_COMMAND`. `holqa dev` reloads by restarting a process; module-level hot-swapping is Planned.
+- CLI: `holqa --help`, `--version`, `--json`, `inspect` (with `--cycles`), `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect` and `metrics` work. `build` without `--manifest` and `openapi generate` exit 1 with `HOLQA_CLI_NOT_IMPLEMENTED`; unknown commands exit 2 with `HOLQA_CLI_UNKNOWN_COMMAND`. `holqa dev` reloads by restarting a process; module-level hot-swapping is Planned.
 - Never paste output you did not produce by running the command. Prefer describing output over fabricating it.
 - Never upgrade a status without the evidence the status model requires. When unsure, use the weaker label.
 - Present Holqa as independent and infrastructure-agnostic. Do not name or imply a proprietary or first-party hosting product, and do not center one cloud vendor; use neutral terms ("an S3-compatible object store") or several examples.

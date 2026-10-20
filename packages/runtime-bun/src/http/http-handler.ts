@@ -6,10 +6,16 @@ import type {
   RouteTransport
 } from "@/http/router";
 import type { StructuredLogger } from "@/logging/log";
+import type { RuntimeTelemetry } from "@/telemetry/runtime-telemetry";
+import type { ActiveSpan } from "@/telemetry/tracer";
 
 import {
   diagnosticCodes,
-  isResponseLike
+  frameworkMetrics,
+  isResponseLike,
+  parseTraceparent,
+  traceparentHeader,
+  tracestateHeader
 } from "@holqa/core";
 
 import { runtimeFailure } from "@/dispatch/failure";
@@ -32,6 +38,19 @@ export interface HttpHandlerOptions {
   readonly cors?: CorsPolicy;
   /** Whether to adopt a caller's `x-correlation-id`. When `false`, every request gets its invocation identifier. */
   readonly trustCorrelationHeader: boolean;
+  /** Records server spans and request durations. */
+  readonly telemetry: RuntimeTelemetry;
+  /** A monotonic clock in milliseconds, for request durations. */
+  readonly now: () => number;
+}
+
+/** Methods recorded as themselves in metrics; anything else is `_OTHER`, as OpenTelemetry's HTTP conventions require, so callers cannot create series. */
+const knownMethods: ReadonlySet<string> = new Set(["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "CONNECT", "TRACE"]);
+
+/** What the request handler reports back about the request it served. */
+interface ServedRequest {
+  /** The matched route template, for example `/api/orders/:orderId`. */
+  route?: string;
 }
 
 /**
@@ -46,16 +65,45 @@ export interface HttpHandlerOptions {
  */
 export function createHttpHandler(options: HttpHandlerOptions): (request: Request) => Promise<Response> {
   const handle = createRequestHandler(options);
+  const { telemetry } = options;
   return async (request) => {
+    const started = options.now();
+    const parent = telemetry.acceptTraceparent ? parseTraceparent(request.headers.get(traceparentHeader), request.headers.get(tracestateHeader)) : undefined;
+    const method = knownMethods.has(request.method) ? request.method : "_OTHER";
+    // The route template is recorded once matched; the concrete path is not,
+    // because path segments often hold personal data (as object keys do).
+    const span = telemetry.startSpan({
+      name: method === "_OTHER" ? "HTTP" : method,
+      kind: "server",
+      ...parent === undefined ? {} : { parent },
+      attributes: { "http.request.method": method, ...method === "_OTHER" ? { "http.request.method_original": request.method.slice(0, 32) } : {} }
+    });
+    const served: ServedRequest = {};
+    let response: Response;
     try {
-      return await handle(request);
+      response = await handle(request, span, served);
     } catch (error) {
       // Building a response can still fail (for example on headers a
       // foreign error object carries). Answer with a generic 500 instead of
       // letting the server render the error.
       options.logger.write("error", "the runtime failed to build a response", { error: describeError(error) });
-      return errorResponse(runtimeFailure(diagnosticCodes.handlerFailed, "The request could not be handled."), "http", undefined);
+      span?.recordException(error);
+      response = errorResponse(runtimeFailure(diagnosticCodes.handlerFailed, "The request could not be handled."), "http", undefined);
     }
+    const status = response.status;
+    if (span !== undefined) {
+      span.setAttribute("http.response.status_code", status);
+      if (served.route !== undefined) {
+        span.setAttribute("http.route", served.route);
+        span.updateName(`${method === "_OTHER" ? "HTTP" : method} ${served.route}`);
+      }
+      // OpenTelemetry's HTTP conventions: a 4xx is the caller's error, not the server's.
+      if (status >= 500)
+        span.setStatus({ code: "error", message: `HTTP ${status}` });
+      span.end();
+    }
+    telemetry.record(frameworkMetrics.httpServerDuration, (options.now() - started) / 1000, { "http.request.method": method, "http.response.status_code": status, ...served.route === undefined ? {} : { "http.route": served.route } });
+    return response;
   };
 }
 
@@ -63,11 +111,11 @@ export function createHttpHandler(options: HttpHandlerOptions): (request: Reques
  * Creates the request handler without the final safety net.
  *
  * @param options - The route table, dispatcher, logger and HTTP settings.
- * @returns A function from `Request` to `Response` that may reject on internal errors.
+ * @returns A function from `Request` (with the request's server span and a record of what was served) to `Response` that may reject on internal errors.
  */
-function createRequestHandler(options: HttpHandlerOptions): (request: Request) => Promise<Response> {
+function createRequestHandler(options: HttpHandlerOptions): (request: Request, span: ActiveSpan | undefined, served: ServedRequest) => Promise<Response> {
   const { table, dispatcher, logger, cors } = options;
-  return async (request) => {
+  return async (request, span, served) => {
     const url = new URL(request.url);
     const offered = request.headers.get(correlationHeader);
     const correlationId = options.trustCorrelationHeader && offered !== null && correlationPattern.test(offered) ? offered : undefined;
@@ -98,13 +146,14 @@ function createRequestHandler(options: HttpHandlerOptions): (request: Request) =
     if (match.kind === "method-not-allowed")
       return reject(runtimeFailure(diagnosticCodes.httpMethodNotAllowed, `${request.method} is not allowed for ${url.pathname}.`, { allow: match.allowed.join(", ") }), match.transport);
 
+    served.route = match.entry.path;
     const outcome = await dispatcher.dispatch({
       handlerId: match.entry.handlerId,
       input: Object.freeze({ request, params: match.params }),
       signal: request.signal,
       ...correlationId === undefined ? {} : { correlationId },
       logFields: { method: request.method, path: url.pathname }
-    });
+    }, span === undefined ? {} : { span });
     const headers = { ...corsHeaders, [correlationHeader]: outcome.correlationId };
     if (!outcome.ok)
       return finalize(errorResponse(outcome.failure, match.entry.transport, outcome.invocationId), request, headers);

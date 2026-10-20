@@ -79,7 +79,10 @@ describe("diagnosticCodes", () => {
       eventAgeExceeded: "HOLQA_EVENT_AGE_EXCEEDED",
       executionBudgetExceeded: "HOLQA_EXECUTION_BUDGET_EXCEEDED",
       idempotencyInProgress: "HOLQA_IDEMPOTENCY_IN_PROGRESS",
-      simulationBudgetExceeded: "HOLQA_SIMULATION_BUDGET_EXCEEDED"
+      simulationBudgetExceeded: "HOLQA_SIMULATION_BUDGET_EXCEEDED",
+      telemetryConfigInvalid: "HOLQA_TELEMETRY_CONFIG_INVALID",
+      telemetryExportFailed: "HOLQA_TELEMETRY_EXPORT_FAILED",
+      telemetryNotFound: "HOLQA_TELEMETRY_NOT_FOUND"
     });
   });
 });

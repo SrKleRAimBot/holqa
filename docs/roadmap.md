@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Status:** Phase 0 to phase 3 and the event safety milestone (M8) are in progress. Later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
+> **Status:** Phase 0 to phase 3, the event safety milestone (M8) and the observability milestone (M9) are in progress. Later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
 
 This roadmap distinguishes the current bootstrap state from future implementation work. Status terms follow the [status model](architecture/status-model.md). Each phase lists its goals and the exit criteria that must hold before the phase is considered complete. Later phases may start before earlier ones finish when the dependency allows it.
 
@@ -14,6 +14,7 @@ This roadmap distinguishes the current bootstrap state from future implementatio
 | 2 | Compiler | In progress (manifest, discovery, validation, `inspect` and `build --manifest` **Implemented**) |
 | 3 | Bun runtime and local development | In progress (runtime, `@holqa/local` drivers, `holqa dev`, the operation commands and `createTestApp` **Implemented**; hot-swapping and worker isolation Planned) |
 | M8 | Event safety, reliability and execution safeguards | In progress (cycle analysis, event lineage, runtime limits, idempotency, controlled redrive and test utilities **Implemented**; backlog thresholds and budgets on other bindings Planned) |
+| M9 | Observability, structured logging and telemetry | In progress (structured logging with redaction, tracing, framework metrics, OTLP/HTTP export, the local telemetry store, the telemetry commands and test helpers **Implemented**; dashboard and OpenTelemetry API bridge Planned) |
 | 4 | Clients and integrations | Planned |
 | 5 | Providers and bindings | Planned |
 | Future | Extended triggers and tooling | Planned |
@@ -150,7 +151,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 
 - `@holqa/runtime-bun`: worker isolation for production runtimes.
 - Module-level hot-swapping (through Bun's reload capabilities or a Vite module runner) that preserves module lifecycles and disposes of old resources; process restarts remain the fallback.
-- A graphical dashboard for local state and traces, if it adds value beyond `holqa state` and the structured logs.
+- A graphical dashboard for local state and traces, if it adds value beyond `holqa state` and the [telemetry commands](#m9-observability-structured-logging-and-telemetry).
 
 ### Exit criteria
 
@@ -192,6 +193,38 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 - A runaway chain is stopped by an enforceable runtime policy and produces a terminal diagnostic. **Met** (`HOLQA_EVENT_DEPTH_EXCEEDED`, `HOLQA_EXECUTION_BUDGET_EXCEEDED`; dead-lettered without retries).
 - Duplicate delivery and retry tests demonstrate the documented idempotency guarantees and limitations. **Met** (`@holqa/testing` and `examples/event-safety`).
 - Independent invocations do not accidentally share lineage or execution-budget state. **Met** (roots are runtime-assigned; requests sharing a caller's correlation identifier get separate budgets).
+
+## M9: Observability, structured logging and telemetry
+
+**Goal:** Observe executions across HTTP, RPC, queues, storage events and scheduled tasks in one way, without requiring a specific monitoring provider. See [observability](concepts/observability.md) and [ADR 0027](architecture/decisions/0027-observability-telemetry-and-local-inspection.md).
+
+### Done
+
+| Item | Status |
+| --- | --- |
+| Observability core in `@holqa/core`: W3C trace context, the telemetry data model and `TelemetryExporter`, the framework metric registry, redaction | **Implemented** |
+| Structured logger: `log.debug/info/warn/error` with application, handler, invocation, correlation, lineage and trace identifiers; level filtering; configurable sinks; redaction of sensitive field names and declared secret values | **Implemented** |
+| Execution instrumentation: spans for HTTP routes, RPC procedures, queue and object event processing, scheduled runs, direct invocations, queue sends and storage operations; propagation across HTTP (`traceparent`) and messages and object events (`DeliveryTrace.traceparent`), parent and link relationships following OpenTelemetry's messaging conventions | **Implemented** |
+| Framework metrics with closed attribute lists and a series limit: invocations, durations, failures, active invocations, queue backlog, processing durations, retries, dead letters, blocked events, HTTP durations, reload failures, dropped telemetry | **Implemented** |
+| Bounded export pipeline: buffers, batches, time limits, isolated exporter failures, rate-limited `HOLQA_TELEMETRY_EXPORT_FAILED` reports, flush on stop | **Implemented** |
+| OpenTelemetry adapter `@holqa/opentelemetry`: OTLP/HTTP JSON exporter for traces, metrics and logs, standard `OTEL_*` variables | **Implemented** |
+| Local telemetry store (`telemetry.sqlite`) with bounded retention, and the CLI: `holqa logs [--follow]`, `holqa traces list`, `holqa traces inspect`, `holqa events inspect`, `holqa metrics` | **Implemented** |
+| Test helpers: in-memory telemetry in `createTestApp`, `createMemoryTelemetry`, `spanTree` | **Implemented** |
+| Privacy and performance policies: sampling, retention, redaction, cardinality and overhead, documented in [observability](concepts/observability.md) | **Implemented** (as documents and enforced limits) |
+
+### Remaining goals
+
+- A dashboard prototype: a local trace and event timeline view.
+- A bridge to `@opentelemetry/api`, so spans created by application code and instrumented libraries join Holqa's traces.
+- OTLP over protobuf or gRPC, and exporter retries with backoff.
+- Telemetry for bindings to external services, validated against their own propagation formats.
+
+### Exit criteria
+
+- A test application can receive an HTTP request, publish a queue message, process it, write an object, and produce correlated diagnostic data. **Met** (`examples/observability`, `@holqa/testing`).
+- Logs identify the relevant execution without leaking declared secret values. **Met** (redaction tests in `@holqa/core`, `@holqa/runtime-bun` and `examples/observability`).
+- A standard OTLP-compatible setup receives usable traces and metrics, validated against the supported Bun versions. **Met** against a stand-in OTLP/HTTP receiver in `examples/observability` on Bun 1.3.13; validation against an OpenTelemetry Collector process in CI is not automated yet.
+- The framework remains operational when telemetry collection is disabled or an exporter is unavailable, with bounded buffering and defined failure policies. **Met** (runtime and example tests with failing and unreachable exporters).
 
 ## Phase 4: Clients and integrations
 
@@ -243,7 +276,7 @@ These capabilities have extension points in the design but no committed phase. A
 | Reactive queries | Requires underlying change-tracking infrastructure; no promise of automatic database reactivity. |
 | Database change events | Depends on provider capabilities. |
 | External event integrations | Third-party event sources. |
-| OpenTelemetry integration | Traces and metrics for handlers. |
+| OpenTelemetry API bridge | Spans created with `@opentelemetry/api` join Holqa's traces. OTLP export of traces and metrics is **Implemented** ([M9](#m9-observability-structured-logging-and-telemetry)). |
 | TanStack Start integration | Full-stack hosting integration. |
 | Local MCP server | Exposes the resource graph, diagnostics, and local invocations to agents. See [agent-native development](concepts/agent-native-development.md). |
 | Schema migration engine | Upgrades data written under an older `schemaVersion`. The compatibility checker and the version metadata it needs are **Implemented**. |

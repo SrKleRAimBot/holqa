@@ -38,7 +38,7 @@ export async function invokeHttp(registration: Described<HandlerDescriptor>, req
     invocationId: "inv-1",
     signal: new AbortController().signal,
     metadata: {},
-    log: { info: silent, warn: silent, error: silent },
+    log: { debug: silent, info: silent, warn: silent, error: silent },
     ...options.scope === undefined ? {} : { scope: options.scope },
     ...options.correlationId === undefined ? {} : { correlationId: options.correlationId }
   };

@@ -1,6 +1,6 @@
 # Diagnostic codes
 
-> **Status:** Sixty-four codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). No planned code is listed at the moment.
+> **Status:** Seventy-four codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). No planned code is listed at the moment.
 
 Every problem Holqa reports is a structured `Diagnostic` with a stable code. Tools, CI scripts, and agents should match on the code, never on the message text, which may be reworded.
 
@@ -113,6 +113,9 @@ JSON form (as emitted by `holqa --json`):
 | `HOLQA_EXECUTION_BUDGET_EXCEEDED` | `executionBudgetExceeded` | Traced drivers (`@holqa/runtime-bun`) | The root operation already published `events.maxEventsPerOperation` events, counted by the binding's operation budget store. Terminal for the delivery that ran into it. `details`: `handler`, `limit`, `used`, `rootId`. |
 | `HOLQA_IDEMPOTENCY_IN_PROGRESS` | `idempotencyInProgress` | Idempotent handlers (`@holqa/sdk`) | Another delivery holds the handler's idempotency key; this delivery fails and is retried with the queue's backoff. |
 | `HOLQA_SIMULATION_BUDGET_EXCEEDED` | `simulationBudgetExceeded` | `createTestApp` (`@holqa/testing`) | A test application ran more than its `maxInvocations`, usually because of an event cycle or unbounded fan-out. Thrown by `flush`, `advance` and `drain`. `details`: `maxInvocations`, `started`, `busiest`, `chain`. |
+| `HOLQA_TELEMETRY_CONFIG_INVALID` | `telemetryConfigInvalid` | `createRuntime` (`@holqa/runtime-bun`), `createOtlpHttpExporter` and `readOtelEnvironment` (`@holqa/opentelemetry`), application processes of `@holqa/cli` | Telemetry settings are invalid or ask for something unsupported: an out-of-range `sampleRatio`, an unknown limit, an endpoint that is not an absolute http or https URL, an OTLP protocol other than `http/json`, an unsupported sampler or exporter. Header values never appear in the message. |
+| `HOLQA_TELEMETRY_EXPORT_FAILED` | `telemetryExportFailed` | Telemetry export pipeline (`@holqa/runtime-bun`) | A `warn` log entry, not a thrown error: an exporter rejected or timed out on a batch, which was dropped for that exporter. Written at most once per minute per exporter and signal; fields `exporter`, `signal`, `failures`, `error`. Invocations are unaffected. |
+| `HOLQA_TELEMETRY_NOT_FOUND` | `telemetryNotFound` | `holqa traces inspect`, `holqa events inspect` (`@holqa/cli`) | No trace, message or object event with the given identifier is recorded in the local telemetry store or state. Exit code `1`. |
 | `HOLQA_BUILD_STALE` | `buildStale` | `loadCompiledApplication` (`@holqa/runtime-bun`) | Build output no longer matches the application: the entry point map belongs to another manifest, or the application name, resources (kind, identifier, settings, requirements), configuration entries, handler exports or triggers differ from the manifest. Schema changes and handler modules added after the build are not detected. Rebuild with `holqa build --manifest`. |
 
 `@holqa/runtime-bun` also reports `HOLQA_INPUT_INVALID` (`400`) for a direct invocation with an invalid `timeoutMs` or with metadata that does not fit the handler's trigger kind, and for a request path with invalid percent-encoding.

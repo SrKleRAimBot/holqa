@@ -1,6 +1,7 @@
 import type {
   ApplicationScope,
-  InvocationLogger
+  InvocationLogger,
+  InvocationTelemetry
 } from "@holqa/core";
 
 import type { HolqaTypeError } from "@/types/checks";
@@ -60,6 +61,8 @@ export interface MiddlewareArgs<Context extends object> {
   /** Aborted when the invocation is cancelled, times out or the runtime stops. */
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
+  /** The invocation's telemetry trace context, for example to pass a `traceparent` header to an outgoing call. Absent when the runtime records no telemetry. */
+  readonly telemetry?: InvocationTelemetry;
   /** Application-scoped values such as connection pools. */
   readonly scope: ApplicationScope;
   readonly next: MiddlewareNext;

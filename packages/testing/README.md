@@ -41,7 +41,13 @@ it("retries a failed order after its backoff", async () => {
 | `messages`, `deadLetters`, `events`, `objects`, `read`, `runs` | Inspect queues, buckets and schedules. |
 | `logs`, `invocations(filter?)`, `trace(correlationId)` | Structured logs, and the finished invocations read from them (`InvocationRecord`: trigger, attempt, outcome, code, `causationId`, `rootId`, `depth`, `emitted`, `blocked`). |
 | `lineage(invocationId)`, `operation(rootId)` | The publication chain that led to an invocation, and everything one root operation caused. |
+| `telemetry`, `flushTelemetry()` | Spans, metrics and exported log records recorded in memory with deterministic identifiers (`spans(filter?)`, `trace(traceId)`, `metrics()`, `metric(name, attributes?)`, `logs()`); flush before asserting. |
 | `dispose()`, `[Symbol.asyncDispose]` | Stops the runtime, closes the state and removes the temporary directory. |
+
+`telemetry` (`exporters`, `sampleRatio`, `messages`, `exportLogs`, `limits`), `logLevel` and `redact` pass through to the
+runtime. `spanTree(spans)` arranges spans as `{ name, kind, status, children }` trees, so a test can assert a trace's
+causal structure; `createMemoryTelemetry()` provides the same in-memory exporter for a runtime created directly. See
+the [observability guide](../../docs/guides/observability.md#test-telemetry).
 
 `events` sets the runtime's [event limits](../../docs/reference/runtime.md#event-lineage-and-limits) for the test.
 `maxInvocations` (default 10 000) bounds the work a test runs: beyond it, `flush`, `advance` and `drain` throw

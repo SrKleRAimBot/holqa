@@ -45,6 +45,7 @@ Once an ADR is accepted, it is not rewritten. To change a decision, write a new 
 | [0024](0024-event-delivery-sources-and-local-drivers.md) | Event delivery through binding sources, with local drivers as the first binding | Proposed (implemented) | 2026-10-18 |
 | [0025](0025-dev-supervisor-and-process-generations.md) | A development supervisor with one process per generation | Proposed (implemented) | 2026-10-19 |
 | [0026](0026-event-safety-analysis-lineage-and-execution-guards.md) | Event safety: static cycle analysis, event lineage and execution guards | Proposed (implemented) | 2026-10-20 |
+| [0027](0027-observability-telemetry-and-local-inspection.md) | Observability: telemetry on the OpenTelemetry model and local inspection | Proposed (implemented) | 2026-10-20 |
 
 ## Adding an ADR
 

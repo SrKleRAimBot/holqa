@@ -33,6 +33,7 @@ Framework-neutral contracts and primitives shared by every Holqa package.
 | `parseCronSchedule()`, `nextCronTime()`, `backoffDelaySeconds()` | Cron evaluation in an IANA time zone (with defined daylight-saving behavior) and deterministic redelivery delays. |
 | `HttpInvocationInput`, `HttpRejectedError`, `HttpErrorBody`, `rpcProtocolFormat`, `RpcResponseEnvelope`, ... | HTTP and `holqa.rpc/1` wire contracts shared by the SDK, runtimes and future clients. |
 | `ApplicationScope`, `ScopedDefinition` | The application execution context that invocations share. |
+| `parseTraceparent()`, `formatTraceparent()`, `TelemetryExporter`, `SpanRecord`, `MetricRecord`, `frameworkMetrics`, `createRedactor()` | Observability contracts: W3C trace context, the telemetry data model and exporter interface (close to OpenTelemetry's, without depending on it), the framework metrics with their allowed attributes, and redaction of sensitive fields and secret values. See [observability](../../docs/concepts/observability.md). |
 
 ```ts
 import { formatDiagnostic, parseResourceId } from "@holqa/core";

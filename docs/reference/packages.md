@@ -1,6 +1,6 @@
 # Packages
 
-> **Status:** Reference for the current repository state. Seven framework packages, one integration package and eight example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline` and `event-safety` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
+> **Status:** Reference for the current repository state. Seven framework packages, two integration packages and nine example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline`, `event-safety` and `observability` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
 
 All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single code entry point (`.`) through their `exports` map. `@holqa/compiler` additionally exports its JSON Schema files. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
 
@@ -10,7 +10,7 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | --- | --- | --- | --- |
 | `@holqa/core` | `packages/core` | **Implemented** (contracts) | Framework-neutral contracts: diagnostics, identity, descriptor protocol, resource and trigger registries, runtime binding. |
 | `@holqa/compiler` | `packages/compiler` | **Implemented** (manifest pipeline, schema contracts) | Handler discovery, graph validation, manifest version 1, schema contracts and compatibility checks. |
-| `@holqa/cli` | `packages/cli` | **Implemented** (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) | The `holqa` command-line interface and local development supervisor. |
+| `@holqa/cli` | `packages/cli` | **Implemented** (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`) | The `holqa` command-line interface and local development supervisor. |
 | `@holqa/example-package-smoke` | `examples/package-smoke` | **Implemented** | Verifies built package outputs. |
 | `@holqa/example-schema-evolution` | `examples/schema-evolution` | **Implemented** | End-to-end schema contract corpus with Zod. |
 | `@holqa/example-manifest` | `examples/manifest` | **Implemented** | End-to-end compilation of SDK applications through the built CLI. |
@@ -18,12 +18,14 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | `@holqa/example-document-processing` | `examples/document-processing` | **Implemented** | An event-driven SDK application (signed uploads, object events, a queue with retries and dead-lettering, a scheduled cleanup), compiled by the built CLI and run on `@holqa/local`. |
 | `@holqa/example-order-pipeline` | `examples/order-pipeline` | **Implemented** | The local development example: run with `holqa dev`, tested end to end with `createTestApp` and with a real `holqa dev` session. |
 | `@holqa/example-event-safety` | `examples/event-safety` | **Implemented** | Event safety: `holqa inspect --cycles` through the built CLI, runtime depth limits, an allowed cycle and idempotent processing with `createTestApp`. |
+| `@holqa/example-observability` | `examples/observability` | **Implemented** | Observability: one correlated trace from an HTTP request through a queue to an object event, redacted logs, metrics, OTLP export to a stand-in collector, and the telemetry commands of the built CLI. |
 | `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model, HTTP routes, RPC procedures, middleware, queue, bucket and schedule operations) | Public developer-facing SDK. |
-| `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP, RPC and background transports. |
-| `@holqa/local` | `packages/local` | **Implemented** (local binding) | Local runtime drivers: SQLite-backed queues, filesystem object storage with events and signed URLs, a clock-driven scheduler, inspection. |
-| `@holqa/testing` | `packages/testing` | **Implemented** (`createTestApp`, type assertions) | Deterministic integration tests on the local environment, and compile-time type assertions. |
+| `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery, telemetry, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP, RPC and background transports. |
+| `@holqa/local` | `packages/local` | **Implemented** (local binding) | Local runtime drivers: SQLite-backed queues, filesystem object storage with events and signed URLs, a clock-driven scheduler, inspection, a local telemetry store. |
+| `@holqa/testing` | `packages/testing` | **Implemented** (`createTestApp`, in-memory telemetry, type assertions) | Deterministic integration tests on the local environment, and compile-time type assertions. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
 | `@holqa/zod` | `packages/integrations/zod` | **Implemented** | Zod 4 schema adapter. |
+| `@holqa/opentelemetry` | `packages/integrations/opentelemetry` | **Implemented** (OTLP/HTTP JSON export, `OTEL_*` variables) | OpenTelemetry interoperability without an OpenTelemetry SDK dependency. |
 | Valibot integration | `packages/integrations/valibot` | Planned | Valibot schema adapter. |
 | Effect integration | `packages/integrations/effect` | Planned | Effect handlers, Effect Schema, Effect HTTP. |
 | oRPC integration | `packages/integrations/orpc` | Planned | oRPC interoperability. |
@@ -99,6 +101,11 @@ Planned packages are directories containing only a README. They have no `package
 | `DeliveryTrace`, `InvocationLineage`, `lineageOfDelivery(trace, fallbackRootId)`, `childTrace(lineage, invocationId)` | Types, functions | Event lineage: traces carry `correlationId`, `causationId`, `rootId` and `depth`; `InvocationContext.lineage` and `LeasedDelivery.sentAt` are optional. See [event safety](../concepts/event-safety.md#event-lineage). |
 | `HandlerEventPolicy`, `HandlerCycleAllowance`, `HandlerIdempotencyPolicy`, `IdempotencyKeySource`, `eventPolicyProblems(value)`, `idempotencyPolicyProblems(value)`, `defaultEventLimits`, `maxCycleJustificationLength`, `isEventGuardCode(code)` | Types, functions, constants | The `events` and `idempotency` fields of handler definitions, their structural checks, the default limits (`{ maxDepth: 16, maxPublications: 1000 }`) and the codes whose deliveries end terminally. |
 | `OperationBudgetStore`, `OperationBudgetRequest`, `OperationBudgetResult` | Types | Atomic per-operation accounting a binding provides as `RuntimeBinding.operationBudgets`. |
+| `TraceContext`, `parseTraceparent(value, traceState?)`, `formatTraceparent(context)`, `isTraceId`, `isSpanId`, `randomTraceId()`, `randomSpanId()`, `traceparentHeader`, `tracestateHeader` | Type, functions, constants | W3C Trace Context. `parseTraceparent` reads version 00 with exactly four fields and later versions by their first four fields; version `ff` is invalid. `DeliveryTrace` gains an optional `traceparent`; `childTrace(lineage, invocationId, traceparent?)` passes it on. |
+| `TelemetryExporter`, `TelemetryResource`, `SpanRecord`, `SpanKind`, `SpanStatus`, `SpanLink`, `SpanEvent`, `MetricRecord` (`SumMetricRecord`, `HistogramMetricRecord`, `GaugeMetricRecord`), `SumPoint`, `HistogramPoint`, `GaugePoint`, `TelemetryLogRecord`, `TelemetryLogSeverity`, `TelemetryAttributes`, `TelemetryAttributeValue`, `TelemetryExportOptions` | Types | The telemetry data model, close to OpenTelemetry's, and the exporter contract; export calls receive a `signal` that aborts when they exceed the runtime's export time limit, and exporters should work asynchronously. `SpanStatus` is a union; only `code: "error"` carries a `message`. See [observability](../concepts/observability.md). |
+| `frameworkMetrics`, `FrameworkMetric`, `FrameworkMetricType`, `metricOverflowAttribute` | Constant, types | The framework metrics with their units and allowed attributes (names are literal types); `"otel.metric.overflow"`. |
+| `createRedactor(options?)`, `Redactor`, `RedactorOptions`, `defaultSensitiveKeys`, `defaultSensitiveKeySuffixes`, `redactedValue`, `minRedactedValueLength` | Function, types, constants | Redaction of sensitive field names (`defaultSensitiveKeys` match anywhere in the normalized name, `defaultSensitiveKeySuffixes` only at its end, extra `keys` anywhere) and known secret values in text, JSON and attributes. |
+| `InvocationTelemetry` | Type | `InvocationContext.telemetry` (optional): `{ traceId, spanId, sampled, traceparent }`. `InvocationLogger` gains a required `debug`. `QueueSource.pending` (optional) counts a queue's backlog. |
 | `IdempotencyStore`, `IdempotencyClaim`, `IdempotencyBeginOptions`, `IdempotencyCompleteOptions`, `IdempotencyExtendOptions`, `createIdempotencyKey(parts)`, `createMemoryIdempotencyStore(options?)`, `MemoryIdempotencyStoreOptions` | Types, functions | The deduplication store a binding provides as `RuntimeBinding.idempotency`, the key convention, and a single-process in-memory store. |
 
 Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 characters (for example `order-processing`, `orders.process`). The grammar is an initial proposal and may be revised before 1.0 ([ADR 0004](../architecture/decisions/0004-stable-logical-resource-identities.md)).
@@ -123,6 +130,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `ObjectCreatedContext`, `ObjectDeletedContext`, `ObjectCreatedOptions`, `ObjectDeletedOptions`, `ObjectInfo`, `DeletedObjectInfo`, `ObjectEventInfo`, `ScheduleContext` | Types | Handler contexts: object handlers receive `event: { id, time, attempt }`; schedule handlers receive `trigger` and `runId`. |
 | `QueueMessageInput`, `QueueMessageOutput`, `QueueConsumerFor`, `ResourceIdOf`, `ResourceIds`, `ResourceById`, `ResourceAliasesOfKind` | Types | Type helpers derived from handles. |
 | `HandlerEventOptions`, `PublishableResource`, `IdempotencyOptions`, `QueueIdempotencyContext`, `ObjectEventIdempotencyContext` | Types | Every handler registration accepts `events: { publishes?, cycle?, maxPublications?, maxDepth? }`; queue consumers and object event handlers also accept `idempotency: true \| { key?, retentionSeconds?, leaseSeconds? }`. Queue, object event and schedule contexts gain `lineage`. See [event safety](../concepts/event-safety.md). |
+| (contexts) | — | Route, procedure, middleware, queue, object event and schedule handler arguments include an optional `telemetry` (`traceId`, `spanId`, `sampled`, `traceparent`) and a logger with `debug`. See [observability](../concepts/observability.md). |
 | `HolqaTypeError`, `CheckResourceId`, `CheckUniqueResourceIds`, `DuplicateResourceIds`, `ResourceIdProblem`, `CheckDistinctAliases` | Types | Compile-time declaration checks. |
 | `HttpApiHandle.route(options)` | Method | Registers an HTTP route: `{ id, method, path, params?, query?, headers?, body?, responses, middleware?, handler }`. See the [runtime reference](runtime.md#http-routes). |
 | `HttpApiHandle.procedure(options)` | Method | Registers an RPC procedure: `{ id, operation, input?, output, middleware?, handler }`, served at `<basePath>/rpc/<id>`. See [RPC procedures](runtime.md#rpc-procedures). |
@@ -135,13 +143,13 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/runtime-bun`
 
 - **Path:** `packages/runtime-bun`
-- **Status:** Implemented (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, trace and lineage propagation, event limits, `Bun.serve` adapter). Private. Worker isolation is planned. See the [runtime reference](runtime.md), [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) and [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md).
+- **Status:** Implemented (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, trace and lineage propagation, event limits, telemetry, `Bun.serve` adapter). Private. Worker isolation is planned. See the [runtime reference](runtime.md), [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) and [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md).
 - **Entry point:** `@holqa/runtime-bun` → `dist/index.js`, `dist/index.d.ts`. Requires Bun (`engines.bun >= 1.3.13`) for `serve` and `loadCompiledApplication`.
 - **Internal dependencies:** `@holqa/core`.
 
 | Export | Kind | Description |
 | --- | --- | --- |
-| `createRuntime(options)` | Function | Validates an application and its handlers and returns a `Runtime`: `start`, `stop`, `invoke`, `fetch`, `stats`, `state`, `name`, `handlers`. `start` consumes the binding's sources to deliver queue messages, object events and scheduled runs, and fails when the binding cannot deliver a handler's trigger unless `manualTriggers: true`. |
+| `createRuntime(options)` | Function | Validates an application and its handlers and returns a `Runtime`: `start`, `stop`, `invoke`, `fetch`, `stats`, `telemetry`, `state`, `name`, `handlers`. `start` consumes the binding's sources to deliver queue messages, object events and scheduled runs, and fails when the binding cannot deliver a handler's trigger unless `manualTriggers: true`. |
 | `Runtime`, `RuntimeOptions`, `RuntimeLimits`, `RuntimeHttpOptions`, `RuntimeDeliveryOptions`, `RuntimeState`, `RuntimeStats`, `StopOptions` | Types | The runtime and its settings. `RuntimeStats.delivery` (`TransportStats`, `DeliveryStats`) counts received, acknowledged, retried, dead-lettered, discarded, blocked (ended by an event limit) and released deliveries and scheduled runs. |
 | `RuntimeEventLimits`, `EventGuardViolation` | Types | `RuntimeOptions.events` (`maxDepth`, `maxPublications`, `maxEventAgeMs`, `maxEventsPerOperation`) and the refusal recorded as `blocked` on outcomes. See [event lineage and limits](runtime.md#event-lineage-and-limits). |
 | `InvocationRequest`, `InvocationOutcome`, `InvocationSuccess`, `InvocationFailed`, `InvocationFailure`, `DispatchStats` | Types | Normalized invocations (with optional `causationId`, `rootId` and `depth`) and their structured outcomes (with `emitted`, `lineage` and `blocked`). |
@@ -151,7 +159,8 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `createEnvironmentBinding(app, env)`, `EnvironmentVariables` | Function, type | The default binding: `http.api` capability and validated configuration from environment variables. |
 | `CorsOptions` | Type | The CORS policy. |
 | `correlationHeader` | Constant | `"x-correlation-id"`. |
-| `jsonLineSink(write?)`, `silentSink`, `LogSink`, `LogEntry`, `LogLevel` | Functions, types | Structured log sinks. |
+| `jsonLineSink(write?)`, `silentSink`, `LogSink`, `LogEntry`, `LogLevel` | Functions, types | Structured log sinks. `RuntimeOptions.logLevel` filters by level; `RuntimeOptions.redact` adds redacted field names. |
+| `RuntimeTelemetryOptions`, `MessageTraceRelation`, `TelemetryIdGenerator`, `TelemetryStats`, `RuntimeTelemetryControl`, `PipelineLimits` | Types | `RuntimeOptions.telemetry`, `runtime.telemetry` (`enabled`, `flush`), `RuntimeStats.telemetry` and `StopOptions.telemetryMs`. See [telemetry](runtime.md#telemetry). |
 
 ## `@holqa/local`
 
@@ -168,7 +177,9 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `LocalQueues`, `LocalQueueMessage`, `LocalMessageState`, `RedriveOptions` | Types | Queue inspection: `messages` (with the sender's `trace` and lineage), `deadLetters`, `redrive` (all, one, or `{ messageId?, limit?, newOperation? }`), `duplicate`, `purge`. |
 | `LocalStorage`, `LocalObjectEvent` | Types | Object and event inspection (`objects`, `events` with `trace` and per-delivery `visibleAt`, `redriveEvents`, `duplicateEvent`), `retainSubscriptions`, and signed URL serving (`fetch`, `handles`). |
 | `LocalScheduler`, `LocalScheduleRun`, `LocalRunStatus` | Types | Manual runs (`trigger`), run records (`runs`), `nextRun`, `idle`. |
-| `DeliveryState`, `DeliveryError`, `stateVersion`, `stateFileName`, `readStateFormat(directory)` | Types, constants, function | The state format (version 3, `state.sqlite`; versions 1 and 2 are upgraded in place). |
+| `DeliveryState`, `DeliveryError`, `stateVersion`, `stateFileName`, `readStateFormat(directory)` | Types, constants, function | The state format (version 4, `state.sqlite`; versions 1 to 3 are upgraded in place). Queue sources implement `pending`. |
+| `readDeliveryHistory(directory, id)`, `DeliveryHistory`, `DeliveryRecord`, `ObjectEventSummary` | Function, types | Read-only history of one message or object event. |
+| `createLocalTelemetryStore(options)`, `openLocalTelemetryReader(directory)`, `LocalTelemetryStore`, `LocalTelemetryReader`, `LocalTelemetryStoreOptions`, `TelemetryRetention`, `LogQuery`, `StoredLogEntry`, `TraceSummary`, `telemetryFileName`, `telemetryStoreVersion` | Functions, types, constants | The local telemetry store (`telemetry.sqlite`). See [telemetry store](local.md#telemetry-store). |
 | `manualTriggerMetadata(app, definition, options)`, `ManualTriggerOptions` | Function, type | The trusted metadata for invoking a queue, object event or schedule handler directly. |
 
 ## `@holqa/testing`
@@ -180,10 +191,12 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 
 | Export | Kind | Description |
 | --- | --- | --- |
-| `createTestApp(options)`, `TestApp`, `TestAppOptions`, `TestInvokeOptions`, `DrainOptions`, `InvocationFilter` | Function, types | Starts an application on a runtime and a local environment with a temporary state directory and a virtual clock: `fetch`, `invoke`, `send`, `put`, `trigger`, `flush`, `advance`, `drain`, `failNext`, `duplicate`, `duplicateEvent`, `redrive`, inspection (`messages`, `deadLetters`, `events`, `objects`, `read`, `runs`), `logs`, `invocations`, `trace`, `lineage`, `operation`, `dispose`. `events` sets the runtime's event limits; `maxInvocations` (default 10 000) bounds the work a test runs (`HOLQA_SIMULATION_BUDGET_EXCEEDED`). |
+| `createTestApp(options)`, `TestApp`, `TestAppOptions`, `TestInvokeOptions`, `DrainOptions`, `InvocationFilter` | Function, types | Starts an application on a runtime and a local environment with a temporary state directory and a virtual clock: `fetch`, `invoke`, `send`, `put`, `trigger`, `flush`, `advance`, `drain`, `failNext`, `duplicate`, `duplicateEvent`, `redrive`, inspection (`messages`, `deadLetters`, `events`, `objects`, `read`, `runs`), `logs`, `invocations`, `trace`, `lineage`, `operation`, `telemetry`, `flushTelemetry`, `dispose`. Telemetry is recorded in memory with deterministic identifiers; `telemetry`, `logLevel` and `redact` options pass through to the runtime. `events` sets the runtime's event limits; `maxInvocations` (default 10 000) bounds the work a test runs (`HOLQA_SIMULATION_BUDGET_EXCEEDED`). |
 | `FailureOptions` | Type | `{ times?, error?, when? }` for `failNext`. |
 | `invocationRecords(entries)`, `InvocationRecord` | Function, type | Reads finished invocations (trigger, attempt, outcome, code, `causationId`, `rootId`, `depth`, `emitted`, `blocked`) from runtime log entries. |
 | `lineageOf(records, invocationId)` | Function | The chain of records from an invocation back to its root, root first. |
+| `createMemoryTelemetry()`, `MemoryTelemetry`, `SpanFilter` | Function, types | An exporter that records in memory, with `spans(filter?)`, `trace(traceId)`, `logs()`, `metrics()`, `metric(name, attributes?)`, `resource()` and `clear()`. |
+| `spanTree(spans)`, `SpanNode` | Function, type | Spans as trees of `{ name, kind, status, children }`, for asserting causal structure. |
 | `Equal`, `NotEqual`, `Expect`, `ExpectFalse` | Types | Exact type equality and compile-time assertions (`type _ = Expect<Equal<A, B>>`). |
 | `IsAny`, `IsNever`, `IsUnknown`, `Extends` | Types | Type predicates. |
 | `Accepts<Fn, Arg>` | Type | Whether a function such as `typeof resources.orders.send` accepts an argument type. |
@@ -248,19 +261,33 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `isZodSchema(value)` | Function | Structural check for Zod 4 schemas. |
 | `zodVendor` | Constant | `"zod"`. |
 
+## `@holqa/opentelemetry`
+
+- **Path:** `packages/integrations/opentelemetry`
+- **Status:** Implemented (OTLP/HTTP JSON export, `OTEL_*` environment variables). Private. An `@opentelemetry/api` bridge and OTLP over protobuf or gRPC are planned. See the [package README](../../packages/integrations/opentelemetry/README.md).
+- **Purpose:** Sends Holqa telemetry to any OTLP/HTTP receiver. Uses only the Fetch API; no OpenTelemetry package is a dependency.
+- **Entry point:** `@holqa/opentelemetry` → `dist/index.js`, `dist/index.d.ts`.
+- **Internal dependencies:** `@holqa/core`.
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `createOtlpHttpExporter(options?)`, `OtlpHttpExporterOptions`, `OtlpSignals` | Function, types | A `TelemetryExporter` named `otlp-http` posting to `<endpoint>/v1/traces`, `/v1/metrics` and `/v1/logs` (default endpoint `http://localhost:4318`, time limit 10 000 ms, no retries). |
+| `readOtelEnvironment(env)`, `OtelEnvironment`, `OtelEnvironmentSettings` | Function, types | Reads the standard `OTEL_*` variables into exporter options, service name, resource attributes, sample ratio and log export; returns `HOLQA_TELEMETRY_CONFIG_INVALID` problems for unsupported values. |
+| `encodeOtlpTraces`, `encodeOtlpMetrics`, `encodeOtlpLogs`, `toAnyValue`, `toKeyValues`, `toUnixNano`, `otlpScope`, `OtlpAnyValue`, `OtlpKeyValue` | Functions, constant, types | The OTLP/JSON encoding, for custom transports. |
+
 ## `@holqa/cli`
 
 - **Path:** `packages/cli`
-- **Status:** Implemented (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
+- **Status:** Implemented (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`, `logs`, `traces list`, `traces inspect`, `events inspect`, `metrics`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
 - **Purpose:** Holqa developer CLI and local development supervisor.
 - **Entry points:** library `@holqa/cli` → `dist/index.js`; binary `holqa` → `dist/bin.js`; analysis process entry `dist/analyze.js` and generation process entry `dist/generation.js` (internal, spawned by the CLI). Runs on Bun, `engines.bun >= 1.3.13`.
-- **Internal dependencies:** `@holqa/core`, `@holqa/compiler`, `@holqa/local`, `@holqa/runtime-bun`.
+- **Internal dependencies:** `@holqa/core`, `@holqa/compiler`, `@holqa/local`, `@holqa/runtime-bun`, `@holqa/opentelemetry`.
 
 | Export | Kind | Description |
 | --- | --- | --- |
 | `runCli(argv, io, version, host?)` | Function | Runs the CLI against split arguments; writes through `io`; resolves to an exit code. `host` defaults to `createProcessHost()`. |
 | `CliIo` | Type | `{ stdout(text), stderr(text) }`. |
-| `CliHost`, `AnalysisOutcome`, `AnalysisSuccess`, `AnalysisFailure` | Types | Working directory, analysis and file writing, injected for tests; optional `readFile`, `dev`, `operate` and `doctor` for the local commands. `AnalysisSuccess.events` (optional) carries the event analysis `inspect --cycles` prints. |
+| `CliHost`, `AnalysisOutcome`, `AnalysisSuccess`, `AnalysisFailure` | Types | Working directory, analysis and file writing, injected for tests; optional `readFile`, `dev`, `operate` and `doctor` for the local commands, and `telemetry`, `deliveryHistory` and `waitForStop` for the telemetry commands. `AnalysisSuccess.events` (optional) carries the event analysis `inspect --cycles` prints. |
 | `DevEvent`, `ApplicationSummary`, `ResourceSummary`, `HandlerSummary`, `ManifestChange`, `ChangeKind`, `IdentityChanges` | Types | The events of a `holqa dev` session (its `--json` lines) and the classification of a rebuild. |
 | `DevRequest`, `DoctorRequest`, `DoctorCheck`, `AppLocation`, `LocalOperation`, `OperationResponse`, `OperateOutcome`, `OperationTarget`, `PhaseResult` | Types | Requests and results of the local commands. |
 | `createProcessHost(options?)`, `ProcessHostOptions`, `forwardedEnvironment` | Function, type, constant | The default host: analysis in a separate Bun process with an allowlisted environment, `--no-install` and a timeout; the local commands run the application in generation processes with the CLI's environment. |
@@ -305,6 +332,12 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 - **Status:** Implemented. Private; not published.
 - **Purpose:** Event safety end to end: `holqa inspect --cycles` through the built `holqa` binary (an indirect cycle warning, an allowed cycle, prefix-safe object writes), and the same application on `createTestApp`, where the depth limit stops the unbounded cycle with a terminal dead letter and an idempotent consumer charges once. See its [README](../../examples/event-safety/README.md).
 
+## `@holqa/example-observability`
+
+- **Path:** `examples/observability`
+- **Status:** Implemented. Private; not published.
+- **Purpose:** The observability acceptance test: an HTTP request, the message it publishes, its processing with a secret token and the object it writes form one trace; logs identify every execution without the secret; retries and dead letters show in spans and metrics; telemetry reaches a stand-in OTLP/HTTP receiver and the application keeps working when the receiver is down; the built CLI records telemetry and prints it with `holqa traces`, `holqa logs` and `holqa metrics`. See its [README](../../examples/observability/README.md).
+
 ## `@holqa/example-package-smoke`
 
 - **Path:** `examples/package-smoke`
@@ -319,7 +352,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `@holqa/runtime-bun` (extensions) | Worker or process isolation. | `core` |
 | `@holqa/testing` (extensions) | Deterministic test harness; simulated deliveries, retries, failures; fixtures. | `core`, `sdk`, `local`, `runtime-bun` |
 | `@holqa/client` | Fetch-based runtime for generated, browser-safe clients. Runtime-neutral. | `core` |
-| `packages/integrations/*` (except `zod`) | Schema, handler, transport, and client adapters. See [integrations](../integrations/index.md). | `core`, `sdk`, `client` |
+| `packages/integrations/*` (except `zod` and `opentelemetry`) | Schema, handler, transport, and client adapters. See [integrations](../integrations/index.md). | `core`, `sdk`, `client` |
 
 See the [roadmap](../roadmap.md) for when each is expected.
 

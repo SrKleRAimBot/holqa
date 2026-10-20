@@ -46,7 +46,7 @@ const allowedDependencies: Readonly<Record<string, readonly string[]>> = {
   "@holqa/runtime-bun": ["@holqa/core"],
   "@holqa/local": ["@holqa/core", "@holqa/runtime-bun"],
   "@holqa/testing": ["@holqa/core", "@holqa/sdk", "@holqa/local", "@holqa/runtime-bun"],
-  "@holqa/cli": ["@holqa/core", "@holqa/compiler", "@holqa/local", "@holqa/runtime-bun"]
+  "@holqa/cli": ["@holqa/core", "@holqa/compiler", "@holqa/local", "@holqa/runtime-bun", "@holqa/opentelemetry"]
 };
 
 /**
@@ -73,7 +73,9 @@ const integrationDependencies = ["@holqa/core", "@holqa/sdk", "@holqa/client"];
  * without pulling in the SDK or client.
  */
 const schemaAdapterDependencies: Readonly<Record<string, readonly string[]>> = {
-  "@holqa/zod": ["@holqa/core"]
+  "@holqa/zod": ["@holqa/core"],
+  // The CLI depends on it (ADR 0027), so it must not reach the SDK or client through it.
+  "@holqa/opentelemetry": ["@holqa/core"]
 };
 
 /** Source file extensions considered when scanning modules. */

@@ -29,6 +29,13 @@ export interface DeliveryTrace {
    * written before lineage existed.
    */
   readonly depth?: number;
+  /**
+   * The telemetry trace context of the span that published the event, as a
+   * W3C `traceparent` value, so the receiving invocation's span joins (or
+   * links to) the same trace. Telemetry only: it never affects lineage, and
+   * a binding that cannot store it only loses trace correlation.
+   */
+  readonly traceparent?: string;
 }
 
 /**
@@ -87,8 +94,9 @@ export function lineageOfDelivery(trace: DeliveryTrace | undefined, fallbackRoot
  *
  * @param lineage - The publishing invocation's lineage.
  * @param invocationId - The publishing invocation's identifier.
+ * @param traceparent - The telemetry context of the publishing span, if telemetry is recorded.
  * @returns The trace to store with the published message or object event.
  */
-export function childTrace(lineage: InvocationLineage, invocationId: string): DeliveryTrace {
-  return Object.freeze({ correlationId: lineage.correlationId, causationId: invocationId, rootId: lineage.rootId, depth: lineage.depth + 1 });
+export function childTrace(lineage: InvocationLineage, invocationId: string, traceparent?: string): DeliveryTrace {
+  return Object.freeze({ correlationId: lineage.correlationId, causationId: invocationId, rootId: lineage.rootId, depth: lineage.depth + 1, ...traceparent === undefined ? {} : { traceparent } });
 }

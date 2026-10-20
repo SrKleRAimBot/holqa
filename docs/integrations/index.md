@@ -1,6 +1,6 @@
 # Integrations
 
-> **Status:** Mostly planned. The Zod schema adapter (`@holqa/zod`) is **Implemented**; no other integration package exists yet. This section records the intended integration patterns so that core packages are designed to support them.
+> **Status:** Mostly planned. The Zod schema adapter (`@holqa/zod`) and OTLP export (`@holqa/opentelemetry`) are **Implemented**; no other integration package exists yet. This section records the intended integration patterns so that core packages are designed to support them.
 
 Holqa must be composable. It should not require developers to abandon the frameworks and libraries they already use. Integrations are adapters that connect those libraries to Holqa's resource graph, schemas, handlers, and generated clients.
 
@@ -14,7 +14,7 @@ Holqa must be composable. It should not require developers to abandon the framew
 | Frontend client adapters | Fetch API, TanStack Query | Call public contracts from browsers with full types. | Planned | [TanStack](tanstack.md) |
 | Application adapters | Vite, TanStack Start | Frontend development, static builds, full-stack hosting. | Planned (TanStack Start: future) | [Vite](vite.md), [TanStack](tanstack.md) |
 | Data access | Drizzle, Prisma, native PostgreSQL clients | Use existing data libraries with Holqa-managed configuration. | Planned | [Drizzle and databases](drizzle-and-databases.md) |
-| Observability | OpenTelemetry | Traces and metrics for handler invocations and resource operations. | Planned | — |
+| Observability | OpenTelemetry | Traces, metrics and logs of handler invocations and resource operations over OTLP/HTTP, and the `OTEL_*` variables. | OTLP export **Implemented** (`@holqa/opentelemetry`); `@opentelemetry/api` bridge Planned | [Observability](../concepts/observability.md) |
 
 ## Principles
 

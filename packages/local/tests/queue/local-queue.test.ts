@@ -56,6 +56,18 @@ async function send(env: LocalEnvironment, name: string, delaySeconds = 0): Prom
 }
 
 describe("local queues", () => {
+  it("stores the publisher's telemetry context and counts pending messages", async () => {
+    const { env, source } = await setup();
+    const traceparent = "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01";
+    await env.binding.drivers.queue!(jobs).send({ format: messageEnvelopeFormat, schemaVersion: 1, payload: { name: "a" } }, {}, { trace: { correlationId: "c-1", rootId: "r-1", depth: 1, traceparent } });
+    await send(env, "b", 60);
+    expect(await source.pending?.()).toBe(2);
+    const [delivery] = await source.receive({ max: 1, leaseMs: 1_000 });
+    expect(delivery?.trace).toEqual({ correlationId: "c-1", rootId: "r-1", depth: 1, traceparent });
+    await source.acknowledge(delivery!.receipt);
+    expect(await source.pending?.()).toBe(1);
+  });
+
   it("keeps the sender's trace with the message, its redeliveries and its duplicates", async () => {
     const { env, source } = await setup();
     const trace = { correlationId: "req-1", causationId: "inv-1" };

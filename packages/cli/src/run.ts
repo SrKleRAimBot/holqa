@@ -22,6 +22,10 @@ import {
   localCommand,
   matchLocalCommand
 } from "@/commands/local-commands";
+import {
+  matchTelemetryCommand,
+  telemetryCommand
+} from "@/commands/telemetry-commands";
 import { exitCodes } from "@/exit-codes";
 
 export { exitCodes } from "@/exit-codes";
@@ -34,7 +38,8 @@ export type { CliIo } from "@/io";
  * Supported: `--help`/`-h` (or no arguments), `--version`/`-v`,
  * `holqa inspect [--app <path>]`, `holqa build --manifest [--app <path>] [--out-dir <dir>]`,
  * the local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`,
- * `cron run`, `state`, `doctor`), and `--json` anywhere, which switches
+ * `cron run`, `state`, `doctor`), the telemetry commands (`logs`, `traces list`,
+ * `traces inspect`, `events inspect`, `metrics`), and `--json` anywhere, which switches
  * output to machine-readable JSON (JSON lines for `holqa dev`).
  * Errors are reported as diagnostics: `{ "diagnostics": [...] }` on standard
  * error with `--json`. Proposed commands report `HOLQA_CLI_NOT_IMPLEMENTED`.
@@ -89,6 +94,9 @@ export async function runCli(argv: readonly string[], io: CliIo, version: string
   const local = matchLocalCommand(args);
   if (local !== undefined)
     return localCommand(host ?? createProcessHost(), io, json, local.name, local.rest);
+  const telemetry = matchTelemetryCommand(args);
+  if (telemetry !== undefined)
+    return telemetryCommand(host ?? createProcessHost(), io, json, telemetry.name, telemetry.rest);
 
   const positionals = args.filter(argument => !argument.startsWith("-"));
   const proposed = findProposedCommand(positionals);
@@ -163,6 +171,11 @@ function renderHelp(version: string): string {
     "       holqa cron run <schedule> [--app <path>] [--state-dir <dir>] [--json]",
     "       holqa state [--app <path>] [--state-dir <dir>] [--json]",
     "       holqa doctor [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--json]",
+    "       holqa logs [--follow] [--handler <id>] [--trace <trace-id>] [--level <level>] [--limit <n>] [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa traces list [--limit <n>] [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa traces inspect <trace-id> [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa events inspect <event-id> [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa metrics [--app <path>] [--state-dir <dir>] [--json]",
     "",
     "Options:",
     "  -h, --help          Show this help.",
@@ -174,13 +187,16 @@ function renderHelp(version: string): string {
     "  --port <port>       The dev server's port (default: 3000; 0 picks a free one).",
     "  --host <host>       The dev server's interface (default: 127.0.0.1).",
     "  --cycles            inspect: print the event dependency graph and its cycles instead of the summary.",
+    "  --follow            logs: keep printing new entries until interrupted.",
     "",
     "Commands:",
     list(implementedCommands),
     "",
     "inspect and build evaluate the application's modules, which runs their code.",
     "dev and the operation commands run the application with your environment; operations",
-    "go to the running dev session when there is one.",
+    "go to the running dev session when there is one. They record logs, traces and metrics in",
+    "the state directory for the telemetry commands, and export them over OTLP/HTTP when",
+    "OTEL_EXPORTER_OTLP_ENDPOINT is set.",
     "",
     "Proposed commands (not implemented yet):",
     list(proposedCommands)

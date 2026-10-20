@@ -8,15 +8,18 @@ import type {
 } from "@holqa/core";
 
 import type {
+  InvocationInstrumentation,
   InvocationOutcome,
   InvocationRequest
 } from "@/dispatch/dispatcher";
 import type { EventGuardViolation } from "@/dispatch/event-guard";
 import type { StructuredLogger } from "@/logging/log";
+import type { RuntimeTelemetry } from "@/telemetry/runtime-telemetry";
 
 import {
   backoffDelaySeconds,
   diagnosticCodes,
+  frameworkMetrics,
   lineageOfDelivery
 } from "@holqa/core";
 
@@ -70,7 +73,13 @@ export interface DeliveryWorkerOptions<Body> {
   readonly timeoutMs: number;
   /** Turns a delivery into an invocation. Throwing is treated as a non-retryable rejection. */
   readonly prepare: (delivery: LeasedDelivery<Body>) => Promise<PreparedDelivery>;
-  readonly dispatch: (request: InvocationRequest) => Promise<InvocationOutcome>;
+  readonly dispatch: (request: InvocationRequest, instrumentation?: InvocationInstrumentation) => Promise<InvocationOutcome>;
+  /** Records processing durations, retries, dead letters and refusals. */
+  readonly telemetry?: RuntimeTelemetry;
+  /** The resource whose deliveries the worker processes, for metrics. */
+  readonly destination?: string;
+  /** How each delivery's processing span is started: its name, kind, parent and links. */
+  readonly instrument?: (delivery: LeasedDelivery<Body>) => InvocationInstrumentation;
   /** Whether the runtime is stopping, so that cancelled deliveries are released rather than counted as failures. */
   readonly stopping: () => boolean;
   readonly logger: StructuredLogger;
@@ -217,6 +226,7 @@ export class DeliveryWorker<Body> {
       const refused = this.options.admit?.(delivery);
       if (refused !== undefined) {
         this.counts.blocked += 1;
+        this.options.telemetry?.count(frameworkMetrics.eventsBlocked, 1, { "holqa.handler.id": handlerId, "error.type": refused.code });
         log.write("warn", "an event guard refused the delivery; it is not retried", { code: refused.code });
         await this.exhaust(delivery, { code: refused.code, message: refused.message, attempt: delivery.attempt }, log);
         return;
@@ -254,7 +264,8 @@ export class DeliveryWorker<Body> {
           depth: lineage.depth,
           timeoutMs,
           logFields: { deliveryId: delivery.id, attempt: delivery.attempt }
-        }));
+        }, this.options.instrument?.(delivery)));
+        this.options.telemetry?.record(frameworkMetrics.processingDuration, outcome.durationMs / 1000, { "messaging.destination.name": this.options.destination ?? handlerId, "messaging.operation.name": "process", "holqa.outcome": outcome.ok ? "ok" : "failed" });
         if (outcome.ok) {
           await this.settle(delivery, "acknowledged", () => this.options.source.acknowledge(delivery.receipt), log);
           return;
@@ -283,6 +294,7 @@ export class DeliveryWorker<Body> {
       }
       const delayMs = backoffDelaySeconds(policy.backoff, delivery.attempt) * 1000;
       log.write("info", "delivery failed; retrying", { code: failure.code, delayMs, maxAttempts: policy.maxAttempts });
+      this.options.telemetry?.count(frameworkMetrics.deliveryRetries, 1, this.metricAttributes());
       await this.settle(delivery, "retried", () => this.options.source.retry(delivery.receipt, delayMs, failure), log);
     } catch (error) {
       log.write("error", "settling a delivery failed; it is redelivered when its lease expires", { error: describeError(error) });
@@ -328,6 +340,7 @@ export class DeliveryWorker<Body> {
   private async exhaust(delivery: LeasedDelivery<Body>, failure: DeliveryFailure, log: StructuredLogger): Promise<void> {
     const { source, policy } = this.options;
     const fields: JsonObject = { code: failure.code, maxAttempts: policy.maxAttempts };
+    this.options.telemetry?.count(frameworkMetrics.deliveryDeadLetters, 1, { ...this.metricAttributes(), "holqa.settlement": policy.deadLetter ? "dead_lettered" : "discarded" });
     if (policy.deadLetter) {
       log.write("warn", "delivery dead-lettered", fields);
       await this.settle(delivery, "deadLettered", () => source.deadLetter(delivery.receipt, failure), log);
@@ -335,6 +348,15 @@ export class DeliveryWorker<Body> {
       log.write("warn", "delivery discarded after its last attempt; no dead-letter destination is required", fields);
       await this.settle(delivery, "discarded", () => source.discard(delivery.receipt, failure), log);
     }
+  }
+
+  /**
+   * Builds the attributes of the worker's delivery metrics.
+   *
+   * @returns The handler and destination.
+   */
+  private metricAttributes(): { readonly "holqa.handler.id": string; readonly "messaging.destination.name": string } {
+    return { "holqa.handler.id": this.options.handlerId, "messaging.destination.name": this.options.destination ?? this.options.handlerId };
   }
 
   /**
