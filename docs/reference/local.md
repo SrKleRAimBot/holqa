@@ -100,6 +100,10 @@ A declaration that needs more fails when the runtime starts: `HOLQA_RUNTIME_STAR
 | Traces | When the runtime passes a trace with a send, write or delete (`DriverOperationContext.trace`: the sending invocation's `correlationId`, its `invocationId` as `causationId`, and the lineage `rootId` and `depth`), the trace is stored with each resulting delivery, kept by redeliveries, duplicates and redrives (unless a redrive starts a new operation), and returned as `LeasedDelivery.trace`, so the receiving invocation joins the trace and lineage. Every delivery also reports `sentAt`, the time it was first stored (or redriven as a new operation), for the runtime's `maxEventAgeMs`. Operations without a trace (signed uploads, the CLI's `queue send`) store none. |
 | Not simulated | Network partitions, throttling, service outages and storage quotas. |
 
+## Static sites
+
+The local binding serves static sites from files: `<root>/<directory>`, where `root` is the application root (`createLocalEnvironment({ root })`, `local.platform({ root })`, `createTestApp({ root })`; default the working directory; `holqa dev` passes the application module's directory). It refuses any path that leaves the site's directory (including encoded `..` and NUL), serves a directory's `index.html`, falls back to the root `index.html` for unknown extension-less paths when the site sets `spa: true`, derives content types from file extensions, and sends HTML with `cache-control: no-cache`. It advertises `static.site: { spaFallback: true }`.
+
 ## Signed URLs
 
 Local signed URLs are a development implementation. Their security properties:

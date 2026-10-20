@@ -88,7 +88,7 @@ describe("validateProvider", () => {
 
   it("requires a complete platform to implement every mandatory contract and bind every kind", () => {
     expect(validateProvider(platformProvider({ contracts: { "execution": 1, "http.api": 1, "queue": 1, "config": 1, "telemetry": 1 } })).map(diagnostic => diagnostic.message)).toContain(
-      "Provider \"platform\": a platform provider must implement every mandatory contract; it lacks bucket, bucket.events, schedule."
+      "Provider \"platform\": a platform provider must implement every mandatory contract; it lacks bucket, bucket.events, schedule, static.site."
     );
     expect(validateProvider(platformProvider({ execution: undefined })).map(diagnostic => diagnostic.message)).toEqual([
       "Provider \"platform\": \"execution\" capabilities must be given exactly when the execution contract is declared."

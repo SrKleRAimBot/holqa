@@ -49,6 +49,7 @@ Once an ADR is accepted, it is not rewritten. To change a decision, write a new 
 | [0028](0028-hot-handler-replacement.md) | Hot handler replacement inside a development generation | Proposed (implemented) | 2026-10-20 |
 | [0029](0029-binding-provider-protocol-and-versioned-contracts.md) | A binding provider protocol with versioned contracts | Proposed (implemented) | 2026-10-20 |
 | [0030](0030-binding-composition-and-resolution.md) | Binding composition with deterministic resolution | Proposed (implemented) | 2026-10-20 |
+| [0031](0031-static-sites-as-a-resource-kind.md) | Static sites as a resource kind served through bindings | Proposed (implemented) | 2026-10-20 |
 
 ## Adding an ADR
 

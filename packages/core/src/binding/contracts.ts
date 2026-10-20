@@ -28,6 +28,7 @@ export const bindingContracts = Object.freeze({
   "bucket": 1,
   "bucket.events": 1,
   "schedule": 1,
+  "static.site": 1,
   "config": 1,
   "telemetry": 1,
   "idempotency": 1,
@@ -48,7 +49,7 @@ export const bindingContractNames: readonly BindingContractName[] = Object.freez
  * with an `idempotency` policy, a per-operation event budget) are rejected by
  * bindings without them.
  */
-export const mandatoryBindingContracts: readonly BindingContractName[] = Object.freeze(["execution", "http.api", "queue", "bucket", "bucket.events", "schedule", "config", "telemetry"] as const);
+export const mandatoryBindingContracts: readonly BindingContractName[] = Object.freeze(["execution", "http.api", "queue", "bucket", "bucket.events", "schedule", "static.site", "config", "telemetry"] as const);
 
 /**
  * Reports whether a value names a binding contract this version defines.

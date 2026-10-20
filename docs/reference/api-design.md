@@ -18,7 +18,8 @@ This page specifies the public APIs for application definitions, typed resources
 | Descriptor protocol | **Implemented** | Typed kind registries instead of open `config` objects; handler descriptors hold `definition` (JSON metadata) separately from `invoke`; resource descriptors add `requirements` ([ADR 0018](../architecture/decisions/0018-typed-kind-registries-in-the-descriptor-protocol.md)). |
 | Runtime bindings | **Implemented** (contract only) | `RuntimeBinding` is `{ name, capabilities, drivers, config }`; `bindApp` checks capabilities and drivers before installing; rebinding fails with `HOLQA_RUNTIME_ALREADY_BOUND` ([ADR 0020](../architecture/decisions/0020-runtime-binding-resolution.md)). `@holqa/runtime-bun` installs a binding when it starts. |
 | Schema adapters | **Implemented** | The method is `describe(schema, side)` and returns a description with structured `runtimeOnly` entries, or a problem with a `path` and `hint`. Fidelity is recorded on the normalized contract's `source`, not per conversion ([ADR 0021](../architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md)). |
-| Infrastructure bindings, `staticSite` | Proposed | — |
+| Infrastructure bindings | **Implemented** | Binding configurations (`defineBindings`), providers and composition ([binding contracts](bindings.md)). |
+| `staticSite` | **Implemented** | `{ id, directory, basePath?, spa? }`: artifacts the frontend build wrote, not a build command ([ADR 0031](../architecture/decisions/0031-static-sites-as-a-resource-kind.md)). |
 
 The [resource model](../architecture/resource-model.md) and the [packages reference](packages.md) describe the implemented API; this page keeps the original proposal for the parts that are not built.
 

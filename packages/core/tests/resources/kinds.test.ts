@@ -19,12 +19,12 @@ import {
 
 describe("resource kind registry", () => {
   it("lists every kind once, in a stable order", () => {
-    expect(resourceKinds).toEqual(["queue", "bucket", "schedule", "http.api"]);
-    expectTypeOf<ResourceKind>().toEqualTypeOf<"queue" | "bucket" | "schedule" | "http.api">();
+    expect(resourceKinds).toEqual(["queue", "bucket", "schedule", "http.api", "static.site"]);
+    expectTypeOf<ResourceKind>().toEqualTypeOf<"queue" | "bucket" | "schedule" | "http.api" | "static.site">();
   });
 
   it("distinguishes kinds with data-plane drivers", () => {
-    expectTypeOf<DrivenResourceKind>().toEqualTypeOf<"queue" | "bucket">();
+    expectTypeOf<DrivenResourceKind>().toEqualTypeOf<"queue" | "bucket" | "static.site">();
     expectTypeOf<ResourceKindMap["schedule"]["driver"]>().toEqualTypeOf<never>();
   });
 

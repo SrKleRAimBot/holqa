@@ -498,6 +498,14 @@ The time zone, daylight-saving and missed-run rules below are what every schedul
 | Manual runs | Started by the binding (for example `scheduler.trigger(id)` in `@holqa/local`) with `trigger: "manual"` and `scheduledTime` set to the request time, through the same overlap policy. |
 | Results | The runtime reports every run's outcome (`succeeded`, `failed` with the failure code, or `skipped`) and invocation identifier back to the scheduler, which can record it. `scheduledTime` is when the run was due, not when it started. |
 
+## Static sites
+
+```ts
+export const web = staticSite({ id: "web", directory: "web/dist", spa: true });
+```
+
+A static site serves files a frontend build wrote (`directory`, relative to the application root) under `basePath` (default `/`). The runtime answers a `GET` or `HEAD` request from a site only when no route or procedure matches it, choosing the site with the longest base path that prefixes the request path, through the binding's `static.site` driver. Other methods, and paths no site has a file for, get the usual `404` (`HOLQA_HTTP_ROUTE_NOT_FOUND`). Two sites under one base path fail with `HOLQA_ROUTE_CONFLICT` when the runtime is created. With `spa: true`, an extension-less path that names no file is answered with the site's `index.html`. A binding that cannot host sites fails at start (`HOLQA_BINDING_CAPABILITY_UNSUPPORTED`); the default environment binding hosts none. Server spans record the route as `<basePath>/*`.
+
 ## Compiled applications
 
 `loadCompiledApplication({ root, buildDir? })` reads `manifest.json` and `entrypoints.json` written by `holqa build --manifest`, imports the application module and each handler module, and returns `{ app, handlers, manifestFingerprint, handlerSources }` for `createRuntime`. It fails with `HOLQA_APP_NOT_FOUND` without build output, `HOLQA_MANIFEST_INVALID` for malformed output (including module paths outside the root), `HOLQA_MANIFEST_VERSION_UNSUPPORTED` for another manifest version, `HOLQA_APP_INVALID` when the application module's default export is not an application, `HOLQA_MODULE_EVALUATION_FAILED` when a module throws, and `HOLQA_BUILD_STALE` when the entry point map belongs to another manifest or the application name, resources (kind, identifier, settings, requirements), configuration entries, handler exports or triggers changed since the build. Schema changes and handler modules added after the build are not detected; rebuild after changing either.

@@ -78,7 +78,7 @@ describe("resolveBindings", () => {
       ["HOLQA_BINDING_MISSING", { resource: "nightly", kind: "schedule" }]
     ]);
     const kinds = resolveBindings(defineBindings(createApp(), { defaults: testPlatform(), kinds: { "topic": testQueueProvider(), "static.site": testQueueProvider() } } as never));
-    expect(kinds.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_BINDING_CONFIG_INVALID", "HOLQA_BINDING_CONFIG_INVALID"]);
+    expect(kinds.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_BINDING_RESOURCE_UNKNOWN", "HOLQA_BINDING_CONFIG_INVALID"]);
   });
 
   it("reports a service provider that does not supply the service, and empty lists", () => {

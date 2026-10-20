@@ -82,6 +82,7 @@ Schemas whose vendor is `holqa` (written by Holqa, such as the SDK's object-crea
 | Bucket | `bucket`, `bucket.access.<access>` |
 | Schedule | `schedule`, `schedule.overlap.<overlap>` |
 | HTTP API | `http.api` |
+| Static site | `static.site`; `static.site.spa-fallback` when `spaFallback` is `true` |
 | Trigger | `trigger.<trigger kind>`, for example `trigger.queue.message` |
 
 The numeric values of `maxAttempts` and `backoff` are in the queue's `requirements`. `requiredCapabilities` in `@holqa/core` derives these strings; the compiler records what it returns, so the vocabulary only grows. `checkCapabilities` in `@holqa/core` compares requirements with a binding when it is installed, and `holqa bindings validate` and `holqa inspect --capabilities` compare them with a binding configuration before anything runs ([binding contracts](bindings.md#capabilities)).

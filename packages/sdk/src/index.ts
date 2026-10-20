@@ -109,6 +109,8 @@ export type {
   ScheduleHandlerOptions,
   ScheduleOptions
 } from "@/resources/schedule";
+export { staticSite } from "@/resources/static-site";
+export type { StaticSiteHandle, StaticSiteOptions } from "@/resources/static-site";
 export { scoped } from "@/scope/scoped";
 export type { ScopedOptions } from "@/scope/scoped";
 export type {

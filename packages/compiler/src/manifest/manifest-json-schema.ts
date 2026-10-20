@@ -84,7 +84,11 @@ const resourceDefinitionsByKind: { readonly [Kind in ResourceKind]: JsonObject }
   "http.api": resourceDefinition("http.api", closedObject({
     basePath: { type: "string", pattern: "^/$|^(?:/[\\w.~-]+)+$" },
     docs: closedObject({ title: { type: "string", minLength: 1 }, version: { type: "string", minLength: 1 } })
-  }, ["basePath"]), closedObject({}))
+  }, ["basePath"]), closedObject({})),
+  "static.site": resourceDefinition("static.site", closedObject({
+    directory: { type: "string", pattern: "^(?![a-zA-Z]:)(?:(?!\\.\\.?(?:/|$))[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$" },
+    basePath: { type: "string", pattern: "^/$|^(?:/[\\w.~-]+)+$" }
+  }), closedObject({ spaFallback: { type: "boolean" } }))
 };
 
 /**

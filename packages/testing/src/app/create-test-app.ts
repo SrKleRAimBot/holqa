@@ -76,6 +76,8 @@ export interface TestAppOptions {
   readonly handlerSources?: Readonly<Record<string, string>>;
   /** Configuration values. Default `{}`: the test process's environment is never read. */
   readonly env?: Readonly<Record<string, string | undefined>>;
+  /** The application root that static sites' directories are relative to. Default: the working directory. */
+  readonly root?: string;
   /** Where virtual time starts, as epoch milliseconds or an ISO 8601 string. Default 2026-01-01T00:00:00Z. */
   readonly startTime?: number | string;
   /** Creates invocation, message, event and run identifiers. Default sequential: `id-1`, `id-2`, ... */
@@ -352,6 +354,7 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
       app: options.app,
       directory,
       env: options.env ?? {},
+      ...options.root === undefined ? {} : { root: options.root },
       clock,
       createId,
       // One process owns the state, so receivers never need to poll for work from another process.

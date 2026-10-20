@@ -26,6 +26,7 @@ This page is the specification every binding implementation follows: which contr
 | `bucket` | 1 | Resource | Yes | `drivers.bucket` |
 | `bucket.events` | 1 | Resource | Yes | `sources.bucket`, `resources.bucket.events` |
 | `schedule` | 1 | Resource | Yes | `sources.schedule` |
+| `static.site` | 1 | Resource | Yes | `drivers["static.site"]` |
 | `config` | 1 | Service | Yes | `ConfigSource` |
 | `telemetry` | 1 | Service | Yes | `TelemetryExporter` list |
 | `idempotency` | 1 | Service | No | `IdempotencyStore` |
@@ -67,6 +68,10 @@ The runtime serves HTTP APIs and RPC procedures with standard Fetch `Request` an
 ### `schedule`
 
 `sources.schedule(resource).start(listener)` reports due runs; the listener's promise resolves with the run's result, which the scheduler may record. The provider evaluates cron, time zone, daylight-saving and missed-run rules exactly as the [runtime reference](runtime.md#scheduled-runs) specifies, or refuses the schedule. The overlap policy is applied by the runtime per process. `ScheduleCapabilities`: `overlap`.
+
+### `static.site`
+
+`drivers["static.site"](resource).fetch(path, request)` answers a `GET` or `HEAD` request for a path relative to the site's base path (`/` for the root) with a file and its content type, or resolves to `undefined`. A provider must never serve a file outside the site's artifacts; serve a directory's `index.html`; and, when the site requires `spaFallback`, answer an extension-less path that names no file with the root `index.html`. The runtime calls it only for requests no route matches ([ADR 0031](../architecture/decisions/0031-static-sites-as-a-resource-kind.md)). `StaticSiteCapabilities`: `spaFallback`.
 
 ### `config`
 

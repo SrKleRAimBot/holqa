@@ -196,19 +196,20 @@ export function testQueueProvider(options: TestProviderOptions = {}): BindingPro
  * @param values - Configuration values the platform's configuration service returns.
  * @returns The provider.
  */
-export function testPlatform(options: TestProviderOptions = {}, values: Readonly<Record<string, string>> = {}): BindingProvider<"queue" | "bucket" | "schedule" | "http.api", "config" | "telemetry" | "idempotency"> {
+export function testPlatform(options: TestProviderOptions = {}, values: Readonly<Record<string, string>> = {}): BindingProvider<"queue" | "bucket" | "schedule" | "http.api" | "static.site", "config" | "telemetry" | "idempotency"> {
   const name = options.name ?? "platform";
   return {
     bindingProtocol: 1,
     provider: "example.platform",
     name,
     role: "platform",
-    contracts: { "execution": 1, "http.api": 1, "queue": 1, "bucket": 1, "bucket.events": 1, "schedule": 1, "config": 1, "telemetry": 1, "idempotency": 1 },
+    contracts: { "execution": 1, "http.api": 1, "queue": 1, "bucket": 1, "bucket.events": 1, "schedule": 1, "static.site": 1, "config": 1, "telemetry": 1, "idempotency": 1 },
     resources: {
       "queue": { delivery: ["at-least-once"], maxAttempts: 100, deadLetter: true, backoff: ["fixed", "exponential"], maxDelaySeconds: 900 },
       "bucket": { access: ["private", "public-read"], events: ["object.created", "object.deleted"] },
       "schedule": { overlap: ["skip", "allow"] },
-      "http.api": {}
+      "http.api": {},
+      "static.site": { spaFallback: true }
     },
     services: { config: true, telemetry: true, idempotency: true },
     execution: { runtimes: ["bun"], mode: "long-running" },

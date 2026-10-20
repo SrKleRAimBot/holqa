@@ -29,6 +29,12 @@ describe("normalizeResourceKind", () => {
       problems: []
     });
     expect(normalizeResourceKind("http.api", { basePath: "/", docs: { title: "T", version: "1" } }, {}).config).toEqual({ basePath: "/", docs: { title: "T", version: "1" } });
+    expect(normalizeResourceKind("static.site", { directory: "web/dist", basePath: "/" }, { spaFallback: true })).toEqual({
+      config: { directory: "web/dist", basePath: "/" },
+      requirements: { spaFallback: true },
+      capabilities: ["static.site", "static.site.spa-fallback"],
+      problems: []
+    });
   });
 
   it("records a queue's backoff and the capability it requires", () => {
@@ -60,7 +66,9 @@ describe("normalizeResourceKind", () => {
     ["bucket", { region: "x" }, { access: "private" }, "\"config.region\" is not a recognized setting."],
     ["schedule", { cron: "0 3 * *", timezone: "UTC" }, { overlap: "skip" }, "\"config.cron\" must be a five-field cron expression separated by single spaces."],
     ["http.api", { basePath: "/api/" }, {}, "\"config.basePath\" must be \"/\" or a path such as \"/api\" that starts with \"/\" and does not end with one."],
-    ["http.api", { basePath: "/" }, null, "\"requirements\" must be an object."]
+    ["http.api", { basePath: "/" }, null, "\"requirements\" must be an object."],
+    ["static.site", { directory: "../outside", basePath: "/" }, { spaFallback: false }, "\"config.directory\" must be a relative path such as \"web/dist\" with \"/\" separators and no empty, \".\" or \"..\" segments."],
+    ["static.site", { directory: "dist", basePath: "/" }, { spaFallback: "yes" }, "\"requirements.spaFallback\" must be a boolean."]
   ] as const)("reports a malformed %p", (kind, config, requirements, problem) => {
     expect(normalizeResourceKind(kind, config, requirements).problems).toContain(problem);
   });
