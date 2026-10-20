@@ -66,7 +66,7 @@ describe("one schema on publish and on receipt", () => {
     try {
       expect(await orders.send({ orderId: "o_1", placedAt: "2026-10-18T09:00:00Z", lines: [{ sku: "SKU-1", quantity: 1 }] })).toEqual({ messageId: "m-1" });
       expect(sent).toEqual([{ orderId: "o_1", placedAt: "2026-10-18T09:00:00Z", lines: [{ sku: "SKU-1", quantity: 1 }] }]);
-      await consumer["~holqa"].invoke(sent[0], { invocationId: "i-1", signal: new AbortController().signal, log: { info: () => undefined, warn: () => undefined, error: () => undefined }, metadata: { attempt: 1, messageId: "m-1" } });
+      await consumer["~holqa"].invoke(sent[0], { invocationId: "i-1", signal: new AbortController().signal, log: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined }, metadata: { attempt: 1, messageId: "m-1" } });
       expect(placedAt.map(date => date.toISOString())).toEqual(["2026-10-18T09:00:00.000Z"]);
     } finally {
       unbind();

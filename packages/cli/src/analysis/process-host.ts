@@ -20,6 +20,10 @@ import {
   createDiagnostic,
   diagnosticCodes
 } from "@holqa/core";
+import {
+  openLocalTelemetryReader,
+  readDeliveryHistory
+} from "@holqa/local";
 
 import { readAnalysisReport } from "@/analysis/report";
 import {
@@ -124,8 +128,33 @@ export function createProcessHost(options: ProcessHostOptions = {}): CliHost {
     readFile: async path => new Uint8Array(readFileSync(path)),
     dev: (request, onEvent) => runDevSession(local, request, onEvent),
     operate: (location, operation) => operateLocally(local, location, operation),
-    doctor: request => runDoctor(local, request)
+    doctor: request => runDoctor(local, request),
+    telemetry: stateDir => openLocalTelemetryReader(stateDir),
+    deliveryHistory: (stateDir, id) => readDeliveryHistory(stateDir, id),
+    waitForStop
   };
+}
+
+/**
+ * Waits for an interval, or until the process receives `SIGINT` or `SIGTERM`.
+ *
+ * @param intervalMs - How long to wait, in milliseconds.
+ * @returns `true` when a stop signal arrived, `false` when the interval passed.
+ */
+async function waitForStop(intervalMs: number): Promise<boolean> {
+  /** Ends the wait early; replaced once the wait has started. */
+  let onSignal: () => void = () => {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stopped = await new Promise<boolean>((resolve) => {
+    onSignal = () => resolve(true);
+    timer = setTimeout(resolve, intervalMs, false);
+    process.once("SIGINT", onSignal);
+    process.once("SIGTERM", onSignal);
+  });
+  clearTimeout(timer);
+  process.off("SIGINT", onSignal);
+  process.off("SIGTERM", onSignal);
+  return stopped;
 }
 
 /**

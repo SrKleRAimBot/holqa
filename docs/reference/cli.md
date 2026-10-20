@@ -1,6 +1,6 @@
 # CLI reference
 
-> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect` (including `--cycles`), `holqa build --manifest`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`, `holqa state` and `holqa doctor`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
+> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect` (including `--cycles`), `holqa build --manifest`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`, `holqa state`, `holqa doctor` and the telemetry commands `holqa logs`, `holqa traces list`, `holqa traces inspect`, `holqa events inspect` and `holqa metrics`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
 
 The `holqa` binary is provided by `@holqa/cli` (`packages/cli`). It runs on Bun (`#!/usr/bin/env bun`; `engines.bun >= 1.3.13`). The package is private and not published, so the CLI is only available inside this repository.
 
@@ -27,6 +27,11 @@ holqa storage put <bucket> <file> [--key <key>] [--content-type <type>] [--app <
 holqa cron run <schedule> [--app <path>] [--state-dir <dir>] [--json]
 holqa state [--app <path>] [--state-dir <dir>] [--json]
 holqa doctor [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--json]
+holqa logs [--follow] [--handler <id>] [--trace <trace-id>] [--level <level>] [--limit <n>] [--app <path>] [--state-dir <dir>] [--json]
+holqa traces list [--limit <n>] [--app <path>] [--state-dir <dir>] [--json]
+holqa traces inspect <trace-id> [--app <path>] [--state-dir <dir>] [--json]
+holqa events inspect <event-id> [--app <path>] [--state-dir <dir>] [--json]
+holqa metrics [--app <path>] [--state-dir <dir>] [--json]
 ```
 
 ## Options
@@ -40,17 +45,20 @@ holqa doctor [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] 
 | `--app <path>` | Every command: the application module, relative to the working directory. Default `infra.ts`. Its directory is the application root. | — |
 | `--out-dir <dir>` | `build`: where to write output, relative to the working directory. Default `.holqa/build` in the application root. | — |
 | `--manifest` | `build`: write the manifest and entry point map. Required today. | — |
-| `--state-dir <dir>` | Local commands: the local state directory, relative to the working directory. Default `.holqa/local` in the application root. | — |
+| `--state-dir <dir>` | Local and telemetry commands: the local state directory, relative to the working directory. Default `.holqa/local` in the application root. | — |
 | `--port <port>` | `dev`, `doctor`: the dev server's port, `0` to `65535`. Default `3000`; `0` picks a free port. | — |
 | `--host <host>` | `dev`, `doctor`: the interface to listen on. Default `127.0.0.1`. | — |
 | `--no-watch` | `dev`: do not rebuild on file changes. | — |
 | `--cycles` | `inspect`: print the event dependency graph and its cycles instead of the summary. | — |
+| `--follow` | `logs`: keep printing new entries until the process receives `SIGINT` or `SIGTERM`. | — |
+| `--handler <id>`, `--trace <trace-id>`, `--level <level>` | `logs`: only entries of one handler, of one trace, or at `debug`, `info`, `warn` or `error` and more severe. | — |
+| `--limit <n>` | `logs`, `traces list`: how many entries or traces, `1` to `10000`. Defaults 100 and 20. | — |
 
 Options take their value as `--app path` or `--app=path`. Positional arguments (`<handler>`, `<queue>`, ...) are required and counted exactly; an argument after `--` is always positional. Help text is always plain text, even with `--json`. It lists the implemented commands, then the proposed commands under "Proposed commands (not implemented yet)".
 
 ## Commands
 
-> **Every command except `--help` and `--version` runs your application's code.** `inspect` and `build` import the application module, every handler module and everything those import, in a separate Bun process with an allowlisted environment. The local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) analyze the same way and then **run** the application in a separate Bun process with the CLI's full environment, as any server you start would, including `.env` files Bun loads from the application root. None of this is a sandbox. See the [security model](compiler-specification.md#security-model).
+> **Every command except `--help`, `--version` and the telemetry commands runs your application's code.** `inspect` and `build` import the application module, every handler module and everything those import, in a separate Bun process with an allowlisted environment. The local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) analyze the same way and then **run** the application in a separate Bun process with the CLI's full environment, as any server you start would, including `.env` files Bun loads from the application root. None of this is a sandbox. See the [security model](compiler-specification.md#security-model).
 
 ### `holqa inspect`
 
@@ -142,7 +150,7 @@ With `--json`, standard output receives one JSON object per line, tagged with `t
 | --- | --- | --- |
 | `holqa invoke <handler> [--input <json>] [--attempt <n>]` | Invokes a queue consumer, object event handler or schedule handler once, with generated trusted metadata (a first delivery of a new message or event, or a manual run now). The handler validates `--input`. Nothing is recorded in queue, event or schedule history. HTTP routes and procedures are rejected with `HOLQA_OPERATION_INVALID`; call them over HTTP. | `{ target, handlerId, outcome: { ok, handlerId, invocationId, correlationId, durationMs, emitted, value? \| failure? }, logs }` |
 | `holqa queue send <queue> --data <json> [--delay <seconds>]` | Validates the message with the queue's schema, as a producer's `send` does, and stores it. | `{ target, queueId, messageId, schemaVersion, delaySeconds? }` |
-| `holqa queue redrive <queue> [--message <id>] [--limit <n>] [--dry-run] [--new-operation]` | Makes dead-lettered messages due again with a fresh attempt count, oldest first: all of them, the one `--message` names, or at most `--limit`. `--dry-run` only lists them. Redriven messages keep their [lineage](runtime.md#event-lineage-and-limits), so a message refused for its depth or budget is refused again; `--new-operation` starts a new root operation (depth 0, a fresh budget, a new send time for `maxEventAgeMs`) for each, keeping its correlation. | `{ target, queueId, dryRun, newOperation?, count, messages: [{ messageId, attempts, sentAt, lastError?, trace? }] }` |
+| `holqa queue redrive <queue> [--message <id>] [--limit <n>] [--dry-run] [--new-operation]` | Makes dead-lettered messages due again with a fresh attempt count, oldest first: all of them, the one `--message` names, or at most `--limit`. `--dry-run` only lists them. Redriven messages keep their [lineage](runtime.md#event-lineage-and-limits), so a message refused for its depth or budget is refused again; `--new-operation` starts a new root operation (depth 0, a fresh budget, a new send time for `maxEventAgeMs`) and a new telemetry trace for each, keeping its correlation. | `{ target, queueId, dryRun, newOperation?, count, messages: [{ messageId, attempts, sentAt, lastError?, trace? }] }` |
 | `holqa storage put <bucket> <file> [--key <key>] [--content-type <type>]` | Stores a file (at most 64 MiB) under `--key` (default: the file name), which emits `object.created`. The content type defaults to the one Bun derives from the file extension. | `{ target, bucketId, object: { key, size, contentType?, etag, lastModified } }` |
 | `holqa cron run <schedule>` | Starts a manual run through the runtime and the schedule's overlap policy and records it in the schedule's history. | `{ target, scheduleId, run: { runId, status, trigger, ... }, logs }` |
 | `holqa state` | Prints the local state: queue messages with their state, attempts, last error and trace; stored objects and object events with each subscription's delivery state; schedule runs and the next cron run. | `{ target, application, queues: [{ id, counts, messages }], buckets: [{ id, objects, events }], schedules: [{ id, cron, timezone, nextRun?, runs }] }` |
@@ -175,6 +183,28 @@ Checks the project and the local environment without changing the local state, a
 
 With `--json`, standard output receives `{ checks: [{ name, status, message, diagnostics? }], diagnostics }`. When a check fails, the exit code is `1` and standard error also receives `{"diagnostics":[...]}`, starting with one `HOLQA_DOCTOR_CHECK_FAILED` per failed check.
 
+### Telemetry commands
+
+`logs`, `traces list`, `traces inspect`, `events inspect` and `metrics` read the local telemetry store (`telemetry.sqlite` in the state directory) and, for `events inspect`, the local state, read-only. They neither analyze nor run the application, and they work while a `holqa dev` session writes to the store. `--app` only locates the default state directory.
+
+The store is written by `holqa dev`, `holqa invoke` and `holqa cron run` (`queue send`, `queue redrive`, `storage put` and `state` run no handler). Those commands also export spans and metrics over OTLP/HTTP when the standard OpenTelemetry environment variables configure an endpoint (`OTEL_EXPORTER_OTLP_ENDPOINT` and related variables; see the [observability guide](../guides/observability.md#export-to-an-opentelemetry-collector-or-another-otlp-backend)); unsupported values make the application process fail with `HOLQA_TELEMETRY_CONFIG_INVALID`. The dev session also counts reload failures (`holqa.dev.reload.failures`) in the store.
+
+| Command | Prints | JSON output (standard output) |
+| --- | --- | --- |
+| `holqa logs` | The newest log entries, oldest first, one formatted line each (the line format of `holqa dev`). With `--follow`, new entries every 500 ms until stopped; a store created after the command started is picked up. | One JSON log entry per line, not one document. |
+| `holqa traces list` | A table of recent traces, newest first: trace identifier, start (UTC), duration, span count, error count and root span name. | `{ traces: [{ traceId, name, startTime, durationMs, spans, errors }] }` |
+| `holqa traces inspect <trace-id>` | One trace as a tree of spans: kind, offset, a timeline bar, duration, status with `error.type`, exception messages and links to other traces. Accepts an unambiguous prefix of the trace identifier. | `{ traceId, spans }` (the stored `SpanRecord`s) |
+| `holqa events inspect <event-id>` | For a message or object event identifier: each delivery's state, attempts, send time, lineage, publishing trace and last error; the invocations that processed it; its spans; its log entries. | `{ id, history?, invocations, logs, spans }` |
+| `holqa metrics` | Every framework metric with its series: counter and gauge values; histogram count, average, p50 and p95 upper bucket bounds, and maximum. | `{ metrics }` (the aggregated `MetricRecord`s) |
+
+| Outcome | Exit code | Standard error with `--json` |
+| --- | --- | --- |
+| Success, including an empty store (`logs`, `traces list` and `metrics` then print that nothing is recorded yet, or empty JSON) | `0` | — |
+| `traces inspect` or `events inspect` finds nothing for the identifier | `1` | `HOLQA_TELEMETRY_NOT_FOUND` |
+| The telemetry store cannot be read, for example because a newer version wrote it | `1` | The store's diagnostic, for example `HOLQA_LOCAL_STATE_UNSUPPORTED` |
+| The host cannot read telemetry or wait for signals (custom hosts) | `1` | `HOLQA_LOCAL_OPERATION_FAILED` |
+| A trace identifier prefix that matches several traces, an invalid `--level` or `--limit`, a missing argument | `2` | `HOLQA_CLI_ARGUMENT_INVALID` |
+
 ### Paths in output
 
 Diagnostic locations and output paths are relative to the working directory when they lie inside it, and absolute otherwise. The manifest and entry point map themselves only contain paths relative to the application root.
@@ -191,6 +221,7 @@ Diagnostic locations and output paths are relative to the working directory when
 | An unknown option, a missing value, a missing or extra argument or a repeated option for any implemented command | Error on standard error; nothing is analyzed. | `2` | `HOLQA_CLI_ARGUMENT_INVALID` |
 | `holqa build` without `--manifest` | Error on standard error. | `1` | `HOLQA_CLI_NOT_IMPLEMENTED` |
 | A local command | See [`holqa dev`](#holqa-dev), [operation commands](#operation-commands) and [`holqa doctor`](#holqa-doctor). | `0`, `1` or `2` | — |
+| A telemetry command | See [telemetry commands](#telemetry-commands). | `0`, `1` or `2` | — |
 | A proposed command (`holqa openapi generate`) | Error on standard error. | `1` | `HOLQA_CLI_NOT_IMPLEMENTED` |
 | Anything else (for example `holqa foo`) | Error on standard error. | `2` | `HOLQA_CLI_UNKNOWN_COMMAND` |
 
@@ -232,7 +263,7 @@ interface CliJsonErrorOutput {
 }
 ```
 
-`--version --json` writes `{"version":"<version>"}` to standard output. Successful output of every command is described under [commands](#commands); `holqa dev` writes JSON lines instead of one document.
+`--version --json` writes `{"version":"<version>"}` to standard output. Successful output of every command is described under [commands](#commands); `holqa dev` and `holqa logs` write JSON lines instead of one document.
 
 Agents and scripts should parse standard error as JSON when the exit code is non-zero and `--json` was passed, then branch on `diagnostics[].code`. See [diagnostic codes](diagnostic-codes.md).
 
@@ -249,7 +280,7 @@ The list is defined in `proposedCommands` (`packages/cli/src/commands.ts`), whic
 
 ## Programmatic use
 
-`runCli(argv, io, version, host?)` runs the CLI without touching process streams and resolves to the exit code. `host` (a `CliHost`) supplies the working directory, analysis and file writing, and optionally `readFile`, `dev`, `operate` and `doctor` for the local commands (a host without them reports those commands as unavailable with `HOLQA_LOCAL_OPERATION_FAILED`). It defaults to `createProcessHost()`, which analyzes and runs the application in separate processes. Tests pass an in-memory host:
+`runCli(argv, io, version, host?)` runs the CLI without touching process streams and resolves to the exit code. `host` (a `CliHost`) supplies the working directory, analysis and file writing, and optionally `readFile`, `dev`, `operate` and `doctor` for the local commands, and `telemetry`, `deliveryHistory` and `waitForStop` for the telemetry commands (a host without them reports those commands as unavailable with `HOLQA_LOCAL_OPERATION_FAILED`; without `deliveryHistory`, `events inspect` shows telemetry only). It defaults to `createProcessHost()`, which analyzes and runs the application in separate processes. Tests pass an in-memory host:
 
 ```ts
 import { runCli } from "@holqa/cli";
@@ -272,4 +303,5 @@ const code = await runCli(["openapi", "generate", "--json"], {
 - [Agent-native development](../concepts/agent-native-development.md)
 - [Local development](../concepts/local-development.md)
 - [Local development guide](../guides/local-development.md)
+- [Observability guide](../guides/observability.md)
 - [ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md)

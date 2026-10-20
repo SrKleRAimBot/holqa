@@ -81,6 +81,7 @@ export type {
   HandlerInvoke,
   InvocationContext,
   InvocationLogger,
+  InvocationTelemetry,
   Trigger,
   TriggerOf
 } from "@/handlers/handler-descriptor";
@@ -146,6 +147,48 @@ export type {
   JsonObject,
   JsonValue
 } from "@/json";
+export { frameworkMetrics, metricOverflowAttribute } from "@/observability/framework-metrics";
+export type { FrameworkMetric, FrameworkMetricType } from "@/observability/framework-metrics";
+export {
+  createRedactor,
+  defaultSensitiveKeys,
+  defaultSensitiveKeySuffixes,
+  minRedactedValueLength,
+  redactedValue
+} from "@/observability/redaction";
+export type { Redactor, RedactorOptions } from "@/observability/redaction";
+export type {
+  GaugeMetricRecord,
+  GaugePoint,
+  HistogramMetricRecord,
+  HistogramPoint,
+  MetricRecord,
+  SpanEvent,
+  SpanKind,
+  SpanLink,
+  SpanRecord,
+  SpanStatus,
+  SumMetricRecord,
+  SumPoint,
+  TelemetryAttributes,
+  TelemetryAttributeValue,
+  TelemetryExporter,
+  TelemetryExportOptions,
+  TelemetryLogRecord,
+  TelemetryLogSeverity,
+  TelemetryResource
+} from "@/observability/telemetry";
+export {
+  formatTraceparent,
+  isSpanId,
+  isTraceId,
+  parseTraceparent,
+  randomSpanId,
+  randomTraceId,
+  traceparentHeader,
+  tracestateHeader
+} from "@/observability/trace-context";
+export type { TraceContext } from "@/observability/trace-context";
 export {
   getAppDescriptor,
   getConfigDescriptor,

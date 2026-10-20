@@ -89,7 +89,7 @@ export function createTestBinding(config: Readonly<Record<string, unknown>> = {}
 export function createContext<Metadata>(metadata: Metadata): InvocationContext<Metadata> {
   /** Discards a log entry. */
   const silent = (): void => {};
-  return { invocationId: "inv-1", signal: new AbortController().signal, metadata, log: { info: silent, warn: silent, error: silent } };
+  return { invocationId: "inv-1", signal: new AbortController().signal, metadata, log: { debug: silent, info: silent, warn: silent, error: silent } };
 }
 
 /**

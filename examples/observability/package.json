@@ -1,0 +1,29 @@
+{
+  "name": "@holqa/example-observability",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Observability example: an HTTP request, the message it publishes, its processing and the object it writes, correlated in logs, traces and metrics; exported over OTLP/HTTP to a collector and inspected with holqa logs, traces, events inspect and metrics.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "holqa dev --app app/infra.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@holqa/cli": "workspace:*",
+    "@holqa/core": "workspace:*",
+    "@holqa/sdk": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@holqa/local": "workspace:*",
+    "@holqa/opentelemetry": "workspace:*",
+    "@holqa/runtime-bun": "workspace:*",
+    "@holqa/testing": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

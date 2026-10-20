@@ -34,7 +34,11 @@ export type {
   RuntimeOptions,
   RuntimeState,
   RuntimeStats,
+  RuntimeTelemetryControl,
   StopOptions
 } from "@/runtime/create-runtime";
 export { createEnvironmentBinding } from "@/runtime/environment-binding";
 export type { EnvironmentVariables } from "@/runtime/environment-binding";
+export type { PipelineLimits, TelemetryStats } from "@/telemetry/pipeline";
+export type { MessageTraceRelation, RuntimeTelemetryOptions } from "@/telemetry/runtime-telemetry";
+export type { TelemetryIdGenerator } from "@/telemetry/tracer";

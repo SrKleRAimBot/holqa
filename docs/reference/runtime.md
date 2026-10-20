@@ -1,6 +1,6 @@
 # Runtime
 
-> **Status:** **Implemented** in `@holqa/runtime-bun` (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, `Bun.serve` adapter), `@holqa/sdk` (`route`, `procedure`, `reply`, `middleware`, `scoped`, queue, bucket and schedule operations) and `@holqa/core` (wire contracts, delivery sources, cron evaluation), including event lineage, event limits and handler idempotency ([event safety](../concepts/event-safety.md)). Reloads are **Implemented** by `holqa dev` as process restarts, one process per generation ([ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md), [CLI reference](cli.md)); in-process module reloading and worker isolation are **Planned**. All packages are private and unpublished.
+> **Status:** **Implemented** in `@holqa/runtime-bun` (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, `Bun.serve` adapter), `@holqa/sdk` (`route`, `procedure`, `reply`, `middleware`, `scoped`, queue, bucket and schedule operations) and `@holqa/core` (wire contracts, delivery sources, cron evaluation), including event lineage, event limits and handler idempotency ([event safety](../concepts/event-safety.md)) and telemetry: spans, metrics, redaction and export ([observability](../concepts/observability.md)). Reloads are **Implemented** by `holqa dev` as process restarts, one process per generation ([ADR 0025](../architecture/decisions/0025-dev-supervisor-and-process-generations.md), [CLI reference](cli.md)); in-process module reloading and worker isolation are **Planned**. All packages are private and unpublished.
 
 This page specifies how a Holqa application executes: the invocation lifecycle shared by every trigger, the HTTP route contract, the `holqa.rpc/1` protocol, middleware ordering, and how queue messages, object events and scheduled runs are delivered. The design is recorded in [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) and [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md). The local binding that delivers them on one machine is described in the [local environment reference](local.md).
 
@@ -49,9 +49,12 @@ stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 | `http.trustCorrelationHeader` | `true` | Adopt a caller's `x-correlation-id` (at most 128 letters, digits, `_`, `.`, `:`, `-`). Set `false` for servers exposed to untrusted callers, so logs never contain caller-chosen identifiers. |
 | `manualTriggers` | `false` | Run queue, object event and schedule handlers only through `runtime.invoke`: the runtime consumes no source. Without it, `start()` fails with `HOLQA_RUNTIME_START_FAILED` and one `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` cause per handler whose trigger the binding cannot deliver. |
 | `log` | JSON lines on standard output | A `LogSink`; `silentSink` discards. |
+| `logLevel` | `debug` | The least severe level written: `debug`, `info`, `warn` or `error`. |
+| `redact.keys` | none | More field names whose values are redacted from logs and spans, in addition to the defaults. See [redaction](#redaction). |
+| `telemetry` | disabled | Spans, metrics and exported logs. See [telemetry](#telemetry). |
 | `createId`, `now`, `clock` | `crypto.randomUUID`, `performance.now`, `new Date()` | Injectable for deterministic tests. |
 
-`createRuntime` is synchronous and side-effect free. It reports every problem at once in one `HolqaError`: a value that is not an application (`HOLQA_APP_INVALID`), a non-handler (`HOLQA_DECLARATION_INVALID`), two registrations with one identifier (`HOLQA_HANDLER_ID_DUPLICATE`), a trigger on an undeclared resource (`HOLQA_RESOURCE_NOT_FOUND`) or a resource of another kind (`HOLQA_TRIGGER_INVALID`), two handlers serving the same method and path shape across all APIs (`HOLQA_ROUTE_CONFLICT`, the same rule the compiler applies), two consumers of one queue (`HOLQA_QUEUE_CONSUMER_DUPLICATE`), and invalid limits, event limits, delivery or CORS settings (`HOLQA_RUNTIME_START_FAILED`). `start()` also fails with `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` when a handler declares `idempotency` and the binding has no idempotency store, or `events.maxEventsPerOperation` is set and the binding has no operation budget store. These checks repeat the compiler's for registrations that were never compiled; the route rule is the shared `httpRouteKeys` function from `@holqa/core`.
+`createRuntime` is synchronous and side-effect free. It reports every problem at once in one `HolqaError`: a value that is not an application (`HOLQA_APP_INVALID`), a non-handler (`HOLQA_DECLARATION_INVALID`), two registrations with one identifier (`HOLQA_HANDLER_ID_DUPLICATE`), a trigger on an undeclared resource (`HOLQA_RESOURCE_NOT_FOUND`) or a resource of another kind (`HOLQA_TRIGGER_INVALID`), two handlers serving the same method and path shape across all APIs (`HOLQA_ROUTE_CONFLICT`, the same rule the compiler applies), two consumers of one queue (`HOLQA_QUEUE_CONSUMER_DUPLICATE`), invalid limits, event limits, delivery, CORS, log level or redaction settings (`HOLQA_RUNTIME_START_FAILED`), and invalid telemetry settings (`HOLQA_TELEMETRY_CONFIG_INVALID`). `start()` also fails with `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` when a handler declares `idempotency` and the binding has no idempotency store, or `events.maxEventsPerOperation` is set and the binding has no operation budget store. These checks repeat the compiler's for registrations that were never compiled; the route rule is the shared `httpRouteKeys` function from `@holqa/core`.
 
 ## Execution lifecycle
 
@@ -65,14 +68,15 @@ stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 
 `start()` runs once. It creates the binding (validating every configuration entry; see [configuration](#configuration)), checks that the binding can deliver every background handler's trigger, installs it with `bindApp`, and then subscribes to the binding's sources (a source can still fail here, for example a schedule with `HOLQA_SCHEDULE_INVALID`). A failure throws `HOLQA_RUNTIME_START_FAILED` followed by its causes and leaves the runtime `stopped`; create a new runtime to retry. Calling `stop()` while `start()` is still running makes the start fail (`HOLQA_RUNTIME_NOT_RUNNING`) and never installs the binding.
 
-`stop({ graceMs = 10000, forceMs = 1000 })` is idempotent; concurrent calls share one stop. It:
+`stop({ graceMs = 10000, forceMs = 1000, telemetryMs = 5000 })` is idempotent; concurrent calls share one stop. It:
 
 1. stops receiving queue messages, object events and scheduled runs, and refuses new invocations;
 2. waits up to `graceMs` for admitted invocations to finish, including those still waiting for a slot; scoped values stay usable meanwhile;
 3. aborts the remaining ones (their callers receive `HOLQA_INVOCATION_CANCELLED`) and waits up to `forceMs` for handler code that ignores its signal, logging a warning if some is still running;
 4. settles every delivery with its source: finished ones are acknowledged, retried or dead-lettered as usual, and those cancelled by the stop are released for immediate redelivery;
 5. aborts the application scope's `signal` and disposes of scoped values in reverse creation order (a failing `dispose` is logged, and the others still run);
-6. removes the binding.
+6. removes the binding;
+7. exports the remaining telemetry and shuts exporters down, waiting at most `telemetryMs`.
 
 `serve(...).stop()` stops the runtime first, while the server keeps listening and answers new requests with `503`, then waits up to `forceMs` for responses that are still being written, then closes every connection.
 
@@ -131,11 +135,41 @@ The default binding validates every configuration entry at `start()`: the enviro
 
 ### Logs
 
-Entries are JSON objects with `level`, `time` and `message`, then context fields (`application`, `handlerId`, `invocationId`, `correlationId`, `triggerKind` and `resourceId` of the handler's trigger, `causationId` when the invocation has a cause, `rootId` and `depth` unless the invocation is its own root at depth 0 (HTTP requests, scheduled runs, direct invocations; an untraced delivery logs its message or event identifier as root), `method` and `path` for HTTP, and `deliveryId` and `attempt` for queue messages and object events, `runId` for scheduled runs), then the fields a handler passes to `log.info/warn/error`. Fields cannot replace `level`, `time` or `message`; a handler field with the same name as a context field replaces it in that entry. The runtime writes `runtime started`, `invocation completed` (`outcome`, `durationMs`, `emitted` when the handler emitted anything, and `blocked` with the guard's code when an event limit refused a publication), `invocation failed` (`code`, `durationMs`, `emitted`, `blocked`, `source` when `handlerSources` names the handler, and `error` with name, message, stack and diagnostics; level `error` for server errors), `request rejected` (unmatched requests), and `runtime stopped`. Request and response bodies are never logged.
+Handlers log with `log.debug`, `log.info`, `log.warn` and `log.error`; entries below `logLevel` are dropped. Entries are JSON objects with `level`, `time` and `message`, then context fields (`application`, `handlerId`, `invocationId`, `correlationId`, `triggerKind` and `resourceId` of the handler's trigger, `causationId` when the invocation has a cause, `rootId` and `depth` unless the invocation is its own root at depth 0 (HTTP requests, scheduled runs, direct invocations; an untraced delivery logs its message or event identifier as root), `method` and `path` for HTTP, and `deliveryId` and `attempt` for queue messages and object events, `runId` for scheduled runs, and `traceId` and `spanId` when telemetry is recorded), then the fields a handler passes to `log.debug/info/warn/error`. Entries are [redacted](#redaction) before the sink sees them. Fields cannot replace `level`, `time` or `message`; a handler field with the same name as a context field replaces it in that entry. The runtime writes `runtime started`, `invocation completed` (`outcome`, `durationMs`, `emitted` when the handler emitted anything, and `blocked` with the guard's code when an event limit refused a publication), `invocation failed` (`code`, `durationMs`, `emitted`, `blocked`, `source` when `handlerSources` names the handler, and `error` with name, message, stack and diagnostics; level `error` for server errors), `request rejected` (unmatched requests), and `runtime stopped`. Request and response bodies are never logged.
 
 ### Traces
 
+This section describes correlation through `correlationId`. Telemetry traces (spans with W3C trace context) are described under [telemetry](#telemetry).
+
 A trace is every invocation that shares one `correlationId`. When handler code sends a message or writes or deletes an object, the runtime passes the running invocation's trace to the driver as `DriverOperationContext.trace` (`{ correlationId, causationId, rootId, depth }`, where `causationId` is the sending invocation's `invocationId` and `depth` is one more than its own) and records the operation in `emitted`. A binding that stores the trace returns it with each resulting delivery (`LeasedDelivery.trace`); the queue or object event invocation then uses the delivery's `correlationId` and logs its `causationId`. Without a trace (a binding that does not store one, or a message sent outside an invocation) the delivery's `correlationId` is the message or event identifier, as before. Scheduled runs use their `runId`. The runtime finds the running invocation with `AsyncLocalStorage`, so operations that handler code starts are attributed to it even when they finish later; work a handler leaves running after its outcome is not listed in `emitted`. The trace is not part of the `holqa.message/1` envelope or of any resource contract.
+
+### Telemetry
+
+`createRuntime({ telemetry })` records spans and metrics and exports them in the background. The design is [ADR 0027](../architecture/decisions/0027-observability-telemetry-and-local-inspection.md); span names, attributes and metrics are listed in [observability](../concepts/observability.md).
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `telemetry.enabled` | `true` when `exporters` is not empty | Whether spans and metrics are recorded. Enabled without exporters, logs still carry `traceId` and `spanId` and trace context is propagated. |
+| `telemetry.exporters` | none | `TelemetryExporter`s, for example `createOtlpHttpExporter` from `@holqa/opentelemetry` or the local store's `exporter`. |
+| `telemetry.serviceName` | the application's name | The `service.name` resource attribute. Every runtime also reports a random `service.instance.id`. |
+| `telemetry.resource` | none | More resource attributes. |
+| `telemetry.sampleRatio` | `1` | Share of new traces recorded, from 0 to 1: a new trace is sampled when the low 56 bits of its identifier are below `ratio × 2^56`. Continued traces follow the caller's decision. Lineage and event limits never depend on it. |
+| `telemetry.messages` | `"parent"` | `"parent"`: a processing span is a child of the span that published the message or wrote the object, with a link to it. `"link"`: a new trace per delivery, with only the link. |
+| `telemetry.acceptTraceparent` | `true` | Continue an HTTP request's `traceparent` and `tracestate`, including its sampling flag, so a caller can force its requests to be recorded. Set `false` for untrusted callers. |
+| `telemetry.exportLogs` | `false` | Also send log entries to exporters as OpenTelemetry log records. |
+| `telemetry.limits` | `maxQueueSize` 2 048, `maxBatchSize` 512, `flushIntervalMs` 1 000, `metricIntervalMs` 10 000, `exportTimeoutMs` 10 000, `maxSeriesPerMetric` 2 000 | Buffer, batch, interval, export time and cardinality limits. Each must be an integer of at least 1 (`PipelineLimits`). |
+| `telemetry.ids` | random (Web Crypto) | `{ traceId(), spanId() }`, for deterministic tests. Invalid identifiers it returns are replaced with random ones. |
+
+Unknown `telemetry` keys, non-boolean `acceptTraceparent` or `exportLogs`, and invalid `ids` or `resource` fail `createRuntime` with `HOLQA_TELEMETRY_CONFIG_INVALID`.
+
+- **Spans.** One per invocation (`server` for HTTP, `consumer` for deliveries, `internal` for scheduled runs and `runtime.invoke`), one per queue send from handler code (`producer`) and one per bucket operation from handler code (`client`). The producer or client span's context is passed to drivers as `DriverOperationContext.trace.traceparent`, and a binding that stores it returns it with the delivery (`LeasedDelivery.trace.traceparent`). Handlers receive `context.telemetry` (`{ traceId, spanId, sampled, traceparent }`).
+- **Metrics.** The framework metrics of `frameworkMetrics` in `@holqa/core`, aggregated in memory, cumulative, and exported every `metricIntervalMs`. `holqa.queue.pending` is reported for queues whose source implements `QueueSource.pending`.
+- **Failures.** Recording never calls an exporter; full batches are exported on a later turn. A full buffer drops the newest records; an exporter that rejects or exceeds `exportTimeoutMs` loses that batch, and its `TelemetryExportOptions.signal` is aborted. Gauges are capped by the series limit, and a failing gauge is reported with exporter `meter`. Neither affects invocations. Failures are logged as `warn` entries `telemetry export failed; the records were dropped` with `code: "HOLQA_TELEMETRY_EXPORT_FAILED"`, `exporter`, `signal`, `failures` and `error`, at most once per minute per exporter and signal. `stats().telemetry` counts recorded, dropped and pending records and failed exports.
+- **Control.** `runtime.telemetry.enabled` reports whether telemetry is recorded; `runtime.telemetry.flush()` exports everything recorded so far and never rejects.
+
+### Redaction
+
+Every log entry and span is redacted before it reaches a sink or exporter: values of fields whose names, lowercased and stripped of everything but letters and digits, contain `password`, `passwd`, `secret`, `privatekey` or `credential` (`defaultSensitiveKeys`) anywhere, or end with `token`, `authorization`, `cookie`, `apikey`, `accesskey` or `signature` (`defaultSensitiveKeySuffixes`; `tokenCount` and `signatureAlgorithm` are not redacted), names in `redact.keys` (matched anywhere), and every occurrence of a declared secret's value of at least four characters, read from the binding at `start()`. Redaction applies to log messages and fields (never `level` or `time`), span attributes, span events (exception messages and stacks) and span status messages. It does not recognize transformed secrets. `createRedactor` in `@holqa/core` applies the same rules.
 
 ### Event lineage and limits
 
@@ -457,6 +491,7 @@ Loading evaluates the application's code in the current process with its permiss
 | In-process module reloading, worker isolation per application | Planned |
 | Middleware for background triggers | Planned |
 | Queue backlog thresholds, per-operation budgets on bindings other than `@holqa/local` | Planned |
+| `@opentelemetry/api` bridge, OTLP over protobuf or gRPC, exporter retries | Planned |
 | CORS and body limits declared in the application | Proposed |
 | OpenAPI documents, generated clients | Planned |
 
@@ -465,6 +500,8 @@ Loading evaluates the application's code in the current process with its permiss
 - [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md)
 - [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md)
 - [ADR 0026](../architecture/decisions/0026-event-safety-analysis-lineage-and-execution-guards.md)
+- [ADR 0027](../architecture/decisions/0027-observability-telemetry-and-local-inspection.md)
+- [Observability](../concepts/observability.md)
 - [Event safety](../concepts/event-safety.md)
 - [Local environment](local.md)
 - [Triggers and execution](../concepts/triggers-and-execution.md)

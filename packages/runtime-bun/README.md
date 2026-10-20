@@ -1,6 +1,6 @@
 # @holqa/runtime-bun
 
-> **Status:** Implemented (invocation dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve` adapter, queue, object event and schedule delivery, event lineage and limits). Private; not published. `holqa dev` reloads by restarting one process per generation ([ADR 0025](../../docs/architecture/decisions/0025-dev-supervisor-and-process-generations.md)); worker isolation is planned.
+> **Status:** Implemented (invocation dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve` adapter, queue, object event and schedule delivery, event lineage and limits, telemetry). Private; not published. `holqa dev` reloads by restarting one process per generation ([ADR 0025](../../docs/architecture/decisions/0025-dev-supervisor-and-process-generations.md)); worker isolation is planned.
 
 Runs a Holqa application on Bun. Every invocation, whatever triggered it, goes through one dispatcher that assigns
 invocation and correlation identifiers, applies time limits, cancellation and concurrency limits, normalizes errors
@@ -16,6 +16,12 @@ delete reaches the binding, the runtime checks it against the event limits (`eve
 operation budgets), and deliveries past a limit end terminally instead of being retried. See
 [event lineage and limits](../../docs/reference/runtime.md#event-lineage-and-limits).
 
+With `telemetry` options (or `exporters`), the runtime also records spans for every invocation and resource
+operation, propagates W3C trace context across HTTP and through messages and object events, aggregates the
+framework metrics, and exports them through a bounded background pipeline that never affects invocations. Log
+entries carry `traceId` and `spanId`, are filtered by `logLevel`, and are redacted (sensitive field names and declared
+secret values). See [observability](../../docs/concepts/observability.md) and [telemetry](../../docs/reference/runtime.md#telemetry).
+
 ```ts
 import { createRuntime, loadCompiledApplication, serve, stopOnSignals } from "@holqa/runtime-bun";
 
@@ -27,11 +33,12 @@ stopOnSignals(server);
 
 | Export | Purpose |
 | --- | --- |
-| `createRuntime(options)` | One application execution context: validates handlers and routes, then `start`, `invoke`, `fetch`, `stop`, `stats`. |
+| `createRuntime(options)` | One application execution context: validates handlers and routes, then `start`, `invoke`, `fetch`, `stop`, `stats`, `telemetry.flush`. |
 | `serve(runtime, options)`, `stopOnSignals(server)` | Serve a runtime with `Bun.serve`; stop gracefully on `SIGINT`/`SIGTERM`. |
 | `loadCompiledApplication({ root, buildDir? })` | Load an application from `holqa build --manifest` output and check it still matches the code; returns `handlerSources` for failure logs. |
 | `createEnvironmentBinding(app, env)` | The default binding: HTTP APIs and configuration validated from environment variables. It delivers nothing; use `@holqa/local` for queues, buckets and schedules. |
 | `jsonLineSink`, `silentSink` | Log sinks. |
+| `RuntimeTelemetryOptions`, `TelemetryStats` | Telemetry settings (`exporters`, `sampleRatio`, `messages`, `acceptTraceparent`, `exportLogs`, `limits`) and counters. Exporters come from `@holqa/opentelemetry`, `@holqa/local` or `@holqa/testing`. |
 | `EmittedEvent` | What an invocation emitted (`InvocationOutcome.emitted`): sent messages and changed objects. |
 
 See the [runtime reference](../../docs/reference/runtime.md) for the execution lifecycle, HTTP contracts, RPC

@@ -23,7 +23,12 @@ export const implementedCommands: readonly ProposedCommand[] = [
   { name: "storage put", summary: "Upload a file to a local bucket." },
   { name: "cron run", summary: "Run a schedule's handler now." },
   { name: "state", summary: "Print local queue messages, objects, events and schedule runs." },
-  { name: "doctor", summary: "Check the project, its configuration and the local environment." }
+  { name: "doctor", summary: "Check the project, its configuration and the local environment." },
+  { name: "logs", summary: "Print recent structured log entries of local runs; --follow keeps printing new ones." },
+  { name: "traces list", summary: "List recent traces recorded by local runs." },
+  { name: "traces inspect", summary: "Print one trace as a tree of spans with a timeline." },
+  { name: "events inspect", summary: "Print a queue message's or object event's deliveries, lineage, invocations, logs and spans." },
+  { name: "metrics", summary: "Print the framework metrics of local runs." }
 ];
 
 /**

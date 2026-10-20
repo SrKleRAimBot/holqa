@@ -21,8 +21,9 @@ await runtime.start();
 | Queues | `holqa.message/1` envelopes in SQLite (`bun:sqlite`) with leases, delays, retries and a dead-letter state; inspection, redrive and duplicate delivery. |
 | Buckets | Object bytes in files named by a hash of the key, metadata in SQLite, `object.created` and `object.deleted` events per subscription, bounded listings, development signed URLs served by `storage.fetch`. |
 | Scheduler | Cron runs driven by an injectable `Clock`, records of every run (including missed ones) and manual runs. |
-| Tracing | Deliveries keep the trace (`correlationId`, `causationId`) and lineage (`rootId`, `depth`) of the invocation that sent the message or changed the object, so the receiving invocation joins the same trace, and report when they were sent. |
+| Tracing | Deliveries keep the trace (`correlationId`, `causationId`), lineage (`rootId`, `depth`) and telemetry context (`traceparent`, state format 4) of the invocation that sent the message or changed the object, so the receiving invocation joins the same trace, and report when they were sent. |
 | Event safety | Per-operation budgets and idempotency keys in the state database, atomic across every process that shares the directory, and controlled redrive (`limit`, `newOperation`). |
+| Telemetry | `createLocalTelemetryStore` keeps recent spans, logs and metrics in `telemetry.sqlite` with bounded retention, for `holqa logs`, `traces`, `events inspect` and `metrics`; `openLocalTelemetryReader` and `readDeliveryHistory` read it and the state without changing them. Queue sources count their backlog (`pending`). |
 | Testing | `ManualClock` (`advance`, `jump`, `nextTimerDue`) and `settle()` make delivery, retries, expiry and schedules deterministic; `manualTriggerMetadata` builds the metadata for invoking a background handler directly. |
 
 The binding advertises only what common production services also offer (for example at most 900 seconds of delay),

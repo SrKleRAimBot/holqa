@@ -1,4 +1,5 @@
 import type { Diagnostic } from "@holqa/core";
+import type { LocalTelemetryStore } from "@holqa/local";
 
 import type { AnalysisOutcome } from "@/analysis/host";
 import type { DevEvent } from "@/dev/events";
@@ -18,9 +19,11 @@ import {
 } from "@holqa/compiler";
 import {
   createDiagnostic,
-  diagnosticCodes
+  diagnosticCodes,
+  frameworkMetrics
 } from "@holqa/core";
 import {
+  createLocalTelemetryStore,
   readStateFormat,
   stateVersion
 } from "@holqa/local";
@@ -83,6 +86,7 @@ export interface DoctorRequest {
  * @returns Success once the session stopped, or the diagnostics of a session that could not start.
  */
 export async function runDevSession(dependencies: LocalHostDependencies, request: DevRequest, onEvent: (event: DevEvent) => void): Promise<PhaseResult<undefined>> {
+  const store = openReloadMetrics(request.location.stateDir);
   const supervisor = new DevSupervisor({
     location: request.location,
     cwd: dependencies.cwd,
@@ -91,7 +95,12 @@ export async function runDevSession(dependencies: LocalHostDependencies, request
     watch: request.watch,
     analyze: dependencies.analyze,
     writeFile: dependencies.writeFile,
-    onEvent,
+    onEvent: (event) => {
+      // Reload failures are a framework metric; `holqa metrics` reads them from the telemetry store.
+      if (event.type === "build.failed" || event.type === "generation.failed")
+        store?.increment(frameworkMetrics.reloadFailures, { "holqa.reload.stage": event.type === "build.failed" ? "build" : "start" });
+      onEvent(event);
+    },
     ...dependencies.env === undefined ? {} : { env: dependencies.env }
   });
   let signalled!: () => void;
@@ -112,6 +121,24 @@ export async function runDevSession(dependencies: LocalHostDependencies, request
   } finally {
     process.off("SIGINT", signalled);
     process.off("SIGTERM", signalled);
+    store?.close();
+  }
+}
+
+/**
+ * Opens the telemetry store the dev session counts reload failures in.
+ * Telemetry never stops a session: when the store cannot be opened, reload
+ * failures are only reported, not counted.
+ *
+ * @param stateDir - The local state directory.
+ * @returns The store, or `undefined` when it cannot be opened.
+ */
+function openReloadMetrics(stateDir: string): LocalTelemetryStore | undefined {
+  try {
+    return createLocalTelemetryStore({ directory: stateDir });
+  } catch (error) {
+    process.stderr.write(`holqa: reload failures are not counted: the telemetry store could not be opened (${error instanceof Error ? error.message : String(error)}).\n`);
+    return undefined;
   }
 }
 

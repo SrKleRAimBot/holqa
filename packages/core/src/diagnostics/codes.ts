@@ -147,7 +147,13 @@ export const diagnosticCodes = {
   /** Another delivery with the same idempotency key is being processed; this one is retried later. */
   idempotencyInProgress: "HOLQA_IDEMPOTENCY_IN_PROGRESS",
   /** A test application ran more invocations than its simulation budget allows, usually because of an event cycle. */
-  simulationBudgetExceeded: "HOLQA_SIMULATION_BUDGET_EXCEEDED"
+  simulationBudgetExceeded: "HOLQA_SIMULATION_BUDGET_EXCEEDED",
+  /** Telemetry settings are invalid or ask for something unsupported, for example an OTLP protocol other than `http/json`. */
+  telemetryConfigInvalid: "HOLQA_TELEMETRY_CONFIG_INVALID",
+  /** A telemetry exporter rejected or timed out on a batch, or the export buffer was full; the records were dropped. Invocations are unaffected. */
+  telemetryExportFailed: "HOLQA_TELEMETRY_EXPORT_FAILED",
+  /** A trace, event or other telemetry record asked for by identifier was not found in the local telemetry store. */
+  telemetryNotFound: "HOLQA_TELEMETRY_NOT_FOUND"
 } as const;
 
 /**

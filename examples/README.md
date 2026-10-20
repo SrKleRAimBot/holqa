@@ -1,6 +1,6 @@
 # Examples
 
-Holqa is at the bootstrap stage. `package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline` and `event-safety` run against the implemented packages, and `commerce` runs against the disposable M0 experiment packages. The others show the intended application structure using the **proposed** SDK API, which is not implemented and may change.
+Holqa is at the bootstrap stage. `package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline`, `event-safety` and `observability` run against the implemented packages, and `commerce` runs against the disposable M0 experiment packages. The others show the intended application structure using the **proposed** SDK API, which is not implemented and may change.
 
 | Example | Status | Runs? | Purpose |
 | --- | --- | --- | --- |
@@ -11,6 +11,7 @@ Holqa is at the bootstrap stage. `package-smoke`, `schema-evolution`, `manifest`
 | [`document-processing`](./document-processing/) | **Implemented** | Yes, in CI via `pnpm test` | An event-driven SDK application (uploads through signed URLs, object events, a queue consumer with retries and dead-lettering, a scheduled cleanup) run on `@holqa/local`; also runs with `holqa dev --app app/infra.ts`. |
 | [`order-pipeline`](./order-pipeline/) | **Implemented** | Yes, in CI via `pnpm test` | The local development example: run it with `pnpm --filter @holqa/example-order-pipeline start` (`holqa dev`), exercise it with `holqa invoke`, `queue send`, `storage put` and `cron run`, and test it with `createTestApp` (controlled failures, retries, dead letters, duplicates, schedules) and a real `holqa dev` session. |
 | [`event-safety`](./event-safety/) | **Implemented** | Yes, in CI via `pnpm test` | Event safety: `holqa inspect --cycles` through the built CLI (an indirect cycle warning, an allowed cycle, prefix-safe object writes), and depth limits, idempotency and lineage inspection with `createTestApp`. |
+| [`observability`](./observability/) | **Implemented** | Yes, in CI via `pnpm test` | Observability: one correlated trace from an HTTP request through a queue to an object event, redacted logs, retries and dead letters in spans and metrics, OTLP export to a stand-in receiver (also with the receiver down), and `holqa traces`, `logs` and `metrics` through the built CLI. |
 | [`commerce`](./commerce/) | Runs against the M0 experiments (not the framework) | Yes, in CI via `pnpm test` | The recurring development reference: HTTP routes, two queues, a storage event and a schedule. Type-checked and tested with the prototype SDK, compiler and runtime. |
 | [`basic-backend`](./basic-backend/) | Illustrative | No | Backend-only application: HTTP route, queue consumer, storage event handler and scheduled task. |
 | [`fullstack-vite`](./fullstack-vite/) | Illustrative | No | Vite frontend calling typed RPC procedures through a generated, browser-safe client with TanStack Query options. |

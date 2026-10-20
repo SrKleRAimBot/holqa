@@ -131,7 +131,7 @@ describe("schema interoperability", () => {
     const consumer = getHandlerDescriptor(skus.consume({ id: "skus.consume", handler: ({ message }) => {
       seen.push(message);
     } }));
-    const context = { invocationId: "1", signal: new AbortController().signal, metadata: {}, log: { info: () => undefined, warn: () => undefined, error: () => undefined } };
+    const context = { invocationId: "1", signal: new AbortController().signal, metadata: {}, log: { debug: () => undefined, info: () => undefined, warn: () => undefined, error: () => undefined } };
     await consumer?.invoke("SKU-1", context);
     expect(seen).toEqual(["SKU-1"]);
     expect(consumer?.invoke("nope", context)).rejects.toBeInstanceOf(InputValidationError);

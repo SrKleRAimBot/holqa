@@ -4,7 +4,11 @@ import type {
   HandlerDescriptor,
   InvocationContext,
   InvocationLineage,
-  JsonObject
+  JsonObject,
+  SpanKind,
+  SpanLink,
+  TelemetryAttributes,
+  TraceContext
 } from "@holqa/core";
 
 import type { EventGuardViolation } from "@/dispatch/event-guard";
@@ -15,8 +19,13 @@ import type {
   InvocationTracker
 } from "@/dispatch/invocation-tracker";
 import type { StructuredLogger } from "@/logging/log";
+import type { RuntimeTelemetry } from "@/telemetry/runtime-telemetry";
+import type { ActiveSpan } from "@/telemetry/tracer";
 
-import { diagnosticCodes } from "@holqa/core";
+import {
+  diagnosticCodes,
+  frameworkMetrics
+} from "@holqa/core";
 
 import {
   failureFromError,
@@ -71,6 +80,24 @@ export interface InvocationRequest {
   readonly timeoutMs?: number;
   /** Extra fields for this invocation's log entries, such as the HTTP method and path. */
   readonly logFields?: JsonObject;
+}
+
+/**
+ * How a transport wants an invocation traced. Internal to the runtime: the
+ * public `runtime.invoke` never passes it, so direct invocations always start
+ * an `internal` span of their own.
+ */
+export interface InvocationInstrumentation {
+  /** A span the transport started and ends itself, for example an HTTP server span that must outlive the invocation to record the response status. */
+  readonly span?: ActiveSpan;
+  /** The span's name, when the dispatcher starts it. Default `invoke <handlerId>`. */
+  readonly name?: string;
+  /** The span's kind, when the dispatcher starts it. Default `internal`. */
+  readonly kind?: SpanKind;
+  /** The parent context, when the dispatcher starts the span. */
+  readonly parent?: TraceContext;
+  readonly links?: readonly SpanLink[];
+  readonly attributes?: TelemetryAttributes;
 }
 
 /** What every outcome reports. */
@@ -143,6 +170,8 @@ export interface DispatcherOptions {
   readonly tracker: InvocationTracker;
   /** Where each handler is implemented (`module#export`), by handler identifier; logged with failures. */
   readonly sources: ReadonlyMap<string, string>;
+  /** Records spans and metrics of every invocation. */
+  readonly telemetry: RuntimeTelemetry;
 }
 
 /**
@@ -192,9 +221,10 @@ export class Dispatcher {
    * JavaScript cannot stop it.
    *
    * @param request - The invocation to run.
+   * @param instrumentation - How the transport wants the invocation traced.
    * @returns The outcome.
    */
-  async dispatch(request: InvocationRequest): Promise<InvocationOutcome> {
+  async dispatch(request: InvocationRequest, instrumentation: InvocationInstrumentation = {}): Promise<InvocationOutcome> {
     const { options } = this;
     const invocationId = options.createId();
     const correlationId = request.correlationId ?? invocationId;
@@ -204,6 +234,23 @@ export class Dispatcher {
     const started = options.now();
     const handler = options.handlers.get(request.handlerId);
     const trigger = handler?.definition.trigger;
+    const ownsSpan = instrumentation.span === undefined;
+    const span = instrumentation.span ?? options.telemetry.startSpan({
+      name: instrumentation.name ?? `invoke ${request.handlerId}`,
+      kind: instrumentation.kind ?? "internal",
+      ...instrumentation.parent === undefined ? {} : { parent: instrumentation.parent },
+      ...instrumentation.links === undefined ? {} : { links: instrumentation.links },
+      ...instrumentation.attributes === undefined ? {} : { attributes: instrumentation.attributes }
+    });
+    span?.setAttributes({
+      "holqa.handler.id": request.handlerId,
+      "holqa.invocation.id": invocationId,
+      "holqa.correlation.id": correlationId,
+      "holqa.lineage.root_id": rootId,
+      "holqa.lineage.depth": depth,
+      ...request.causationId === undefined ? {} : { "holqa.lineage.causation_id": request.causationId },
+      ...trigger === undefined ? {} : { "holqa.trigger.kind": trigger.kind, "holqa.resource.id": trigger.resource.id }
+    });
     const log = options.logger.child({
       handlerId: request.handlerId,
       invocationId,
@@ -212,6 +259,7 @@ export class Dispatcher {
       // A root invocation is its own root at depth 0; only descendants log their lineage.
       ...rootId === invocationId && depth === 0 ? {} : { rootId, depth },
       ...trigger === undefined ? {} : { triggerKind: trigger.kind, resourceId: trigger.resource.id },
+      ...span === undefined ? {} : { traceId: span.context.traceId, spanId: span.context.spanId },
       ...request.logFields
     });
     const base = { invocationId, correlationId, handlerId: request.handlerId, lineage };
@@ -233,14 +281,39 @@ export class Dispatcher {
       const emittedField: JsonObject = effects.length === 0 ? {} : { emitted: effects.map(event => ({ ...event })) };
       const blockedField: JsonObject = blocked === undefined ? {} : { blocked: blocked.code };
       const refusal = blocked === undefined ? {} : { blocked };
+      const metricAttributes = { "holqa.handler.id": request.handlerId, "holqa.trigger.kind": trigger?.kind ?? "unknown", "holqa.outcome": "failure" in outcome ? "failed" : "ok" };
+      options.telemetry.count(frameworkMetrics.handlerInvocations, 1, metricAttributes);
+      options.telemetry.record(frameworkMetrics.handlerDuration, durationMs / 1000, metricAttributes);
+      if (blocked !== undefined) {
+        options.telemetry.count(frameworkMetrics.eventsBlocked, 1, { "holqa.handler.id": request.handlerId, "error.type": blocked.code });
+        span?.setAttribute("holqa.event_guard.code", blocked.code);
+      }
+      if (span !== undefined) {
+        span.setAttribute("holqa.outcome", metricAttributes["holqa.outcome"]);
+        if (effects.length > 0)
+          span.setAttribute("holqa.emitted.count", effects.length);
+      }
       if ("failure" in outcome) {
         this.failed += 1;
         const { failure } = outcome;
+        options.telemetry.count(frameworkMetrics.handlerFailures, 1, { ...metricAttributes, "error.type": failure.code });
+        if (span !== undefined) {
+          span.setAttribute("error.type", failure.code);
+          if (failure.error !== undefined)
+            span.recordException(failure.error);
+          // A transport that owns the span decides its status (an HTTP 4xx is not a server error).
+          if (ownsSpan) {
+            span.setStatus({ code: "error", message: failure.message });
+            span.end();
+          }
+        }
         const fields: JsonObject = { outcome: "failed", code: failure.code, durationMs, ...emittedField, ...blockedField, ...source === undefined ? {} : { source }, ...failure.error === undefined ? {} : { error: describeError(failure.error) } };
         log.write(failure.status >= 500 ? "error" : "info", "invocation failed", fields);
         return Object.freeze({ ...base, ok: false, failure, durationMs, emitted: effects, ...refusal });
       }
       this.succeeded += 1;
+      if (ownsSpan)
+        span?.end();
       log.write("info", "invocation completed", { outcome: "ok", durationMs, ...emittedField, ...blockedField });
       return Object.freeze({ ...base, ok: true, value: outcome.value, durationMs, emitted: effects, ...refusal });
     };
@@ -306,8 +379,9 @@ export class Dispatcher {
         signal: controller.signal,
         metadata: (request.metadata ?? {}) as never,
         log: log.forHandler(),
+        ...span === undefined ? {} : { telemetry: Object.freeze({ traceId: span.context.traceId, spanId: span.context.spanId, sampled: span.context.sampled, traceparent: span.traceparent }) },
         scope: options.scope
-      });
+      }, span);
     } finally {
       clearTimeout(timer);
       this.live.delete(abort);
@@ -326,14 +400,15 @@ export class Dispatcher {
    * @param log - The invocation's logger.
    * @param finish - Records the outcome.
    * @param context - The invocation context passed to the handler.
+   * @param span - The invocation's span, parent of the spans of the resource operations it performs.
    * @returns The outcome.
    */
-  private async execute(handler: RegisteredHandler, request: InvocationRequest, signal: AbortSignal, releases: ReadonlyArray<() => void>, log: StructuredLogger, finish: (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[], blocked?: EventGuardViolation) => InvocationOutcome, context: InvocationContext<never> & { readonly lineage: InvocationLineage }): Promise<InvocationOutcome> {
+  private async execute(handler: RegisteredHandler, request: InvocationRequest, signal: AbortSignal, releases: ReadonlyArray<() => void>, log: StructuredLogger, finish: (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[], blocked?: EventGuardViolation) => InvocationOutcome, context: InvocationContext<never> & { readonly lineage: InvocationLineage }, span: ActiveSpan | undefined): Promise<InvocationOutcome> {
     this.running += 1;
     let settled = false;
     let orphan = false;
     const started = this.options.now();
-    const active: ActiveInvocation = { invocationId: context.invocationId, correlationId: context.correlationId ?? context.invocationId, handlerId: handler.definition.id, lineage: context.lineage, publications: 0, emitted: [] };
+    const active: ActiveInvocation = { invocationId: context.invocationId, correlationId: context.correlationId ?? context.invocationId, handlerId: handler.definition.id, lineage: context.lineage, publications: 0, emitted: [], ...span === undefined ? {} : { span } };
     // A handler that throws synchronously becomes a rejected execution, like an async one.
     // Running it inside the tracker attributes its resource operations to this invocation.
     const execution = Promise.resolve().then(() => this.options.tracker.run(active, () => handler.invoke(request.input, context)));

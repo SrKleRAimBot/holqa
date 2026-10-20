@@ -4,6 +4,10 @@ import type {
   Manifest
 } from "@holqa/compiler";
 import type { Diagnostic } from "@holqa/core";
+import type {
+  DeliveryHistory,
+  LocalTelemetryReader
+} from "@holqa/local";
 
 import type { DevEvent } from "@/dev/events";
 import type { PhaseResult } from "@/local/generation-process";
@@ -90,4 +94,32 @@ export interface CliHost {
   readonly operate?: (location: AppLocation, operation: LocalOperation) => Promise<OperateOutcome>;
   /** Runs the checks of `holqa doctor`. Optional. */
   readonly doctor?: (request: DoctorRequest) => Promise<DoctorCheck[]>;
+  /**
+   * Opens the telemetry of a local state directory for reading, for
+   * `holqa logs`, `traces`, `events inspect` and `metrics`. Optional; hosts
+   * without it report those commands as unavailable.
+   *
+   * @param stateDir - The absolute state directory.
+   * @returns The reader, or `undefined` when nothing was recorded there yet.
+   */
+  readonly telemetry?: (stateDir: string) => LocalTelemetryReader | undefined;
+  /**
+   * Reads what the local state records about one queue message or object
+   * event, read-only. Optional; without it `holqa events inspect` shows only
+   * telemetry.
+   *
+   * @param stateDir - The absolute state directory.
+   * @param id - The message or event identifier.
+   * @returns The history, or `undefined` when nothing has that identifier.
+   */
+  readonly deliveryHistory?: (stateDir: string, id: string) => DeliveryHistory | undefined;
+  /**
+   * Waits for an interval or until the process is asked to stop
+   * (`SIGINT` or `SIGTERM`), for `holqa logs --follow`. Optional; without it
+   * `--follow` is unavailable.
+   *
+   * @param intervalMs - How long to wait.
+   * @returns `true` when the process was asked to stop, `false` when the interval passed.
+   */
+  readonly waitForStop?: (intervalMs: number) => Promise<boolean>;
 }

@@ -18,6 +18,8 @@ const neutralPackageSources = [
   "packages/client/src/**",
   // Schema adapters run wherever the schemas run, so they stay runtime-neutral too.
   "packages/integrations/zod/src/**",
+  // The OTLP exporter only uses the Fetch API, so it runs on any runtime.
+  "packages/integrations/opentelemetry/src/**",
   // Disposable M0 experiments that prototype neutral packages obey the same rules.
   "experiments/model/src/**",
   "experiments/sdk/src/**",

@@ -42,6 +42,7 @@
     "@holqa/compiler": "workspace:*",
     "@holqa/core": "workspace:*",
     "@holqa/local": "workspace:*",
+    "@holqa/opentelemetry": "workspace:*",
     "@holqa/runtime-bun": "workspace:*"
   },
   "devDependencies": {

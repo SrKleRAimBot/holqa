@@ -2,6 +2,7 @@ import type {
   HandlerInvoke,
   InvocationLineage,
   InvocationLogger,
+  InvocationTelemetry,
   ResourceDescriptorOf,
   ScheduleOverlap,
   ScheduleRunTrigger
@@ -59,6 +60,8 @@ export interface ScheduleContext {
   readonly lineage?: InvocationLineage;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
+  /** The invocation's telemetry trace context, for example to pass a `traceparent` header to an outgoing call. Absent when the runtime records no telemetry. */
+  readonly telemetry?: InvocationTelemetry;
 }
 
 /**
@@ -148,7 +151,7 @@ export function schedule<const Id extends string>(options: ScheduleOptions<Id> &
        */
       const invoke: HandlerInvoke<"schedule.tick"> = async (_input, context) => {
         const { scheduledTime, runId, trigger = "cron" } = context.metadata;
-        await registration.handler({ scheduledTime, trigger, ...runId === undefined ? {} : { runId }, ...context.lineage === undefined ? {} : { lineage: context.lineage }, signal: context.signal, log: context.log });
+        await registration.handler({ scheduledTime, trigger, ...runId === undefined ? {} : { runId }, ...context.lineage === undefined ? {} : { lineage: context.lineage }, signal: context.signal, log: context.log, ...context.telemetry === undefined ? {} : { telemetry: context.telemetry } });
         return undefined;
       };
       const handler: ScheduleHandler<Id, HandlerId> = Object.freeze({

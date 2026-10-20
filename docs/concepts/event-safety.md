@@ -66,7 +66,7 @@ Propagation rules:
 - Two requests with the same `x-correlation-id` share a correlation, but are separate roots with separate budgets.
 - A delivery whose binding stored no lineage (state written before lineage existed, or a binding that does not store it) starts a new root at depth 0, rooted at its own message or event identifier. Depth limits and operation budgets therefore only span hops through bindings that store `rootId` and `depth`; the local binding does.
 
-Handlers read their lineage as `context.lineage` (queue consumers, object event handlers and schedule handlers), for example to stop an intentional cycle after a number of hops. Telemetry trace context is separate and **Planned** ([OpenTelemetry integration](../roadmap.md#future)).
+Handlers read their lineage as `context.lineage` (queue consumers, object event handlers and schedule handlers), for example to stop an intentional cycle after a number of hops. Telemetry trace context (`traceparent`) is **Implemented** and kept separate: sampling never changes lineage or the limits that depend on it ([observability](observability.md#lineage-is-independent-of-tracing)).
 
 ## Limits
 

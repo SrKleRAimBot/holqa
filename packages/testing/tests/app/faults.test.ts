@@ -11,7 +11,7 @@ import {
 import { FaultPlan } from "@/app/faults";
 
 /** A context for calling `invoke` outside a runtime. */
-const context = { invocationId: "inv-1", signal: new AbortController().signal, metadata: { attempt: 1, messageId: "m-1" }, log: { info: () => {}, warn: () => {}, error: () => {} } } as InvocationContext<object>;
+const context = { invocationId: "inv-1", signal: new AbortController().signal, metadata: { attempt: 1, messageId: "m-1" }, log: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} } } as InvocationContext<object>;
 
 describe("FaultPlan", () => {
   it("fails the next invocations of a handler, then lets them through", async () => {

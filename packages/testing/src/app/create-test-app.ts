@@ -15,15 +15,18 @@ import type {
 import type {
   InvocationOutcome,
   LogEntry,
+  LogLevel,
   LogSink,
   Runtime,
   RuntimeDeliveryOptions,
   RuntimeEventLimits,
-  RuntimeLimits
+  RuntimeLimits,
+  RuntimeTelemetryOptions
 } from "@holqa/runtime-bun";
 
 import type { FailureOptions } from "@/app/faults";
 import type { InvocationRecord } from "@/app/invocation-records";
+import type { MemoryTelemetry } from "@/telemetry/memory-telemetry";
 import {
   mkdtempSync,
   rmSync
@@ -49,6 +52,7 @@ import {
   lineageOf,
   SimulationBudget
 } from "@/app/simulation-budget";
+import { createMemoryTelemetry } from "@/telemetry/memory-telemetry";
 
 /** Settings of {@link createTestApp}. */
 export interface TestAppOptions {
@@ -84,6 +88,16 @@ export interface TestAppOptions {
   readonly defaultMaxAttempts?: number;
   /** Also receives every log entry, for example to print them while debugging a test. */
   readonly log?: LogSink;
+  /** The least severe log level recorded. Default `debug`. */
+  readonly logLevel?: LogLevel;
+  /** Extra field names redacted from logs and telemetry; see `createRuntime`. */
+  readonly redact?: { readonly keys?: readonly string[] };
+  /**
+   * Telemetry settings. Telemetry is always recorded in memory (see
+   * {@link TestApp.telemetry}) with deterministic trace and span
+   * identifiers; `exporters` adds more, for example an OTLP exporter.
+   */
+  readonly telemetry?: Omit<RuntimeTelemetryOptions, "enabled" | "ids">;
   /** How long `flush` waits for due work, in real milliseconds. Default 10 000. */
   readonly flushTimeoutMs?: number;
 }
@@ -201,6 +215,13 @@ export interface TestApp {
   readonly lineage: (invocationId: string) => InvocationRecord[];
   /** Every finished invocation that descends from one root operation, the root included, in order. */
   readonly operation: (rootId: string) => InvocationRecord[];
+  /**
+   * Spans, metrics and exported log records, recorded in memory. Call
+   * `flushTelemetry` before asserting on them: exports run in the background.
+   */
+  readonly telemetry: MemoryTelemetry;
+  /** Exports everything recorded so far to every exporter and waits for it. */
+  readonly flushTelemetry: () => Promise<void>;
   /** Stops the runtime, closes the local state and removes a temporary state directory. Idempotent. */
   readonly dispose: () => Promise<void>;
   readonly [Symbol.asyncDispose]: () => Promise<void>;
@@ -258,6 +279,8 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
     failWith(diagnosticCodes.declarationInvalid, `"maxInvocations" must be a positive integer, not ${JSON.stringify(options.maxInvocations)}.`);
   const budget = new SimulationBudget(maxInvocations);
   const logs: LogEntry[] = [];
+  const memory = createMemoryTelemetry();
+  let spanSequence = 0;
 
   let local: LocalEnvironment | undefined;
   let runtime: Runtime;
@@ -283,6 +306,15 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
       log: (entry) => {
         logs.push(entry);
         options.log?.(entry);
+      },
+      ...options.logLevel === undefined ? {} : { logLevel: options.logLevel },
+      ...options.redact === undefined ? {} : { redact: options.redact },
+      telemetry: {
+        ...options.telemetry,
+        enabled: true,
+        exporters: [memory.exporter, ...options.telemetry?.exporters ?? []],
+        // Deterministic identifiers: the same test produces the same traces.
+        ids: { traceId: () => (++spanSequence).toString(16).padStart(32, "0"), spanId: () => (++spanSequence).toString(16).padStart(16, "0") }
       },
       createId,
       clock: () => new Date(clock.now())
@@ -499,6 +531,8 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
     trace: (correlationId: string) => invocations({ correlationId }),
     lineage: (invocationId: string) => lineageOf(invocationRecords(logs), invocationId),
     operation: (rootId: string) => invocationRecords(logs).filter(record => record.rootId === rootId),
+    telemetry: memory,
+    flushTelemetry: () => runtime.telemetry.flush(),
     dispose,
     [Symbol.asyncDispose]: dispose
   });

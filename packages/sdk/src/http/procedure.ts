@@ -5,6 +5,7 @@ import type {
   InferInput,
   InferOutput,
   InvocationLogger,
+  InvocationTelemetry,
   JsonValue,
   ResourceId,
   RpcSuccessEnvelope,
@@ -64,6 +65,8 @@ export interface ProcedureContext<Input, Context extends object> {
   readonly correlationId: string;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
+  /** The invocation's telemetry trace context, for example to pass a `traceparent` header to an outgoing call. Absent when the runtime records no telemetry. */
+  readonly telemetry?: InvocationTelemetry;
   readonly scope: ApplicationScope;
 }
 

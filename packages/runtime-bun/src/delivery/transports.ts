@@ -14,7 +14,10 @@ import type {
   ScheduleRunResult,
   ScheduleSubscription,
   ScheduleTick,
-  StandardSchemaV1
+  SpanLink,
+  StandardSchemaV1,
+  TelemetryAttributes,
+  TraceContext
 } from "@holqa/core";
 
 import type {
@@ -23,19 +26,23 @@ import type {
   PreparedDelivery
 } from "@/delivery/delivery-worker";
 import type {
+  InvocationInstrumentation,
   InvocationOutcome,
   InvocationRequest,
   RegisteredHandler
 } from "@/dispatch/dispatcher";
 import type { EventGuard } from "@/dispatch/event-guard";
 import type { StructuredLogger } from "@/logging/log";
+import type { RuntimeTelemetry } from "@/telemetry/runtime-telemetry";
 
 import {
   defaultQueueBackoff,
   diagnosticCodes,
+  frameworkMetrics,
   InputValidationError,
   lineageOfDelivery,
   messageEnvelopeFormat,
+  parseTraceparent,
   readObjectEvent,
   validateInput
 } from "@holqa/core";
@@ -86,11 +93,13 @@ export interface TransportsOptions {
   readonly delivery: RuntimeDeliveryOptions;
   /** The runtime's default invocation time limit. */
   readonly timeoutMs: number;
-  readonly dispatch: (request: InvocationRequest) => Promise<InvocationOutcome>;
+  readonly dispatch: (request: InvocationRequest, instrumentation?: InvocationInstrumentation) => Promise<InvocationOutcome>;
   readonly stopping: () => boolean;
   readonly logger: StructuredLogger;
   /** Applies depth and age limits to every delivery. */
   readonly guard: EventGuard;
+  /** Records processing spans and delivery metrics. */
+  readonly telemetry: RuntimeTelemetry;
   /** The wall clock, in epoch milliseconds, for event age. */
   readonly now: () => number;
 }
@@ -141,6 +150,7 @@ export class Transports {
     const sources = binding.sources ?? {};
     const resources = new Map<string, ResourceDescriptor>(this.options.app.resources.map(resource => [resource.id, resource]));
     const bucketSources = new Map<string, ObjectEventSource>();
+    const queueSources = new Map<string, QueueSource>();
     try {
       for (const handler of this.options.handlers.values()) {
         const { definition } = handler;
@@ -148,7 +158,9 @@ export class Transports {
         if (resource === undefined)
           continue;
         if (definition.trigger.kind === "queue.message" && resource.kind === "queue" && sources.queue !== undefined) {
-          this.queueWorkers.push(this.queueWorker(handler, resource, sources.queue(resource)));
+          const source = sources.queue(resource);
+          queueSources.set(resource.id, source);
+          this.queueWorkers.push(this.queueWorker(handler, resource, source));
         } else if ((definition.trigger.kind === "bucket.object-created" || definition.trigger.kind === "bucket.object-deleted") && resource.kind === "bucket" && sources.bucket !== undefined) {
           let source = bucketSources.get(resource.id);
           if (source === undefined) {
@@ -168,8 +180,22 @@ export class Transports {
       await this.stopReceiving();
       throw error;
     }
+    this.observeBacklog(queueSources);
     for (const worker of [...this.queueWorkers, ...this.eventWorkers])
       worker.start();
+  }
+
+  /**
+   * Reports each consumed queue's backlog as the `holqa.queue.pending`
+   * gauge, for the queues whose source can count it.
+   *
+   * @param sources - The consumed queues' sources, by queue identifier.
+   */
+  private observeBacklog(sources: ReadonlyMap<string, QueueSource>): void {
+    const countable = [...sources].filter(([, source]) => source.pending !== undefined);
+    if (countable.length === 0)
+      return;
+    this.options.telemetry.gauge(frameworkMetrics.queuePending, async () => Promise.all(countable.map(async ([queueId, source]) => ({ value: await source.pending!(), attributes: { "messaging.destination.name": queueId } }))));
   }
 
   /**
@@ -291,8 +317,10 @@ export class Transports {
    * @returns A worker that is not started yet.
    */
   private worker<Body>(handler: RegisteredHandler, source: DeliverySource<Body>, policy: DeliveryPolicy, concurrency: number, prepare: (delivery: LeasedDelivery<Body>) => Promise<PreparedDelivery>): DeliveryWorker<Body> {
-    const { timeoutMs, delivery, dispatch, stopping, logger, guard, now } = this.options;
+    const { timeoutMs, delivery, dispatch, stopping, logger, guard, now, telemetry } = this.options;
     const handlerId = handler.definition.id;
+    const destination = handler.definition.trigger.resource.id;
+    const objectEvent = handler.definition.trigger.kind !== "queue.message";
     return new DeliveryWorker<Body>({
       handlerId,
       source,
@@ -304,8 +332,35 @@ export class Transports {
       dispatch,
       stopping,
       logger: logger.child({ transport: handler.definition.trigger.kind }),
+      telemetry,
+      destination,
+      instrument: received => this.instrumentation(destination, received.trace?.traceparent, {
+        "messaging.system": "holqa",
+        "messaging.destination.name": destination,
+        "messaging.operation.type": "process",
+        "messaging.operation.name": "process",
+        "holqa.delivery.attempt": received.attempt,
+        ...objectEvent ? { "holqa.object_event.id": received.id } : { "messaging.message.id": received.id }
+      }),
       admit: received => guard.checkDelivery(handlerId, lineageOfDelivery(received.trace, received.id), received.sentAt, now())
     });
+  }
+
+  /**
+   * Describes the processing span of one delivery: a consumer span named
+   * `process <destination>` that is a child of the publishing span (or, with
+   * `telemetry.messages: "link"`, the root of a new trace) and links to it.
+   *
+   * @param destination - The queue or bucket.
+   * @param traceparent - The publishing span's context, when the binding stored it.
+   * @param attributes - The span's attributes.
+   * @returns The instrumentation for the dispatcher.
+   */
+  private instrumentation(destination: string, traceparent: string | undefined, attributes: TelemetryAttributes): InvocationInstrumentation {
+    const publisher: TraceContext | undefined = parseTraceparent(traceparent);
+    const links: SpanLink[] = publisher === undefined ? [] : [{ traceId: publisher.traceId, spanId: publisher.spanId }];
+    const parent = publisher !== undefined && this.options.telemetry.messages === "parent" ? publisher : undefined;
+    return { name: `process ${destination}`, kind: "consumer", attributes, links, ...parent === undefined ? {} : { parent } };
   }
 
   /**
@@ -333,7 +388,7 @@ export class Transports {
       correlationId: tick.runId,
       timeoutMs: this.options.timeoutMs,
       logFields: { runId: tick.runId, trigger: tick.trigger }
-    });
+    }, { name: `run ${scheduleId}`, kind: "internal", attributes: { "holqa.schedule.run_id": tick.runId, "holqa.schedule.trigger": tick.trigger, "holqa.schedule.scheduled_time": tick.scheduledTime } });
     this.runs.add(run);
     try {
       const outcome = await run;

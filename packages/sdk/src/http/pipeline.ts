@@ -2,7 +2,8 @@ import type {
   ApplicationScope,
   HttpInvocationInput,
   InvocationContext,
-  InvocationLogger
+  InvocationLogger,
+  InvocationTelemetry
 } from "@holqa/core";
 
 import type { AnyHttpMiddleware } from "@/http/middleware";
@@ -27,6 +28,8 @@ export interface PipelineArgs {
   readonly correlationId: string;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
+  /** The invocation's telemetry trace context, for example to pass a `traceparent` header to an outgoing call. Absent when the runtime records no telemetry. */
+  readonly telemetry?: InvocationTelemetry;
   readonly scope: ApplicationScope;
 }
 
@@ -66,6 +69,7 @@ export async function runHttpPipeline(input: unknown, invocation: InvocationCont
     correlationId: invocation.correlationId ?? invocation.invocationId,
     signal: invocation.signal,
     log: invocation.log,
+    ...invocation.telemetry === undefined ? {} : { telemetry: invocation.telemetry },
     scope: invocation.scope ?? unavailableScope
   };
 

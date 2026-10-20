@@ -17,7 +17,7 @@ Holqa is designed for both human developers and autonomous coding agents. Toolin
 | Diagnose compiler and runtime failures | Structured diagnostics with stable codes | **Implemented** (model, compiler and `@holqa/runtime-bun`, which logs invocation failures with their codes) |
 | Inspect infrastructure requirements | Manifest capability requirements | **Implemented** |
 | Generate deployment plans | Provisioning provider plans | Planned |
-| Verify behavior through logs and traces | Structured JSON logs with `correlationId`, `causationId` and emitted events; `holqa state --json`; OpenTelemetry integration | **Implemented** (logs, traces and local state); OpenTelemetry Planned |
+| Verify behavior through logs and traces | Structured JSON logs with `correlationId`, `causationId`, `traceId` and emitted events; `holqa state --json`; `holqa logs --json`, `traces inspect --json`, `events inspect --json`, `metrics --json`; OTLP export | **Implemented** (logs, traces, metrics, local state and OTLP export); `@opentelemetry/api` bridge Planned |
 
 ## Principles
 

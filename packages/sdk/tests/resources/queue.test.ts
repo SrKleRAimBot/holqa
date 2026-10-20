@@ -224,6 +224,17 @@ describe("queue consumers", () => {
     expect(calls).toBe(0);
   });
 
+  it("passes the runtime's telemetry context to the consumer only when there is one", async () => {
+    const seen: unknown[] = [];
+    const consumer = jobs.consume({ id: "jobs.traced", handler: ({ telemetry }) => {
+      seen.push(telemetry);
+    } });
+    const telemetry = { traceId: "0af7651916cd43dd8448eb211c80319c", spanId: "b7ad6b7169203331", sampled: true, traceparent: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01" };
+    await consumer["~holqa"].invoke({ n: 1 }, { ...createContext({ attempt: 1, messageId: "m-1" }), telemetry });
+    await consumer["~holqa"].invoke({ n: 1 }, createContext({ attempt: 1, messageId: "m-2" }));
+    expect(seen).toEqual([telemetry, undefined]);
+  });
+
   it("validates untrusted input before running user code", async () => {
     const received: number[] = [];
     const consumer = jobs.consume({ id: "jobs.collect", handler: ({ message, delivery }) => {

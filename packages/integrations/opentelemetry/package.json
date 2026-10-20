@@ -1,0 +1,46 @@
+{
+  "name": "@holqa/opentelemetry",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "OpenTelemetry interoperability for Holqa: an OTLP/HTTP JSON exporter for traces, metrics and logs, and the standard OTEL_* environment variables, with no OpenTelemetry SDK dependency.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SrKleRAimBot/holqa.git",
+    "directory": "packages/integrations/opentelemetry"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@holqa/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

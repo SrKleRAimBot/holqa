@@ -1,4 +1,5 @@
 import type { GuardedInvocation } from "@/dispatch/event-guard";
+import type { ActiveSpan } from "@/telemetry/tracer";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 /** A queue message an invocation sent. */
@@ -30,6 +31,8 @@ export interface ActiveInvocation extends GuardedInvocation {
   readonly correlationId: string;
   /** What the invocation has emitted so far, in order. */
   readonly emitted: EmittedEvent[];
+  /** The invocation's span, when telemetry is recorded: the parent of its resource operations' spans. */
+  readonly span?: ActiveSpan;
 }
 
 /**

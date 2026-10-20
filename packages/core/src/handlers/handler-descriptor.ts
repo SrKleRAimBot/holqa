@@ -50,11 +50,29 @@ export interface HandlerDefinitionOf<Trigger extends TriggerKind> {
 /** Any handler definition, discriminated by `trigger.kind`. */
 export type HandlerDefinition = { [Kind in TriggerKind]: HandlerDefinitionOf<Kind> }[TriggerKind];
 
-/** Structured logging available to a running handler. */
+/**
+ * Structured logging available to a running handler. Every entry carries the
+ * application, handler, invocation, correlation and (when telemetry is
+ * enabled) trace identifiers; fields with sensitive names and values of
+ * declared secrets are redacted before the entry leaves the runtime.
+ */
 export interface InvocationLogger {
+  /** Writes a diagnostic entry, dropped unless the runtime's log level is `debug`. */
+  readonly debug: (message: string, fields?: JsonObject) => void;
   readonly info: (message: string, fields?: JsonObject) => void;
   readonly warn: (message: string, fields?: JsonObject) => void;
   readonly error: (message: string, fields?: JsonObject) => void;
+}
+
+/** The telemetry trace context of a running invocation. */
+export interface InvocationTelemetry {
+  readonly traceId: string;
+  /** The invocation's span. */
+  readonly spanId: string;
+  /** Whether the trace is recorded and exported. */
+  readonly sampled: boolean;
+  /** The context as a W3C `traceparent` header value. */
+  readonly traceparent: string;
 }
 
 /**
@@ -81,6 +99,13 @@ export interface InvocationContext<Metadata = EmptyObject> {
   readonly signal: AbortSignal;
   readonly metadata: Metadata;
   readonly log: InvocationLogger;
+  /**
+   * The telemetry trace context of the invocation's span, for example to
+   * propagate it to an outgoing HTTP call as a `traceparent` header. Absent
+   * when the runtime records no telemetry. Unrelated to `lineage`: sampling
+   * never changes lineage or the safety limits that depend on it.
+   */
+  readonly telemetry?: InvocationTelemetry;
   /** The application execution context. Absent outside a runtime, for example when a test calls `invoke` directly. */
   readonly scope?: ApplicationScope;
 }

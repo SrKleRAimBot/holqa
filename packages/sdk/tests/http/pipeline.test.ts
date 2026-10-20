@@ -11,7 +11,7 @@ import { runHttpPipeline } from "@/http/pipeline";
 function silent(): void {}
 
 /** An invocation context outside a runtime. */
-const context = { invocationId: "inv-1", signal: new AbortController().signal, metadata: {}, log: { info: silent, warn: silent, error: silent } };
+const context = { invocationId: "inv-1", signal: new AbortController().signal, metadata: {}, log: { debug: silent, info: silent, warn: silent, error: silent } };
 
 describe("runHttpPipeline", () => {
   it("passes request, URL, parameters and identifiers to the terminal step without middleware", async () => {

@@ -103,6 +103,12 @@ export interface DeliverySource<Body> {
 export interface QueueSource extends DeliverySource<MessageEnvelope> {
   /** The attempts the binding allows when a queue declares no `maxAttempts`. */
   readonly defaultMaxAttempts: number;
+  /**
+   * Counts the messages waiting in the queue: ready, delayed and in flight,
+   * not dead-lettered. Optional: a runtime reports the queue backlog metric
+   * only for bindings that provide it, and the count may be approximate.
+   */
+  readonly pending?: () => Promise<number>;
 }
 
 /** Which object events one handler receives. */

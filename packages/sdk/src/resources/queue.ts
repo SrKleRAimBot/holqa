@@ -4,6 +4,7 @@ import type {
   InferOutput,
   InvocationLineage,
   InvocationLogger,
+  InvocationTelemetry,
   QueueBackoff,
   QueueMessageTriggerOptions,
   QueueSendOptions,
@@ -98,6 +99,8 @@ export interface QueueMessageContext<Message> {
   readonly lineage?: InvocationLineage;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
+  /** The invocation's telemetry trace context, for example to pass a `traceparent` header to an outgoing call. Absent when the runtime records no telemetry. */
+  readonly telemetry?: InvocationTelemetry;
 }
 
 /**
@@ -282,7 +285,8 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
           delivery,
           ...context.lineage === undefined ? {} : { lineage: context.lineage },
           signal: context.signal,
-          log: context.log
+          log: context.log,
+          ...context.telemetry === undefined ? {} : { telemetry: context.telemetry }
         });
         if (idempotency === undefined)
           await run();

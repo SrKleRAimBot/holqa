@@ -19,6 +19,7 @@ import type {
   LocalOperation,
   OperationResponse
 } from "@/local/protocol";
+import type { ProcessTelemetry } from "@/local/telemetry";
 import {
   mkdtempSync,
   rmSync
@@ -50,6 +51,7 @@ import {
   readControlMessage,
   toJson
 } from "@/local/protocol";
+import { openProcessTelemetry } from "@/local/telemetry";
 
 /** The largest request body a generation accepts; signed uploads to the local storage can be this large. */
 const maxRequestBodySize = 100 * 1024 * 1024;
@@ -165,13 +167,15 @@ function precheck(compiled: CompiledApplication, runtime: Runtime, local: LocalE
  */
 async function serve(request: GenerationRequest): Promise<void> {
   const logs = new LogCapture();
+  let telemetry: ProcessTelemetry | undefined;
   /**
-   * Records an entry for operations and forwards it to the CLI.
+   * Records an entry for operations and the telemetry store, and forwards it to the CLI.
    *
    * @param entry - A runtime log entry.
    */
   const sink: LogSink = (entry) => {
     logs.add(entry);
+    telemetry?.writeLog(entry);
     send({ type: "log", entry: { ...entry, generation: request.generation } });
   };
   let local: LocalEnvironment | undefined;
@@ -180,15 +184,19 @@ async function serve(request: GenerationRequest): Promise<void> {
   try {
     compiled = await loadCompiledApplication({ root: request.root, buildDir: request.buildDir });
     local = await createLocalEnvironment({ app: compiled.app, directory: request.stateDir, storage: { signedUrlBase: `${request.publicOrigin}/_holqa/storage` } });
-    runtime = createRuntime({ ...compiled, binding: local.binding, log: sink });
+    telemetry = openProcessTelemetry(request.stateDir, process.env);
+    runtime = createRuntime({ ...compiled, binding: local.binding, log: sink, telemetry: telemetry.options });
     precheck(compiled, runtime, local);
   } catch (error) {
+    telemetry?.store.close();
     local?.close();
     send({ type: "failed", diagnostics: operationDiagnostics(error) });
     process.exit(1);
   }
   const environment = local;
+  const store = telemetry.store;
   shutdown = async () => {
+    store.close();
     environment.close();
     process.exit(0);
   };
@@ -202,6 +210,7 @@ async function serve(request: GenerationRequest): Promise<void> {
   try {
     await runtime.start();
   } catch (error) {
+    store.close();
     environment.close();
     send({ type: "failed", diagnostics: operationDiagnostics(error) });
     process.exit(1);
@@ -231,6 +240,7 @@ async function serve(request: GenerationRequest): Promise<void> {
         await runtime.stop({ graceMs: 5_000, forceMs: 1_000 });
       } finally {
         await server.stop(true);
+        store.close();
         environment.close();
         send({ type: "stopped" });
         process.exit(0);
@@ -316,6 +326,16 @@ async function runOnce(request: GenerationRequest, operation: LocalOperation): P
   const logs = new LogCapture();
   let local: LocalEnvironment | undefined;
   let runtime: Runtime | undefined;
+  let telemetry: ProcessTelemetry | undefined;
+  /**
+   * Records an entry for the operation and the telemetry store.
+   *
+   * @param entry - A runtime log entry.
+   */
+  const sink: LogSink = (entry) => {
+    logs.add(entry);
+    telemetry?.writeLog(entry);
+  };
   // Doctor never touches the real state: it checks configuration and capabilities against a scratch directory.
   const scratch = operation.kind === "doctor" ? mkdtempSync(join(tmpdir(), "holqa-doctor-")) : undefined;
   try {
@@ -328,8 +348,12 @@ async function runOnce(request: GenerationRequest, operation: LocalOperation): P
       return { ok: true, result: { checks: [{ name: "configuration", status: "error", message: "The configuration is invalid or incomplete.", diagnostics: toJson(operationDiagnostics(error)) }] } };
     }
     const environment = local;
+    // Operations that run handlers record telemetry like the dev session does; doctor only checks.
+    if (operation.kind === "invoke" || operation.kind === "cron.run")
+      telemetry = openProcessTelemetry(request.stateDir, process.env);
+    const telemetryOptions = telemetry === undefined ? {} : { telemetry: telemetry.options };
     if (operation.kind === "invoke" || operation.kind === "doctor") {
-      runtime = createRuntime({ ...compiled, binding: environment.binding, manualTriggers: true, log: entry => logs.add(entry) });
+      runtime = createRuntime({ ...compiled, binding: environment.binding, manualTriggers: true, log: sink, ...telemetryOptions });
       if (operation.kind === "invoke")
         await runtime.start();
     } else if (operation.kind === "cron.run") {
@@ -339,7 +363,7 @@ async function runOnce(request: GenerationRequest, operation: LocalOperation): P
         return trigger?.kind === "schedule.tick" && trigger.resource.id === operation.scheduleId;
       });
       const schedules = environment.binding.sources?.schedule;
-      runtime = createRuntime({ ...compiled, handlers, binding: { ...environment.binding, sources: schedules === undefined ? {} : { schedule: schedules } }, log: entry => logs.add(entry) });
+      runtime = createRuntime({ ...compiled, handlers, binding: { ...environment.binding, sources: schedules === undefined ? {} : { schedule: schedules } }, log: sink, ...telemetryOptions });
       await runtime.start();
     }
     return await respond({ app: compiled.app, descriptor: getAppDescriptor(compiled.app)!, local: environment, runtime, logs, createId: () => crypto.randomUUID(), now: () => Date.now() }, operation);
@@ -347,6 +371,7 @@ async function runOnce(request: GenerationRequest, operation: LocalOperation): P
     return { ok: false, diagnostics: operationDiagnostics(error) };
   } finally {
     await runtime?.stop({ graceMs: 5_000, forceMs: 1_000 });
+    telemetry?.store.close();
     local?.close();
     if (scratch !== undefined)
       rmSync(scratch, { recursive: true, force: true });
