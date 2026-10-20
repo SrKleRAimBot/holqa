@@ -1,6 +1,6 @@
 # Binding contracts
 
-> **Status:** **Implemented** in `@holqa/core`: contract versions, the provider protocol, provider validation, failure classification, lifecycle types and per-resource capability checks ([ADR 0029](../architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md)). The local binding in `@holqa/local` implements the resource contracts through `createLocalEnvironment`. Composition of several providers into one binding is not implemented by this reference page's change.
+> **Status:** **Implemented** in `@holqa/core` (contract versions, the provider protocol, provider validation, failure classification, lifecycle types, per-resource capability checks; [ADR 0029](../architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md)), `@holqa/bindings` (binding configurations, resolution and composition; [ADR 0030](../architecture/decisions/0030-binding-composition-and-resolution.md)) and `@holqa/runtime-bun` (the binding lifecycle and `runtime.health()`). The local binding in `@holqa/local` implements the resource contracts through `createLocalEnvironment`.
 
 This page is the specification every binding implementation follows: which contracts exist, what each one guarantees, how a provider declares what it supports, how it is opened, monitored and stopped, and how its failures are reported. Application developers never implement these interfaces; they declare resources with `@holqa/sdk`, and providers fulfil them.
 
@@ -119,6 +119,59 @@ The provider type records what it binds: `BindingProvider<"queue">` has a requir
 
 The returned `ProviderInstance` may contain `drivers`, `sources`, `config`, `telemetry`, `idempotency`, `operationBudgets`, and the lifecycle hooks `ready`, `health` and `stop`. Parts for contracts the provider did not declare are ignored.
 
+## Binding configurations
+
+A binding configuration selects a provider for every resource and service of an application in one environment. It is a module, conventionally `bindings.ts` next to `infra.ts`:
+
+```ts
+import { defineBindings, environmentConfig } from "@holqa/bindings";
+import app from "./infra";
+
+export default defineBindings(app, {
+  name: "production",
+  defaults: platformProvider,            // a platform provider
+  kinds: { queue: brokerQueues },        // every queue
+  resources: { "audit-log": auditQueue }, // one resource, by identifier
+  services: { config: [secretFiles, environmentConfig()], telemetry: collector }
+});
+```
+
+`platformProvider`, `brokerQueues`, `auditQueue`, `secretFiles` and `collector` stand for provider objects created by provider factories.
+
+`defineBindings` is pure and type-checked against the application: a resource identifier or kind the application does not declare, a provider that does not bind a resource's kind, a service provider that does not supply the service, and (without `defaults`) a resource no entry covers are compile errors. Malformed settings fail at run time with `HOLQA_BINDING_CONFIG_INVALID`.
+
+### Resolution
+
+`resolveBindings(definition)` returns the selections and every problem, without opening anything:
+
+| Rule | Behaviour |
+| --- | --- |
+| Resource precedence | Its `resources` entry, else its kind's `kinds` entry, else `defaults`. Each selection records its `source`: `resource`, `kind` or `default`. |
+| No fall-through | A selected provider that does not bind the resource's kind is `HOLQA_BINDING_KIND_MISMATCH`; the next level is never tried. |
+| Unknown entries | A `resources` entry for an undeclared identifier, or a `kinds` entry for a kind the application does not declare, is `HOLQA_BINDING_RESOURCE_UNKNOWN`. A `kinds` key that is not a resource kind is `HOLQA_BINDING_CONFIG_INVALID`. |
+| Missing | A resource without a provider is `HOLQA_BINDING_MISSING`. |
+| Providers | Every selected provider is validated (`validateProvider`). Two different providers may not share a name (`HOLQA_BINDING_CONFIG_INVALID`). |
+| Services | `services.config`: ordered sources, the first with a value wins. `services.telemetry`: every listed provider receives every export. `idempotency`, `operation-budgets`: one provider. Without an entry, `defaults` when it supplies the service (`source: "default"`); for `config` only, `environmentConfig()` as the built-in fallback (`source: "builtin"`). A provider that does not supply the service is `HOLQA_BINDING_KIND_MISMATCH`. |
+| Determinism | Selections are sorted by resource identifier; providers are listed in opening order (configuration, other services, resources); equal input gives equal output. |
+
+`assertResolved(resolved)` throws the resolution's errors.
+
+### Composition
+
+`createBinding(resolved)` composes a valid resolution into one `RuntimeBinding`:
+
+| Part | Behaviour |
+| --- | --- |
+| Drivers and sources | Dispatch to the provider selected for each resource. Source dispatchers exist for kinds whose selected providers deliver events (`topology.delivery` other than `none`). |
+| `describe(resource)` | The selected provider's name and capabilities, so `bindApp` and `checkTriggerDelivery` check each resource against it. |
+| `config(entry)` | The validated value, from the configuration sources in order. |
+| `telemetry` | One forwarding exporter per telemetry provider. Batches recorded before the binding started are dropped. |
+| `idempotency`, `operationBudgets` | Forward to the selected provider. |
+| `lifecycle.start` | Opens every provider once: configuration providers first (they cannot use credential references), then other services, then resource providers. Resolves credentials through the configuration sources, checks that every provider supplied the parts it declares, then validates every configuration entry (`resolveConfiguration`). On failure, stops the providers already opened in reverse order and rejects with the classified failure; nothing falls back to another provider. |
+| `lifecycle.ready`, `health`, `stop` | Forwarded to every provider; `stop` runs in reverse opening order, logs failures and continues. |
+
+Drivers, sources and configuration used before `start` completes fail with `HOLQA_RUNTIME_NOT_RUNNING`. A composed binding starts once.
+
 ## Lifecycle
 
 | Step | Who | What |
@@ -168,6 +221,7 @@ A stronger capability than required is accepted. A requirement is never weakened
 ## Related
 
 - [ADR 0029: A binding provider protocol with versioned contracts](../architecture/decisions/0029-binding-provider-protocol-and-versioned-contracts.md)
+- [ADR 0030: Binding composition with deterministic resolution](../architecture/decisions/0030-binding-composition-and-resolution.md)
 - [Infrastructure providers](../concepts/infrastructure-providers.md)
 - [Runtime reference](runtime.md)
 - [Local environment reference](local.md)

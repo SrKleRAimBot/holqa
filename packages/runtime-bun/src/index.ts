@@ -32,6 +32,7 @@ export type {
   HandlerReplacement,
   ReplaceHandlersOptions,
   Runtime,
+  RuntimeHealth,
   RuntimeHttpOptions,
   RuntimeLimits,
   RuntimeOptions,

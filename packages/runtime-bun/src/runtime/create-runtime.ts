@@ -1,7 +1,10 @@
 import type {
   AppDescriptor,
+  BindingHealth,
+  ComponentHealth,
   Diagnostic,
   HandlerDefinition,
+  HealthStatus,
   RuntimeBinding
 } from "@holqa/core";
 
@@ -32,6 +35,7 @@ import type { RuntimeTelemetryOptions } from "@/telemetry/runtime-telemetry";
 import {
   bindApp,
   checkTriggerDelivery,
+  combineHealth,
   createDiagnostic,
   createRedactor,
   diagnosticCodes,
@@ -80,6 +84,8 @@ export interface RuntimeLimits {
   readonly queue?: number;
   /** Default time limit of one invocation in milliseconds, including waiting for a slot. Default 30 000. */
   readonly timeoutMs?: number;
+  /** How long the binding may take to start and to become ready, in milliseconds, when it has a lifecycle. Default 30 000. */
+  readonly bindingStartMs?: number;
 }
 
 /** HTTP settings. */
@@ -173,6 +179,19 @@ export interface StopOptions {
   readonly forceMs?: number;
   /** How long to wait for the final telemetry export, in milliseconds. Default 5 000. */
   readonly telemetryMs?: number;
+  /** How long the binding may take to stop (close connections), in milliseconds, when it has a lifecycle. Default 10 000. */
+  readonly bindingMs?: number;
+}
+
+/**
+ * A runtime's health: whether it accepts work (`state`), and the health of
+ * its binding's components. `ready` is `true` while the runtime is running
+ * and no component is unhealthy; container platforms use it for readiness,
+ * and `state` for liveness.
+ */
+export interface RuntimeHealth extends BindingHealth {
+  readonly state: RuntimeState;
+  readonly ready: boolean;
 }
 
 /** A snapshot of a runtime's state and counters. */
@@ -262,10 +281,16 @@ export interface Runtime {
   readonly replaceHandlers: (handlers: readonly unknown[], options?: ReplaceHandlersOptions) => HandlerReplacement;
   /** Describes every handler's current implementation and the replaced ones still running, sorted by identifier. */
   readonly handlerVersions: () => readonly HandlerVersionInfo[];
+  /**
+   * Reports the runtime's state and its binding's health: the runtime as one
+   * component, followed by the binding's components when the binding has a
+   * lifecycle with `health`. Never rejects.
+   */
+  readonly health: () => Promise<RuntimeHealth>;
 }
 
 /** Default limits. */
-const defaults = { concurrency: 256, queue: 1024, timeoutMs: 30_000, graceMs: 10_000, forceMs: 1_000, telemetryMs: 5_000 } as const;
+const defaults = { concurrency: 256, queue: 1024, timeoutMs: 30_000, bindingStartMs: 30_000, graceMs: 10_000, forceMs: 1_000, telemetryMs: 5_000, bindingMs: 10_000 } as const;
 
 /**
  * Creates a runtime for an application and its handlers. Creation is
@@ -318,7 +343,10 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const redactor = createRedactor(redactKeys === undefined ? {} : { keys: redactKeys });
   // Created before the logger, which reports to it; it reports export problems through the logger.
   let logger: StructuredLogger | undefined;
-  const telemetry = new RuntimeTelemetry(options.telemetry, {
+  // Exporters selected by the binding's telemetry service join the runtime's own.
+  const bindingExporters = options.binding?.telemetry ?? [];
+  const telemetryOptions = bindingExporters.length === 0 ? options.telemetry : { ...options.telemetry, exporters: [...options.telemetry?.exporters ?? [], ...bindingExporters] };
+  const telemetry = new RuntimeTelemetry(telemetryOptions, {
     appName: app.name,
     wallNow: () => wallClock().getTime(),
     monotonicNow,
@@ -340,6 +368,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   let state: RuntimeState = "idle";
   let unbind: (() => void) | undefined;
   let stopping: Promise<void> | undefined;
+  // The installed binding while its lifecycle is started, so stop can dispose of it.
+  let started: RuntimeBinding | undefined;
   const dispatcher = new Dispatcher({
     handlers,
     concurrency: limits.concurrency,
@@ -374,6 +404,23 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const fetch = createHttpHandler({ table, dispatcher, logger, ...cors === undefined ? {} : { cors }, trustCorrelationHeader: options.http?.trustCorrelationHeader ?? true, telemetry, now: monotonicNow });
 
   /**
+   * Stops the started binding's lifecycle once; failures are logged, because the runtime is stopped either way.
+   *
+   * @param timeoutMs - How long the binding may take.
+   */
+  const stopBinding = async (timeoutMs: number): Promise<void> => {
+    const binding = started;
+    started = undefined;
+    if (binding?.lifecycle?.stop === undefined)
+      return;
+    try {
+      await binding.lifecycle.stop({ signal: AbortSignal.timeout(timeoutMs) });
+    } catch (error) {
+      logger.write("warn", "the binding failed to stop cleanly", { binding: binding.name, error: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  /**
    * Starts the runtime: validates configuration and installs the binding.
    *
    * @throws {HolqaError} `HOLQA_RUNTIME_START_FAILED` and its causes.
@@ -396,6 +443,12 @@ export function createRuntime(options: RuntimeOptions): Runtime {
         if (undeliverable.length > 0)
           throw new HolqaError(undeliverable);
       }
+      // The binding connects only after every static check passed.
+      const lifecycle = binding.lifecycle;
+      const startSignal = Number.isFinite(limits.bindingStartMs) ? AbortSignal.timeout(limits.bindingStartMs) : new AbortController().signal;
+      // Recorded first, so that a failed or partial start is still stopped.
+      started = binding;
+      await lifecycle?.start?.({ signal: startSignal, log: (level, message, fields) => logger.write(level, message, fields ?? {}) });
       // Values of declared secrets never reach logs or telemetry.
       redactor.addValues(secretValues(app, binding));
       unbind = bindApp(app, binding);
@@ -403,10 +456,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       state = "running";
       if (options.manualTriggers !== true)
         await transports.start(binding);
+      await lifecycle?.ready?.(startSignal);
     } catch (error) {
       state = "stopped";
       unbind?.();
       unbind = undefined;
+      await transports.stopReceiving();
+      await stopBinding(defaults.bindingMs);
       const causes = diagnosticsOf(error);
       throw new HolqaError([
         createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: `The application "${app.name}" could not start.` }),
@@ -445,7 +501,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       state = "stopped";
       if (wasRunning)
         logger.write("info", "runtime stopped", { ...dispatcher.stats() });
+      // Telemetry flushes through the binding's exporters before the binding closes them.
       await telemetry.shutdown(stopOptions.telemetryMs ?? defaults.telemetryMs);
+      await stopBinding(stopOptions.bindingMs ?? defaults.bindingMs);
     })();
     return stopping;
   };
@@ -473,7 +531,22 @@ export function createRuntime(options: RuntimeOptions): Runtime {
       logger.write("info", "handlers replaced", { handlerVersion: replacement.version, handlers: [...replacement.handlers] });
       return Object.freeze(replacement);
     },
-    handlerVersions: () => registry.snapshot()
+    handlerVersions: () => registry.snapshot(),
+    health: async (): Promise<RuntimeHealth> => {
+      const runtime: ComponentHealth = { name: "runtime", status: state === "running" ? "healthy" : "unhealthy", ...state === "running" ? {} : { message: `The runtime is ${state}.` } };
+      let components: readonly ComponentHealth[] = [];
+      const lifecycle = started?.lifecycle;
+      if (lifecycle?.health !== undefined) {
+        try {
+          components = (await lifecycle.health()).components;
+        } catch (error) {
+          components = [{ name: started?.name ?? "binding", status: "unhealthy", message: error instanceof Error ? error.message : String(error) }];
+        }
+      }
+      const combined = combineHealth([runtime, ...components]);
+      const status: HealthStatus = combined.status;
+      return Object.freeze({ ...combined, state, ready: state === "running" && status !== "unhealthy" });
+    }
   });
 }
 
@@ -550,7 +623,7 @@ function checkEventSafetySupport(binding: RuntimeBinding, handlers: readonly Han
  * @returns Complete limits.
  */
 function readLimits(limits: RuntimeLimits | undefined, problems: Diagnostic[]): Required<RuntimeLimits> {
-  const resolved = { concurrency: limits?.concurrency ?? defaults.concurrency, queue: limits?.queue ?? defaults.queue, timeoutMs: limits?.timeoutMs ?? defaults.timeoutMs };
+  const resolved = { concurrency: limits?.concurrency ?? defaults.concurrency, queue: limits?.queue ?? defaults.queue, timeoutMs: limits?.timeoutMs ?? defaults.timeoutMs, bindingStartMs: limits?.bindingStartMs ?? defaults.bindingStartMs };
   for (const [name, value] of Object.entries(resolved)) {
     const minimum = name === "queue" ? 0 : 1;
     if (!(Number.isSafeInteger(value) && value >= minimum) && value !== Number.POSITIVE_INFINITY)

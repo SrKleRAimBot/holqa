@@ -8,6 +8,8 @@ export {
   requireBinding,
   resolveDriver
 } from "@/binding/bind";
+export { resolveConfiguration } from "@/binding/configuration";
+export type { ResolveConfigurationOptions } from "@/binding/configuration";
 export {
   bindingContractNames,
   bindingContracts,
@@ -29,6 +31,8 @@ export { combineHealth } from "@/binding/lifecycle";
 export type {
   BindingHealth,
   BindingLifecycle,
+  BindingLogLevel,
+  BindingStartOptions,
   BindingStopOptions,
   ComponentHealth,
   HealthStatus
@@ -54,7 +58,6 @@ export type {
   ExecutionCapabilities,
   ProviderContext,
   ProviderInstance,
-  ProviderLogLevel,
   ProviderRole,
   ProviderTopology
 } from "@/binding/provider";

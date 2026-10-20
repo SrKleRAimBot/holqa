@@ -1,7 +1,9 @@
+import type { BindingLifecycle } from "@/binding/lifecycle";
 import type { OperationBudgetStore } from "@/binding/operation-budgets";
 import type { ResourceSources } from "@/binding/sources";
 import type { ConfigDescriptor } from "@/config/config-descriptor";
 import type { IdempotencyStore } from "@/idempotency/idempotency-store";
+import type { TelemetryExporter } from "@/observability/telemetry";
 import type {
   DrivenResourceKind,
   ResourceKind,
@@ -81,6 +83,19 @@ export interface RuntimeBinding {
    * Absent means such handlers cannot run on this binding.
    */
   readonly idempotency?: IdempotencyStore;
+  /**
+   * The binding's lifecycle. A runtime that installs the binding calls
+   * `start` before installing it, `ready` once deliveries are registered,
+   * `health` on request and `stop` after every invocation has drained.
+   * Absent means the binding needs no initialization; its owner manages it.
+   */
+  readonly lifecycle?: BindingLifecycle;
+  /**
+   * Telemetry exporters the binding's telemetry service selected. A runtime
+   * exports to them in addition to the exporters in its own options, under
+   * the same bounded, failure-isolated pipeline.
+   */
+  readonly telemetry?: readonly TelemetryExporter[];
   /**
    * Returns the value of a configuration entry. The binding is responsible for
    * supplying it, applying the declared default and validating it against the

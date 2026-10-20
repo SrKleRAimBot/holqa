@@ -40,6 +40,17 @@ export interface BindingHealth {
   readonly components: readonly ComponentHealth[];
 }
 
+/** Log levels a binding may write through its lifecycle. */
+export type BindingLogLevel = "debug" | "info" | "warn" | "error";
+
+/** Settings of {@link BindingLifecycle.start}. */
+export interface BindingStartOptions {
+  /** Aborted when the start exceeded its time limit or the runtime is stopping. */
+  readonly signal: AbortSignal;
+  /** Writes a structured log entry through the runtime's logger, which redacts it. */
+  readonly log: (level: BindingLogLevel, message: string, fields?: JsonObject) => void;
+}
+
 /** Settings of {@link BindingLifecycle.stop}. */
 export interface BindingStopOptions {
   /**
@@ -65,7 +76,7 @@ export interface BindingLifecycle {
    * `bindingFailureCodes`); a binding must never fall back to another
    * provider on its own.
    */
-  readonly start?: (signal: AbortSignal) => Promise<void>;
+  readonly start?: (options: BindingStartOptions) => Promise<void>;
   /** Resolves once the binding can serve operations and deliver events; rejects like `start`. */
   readonly ready?: (signal: AbortSignal) => Promise<void>;
   /** Reports the current health without throwing. */

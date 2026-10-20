@@ -1,6 +1,6 @@
 # Diagnostic codes
 
-> **Status:** Eighty-two codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). No planned code is listed at the moment.
+> **Status:** Eighty-five codes are **Implemented** and registered in `diagnosticCodes` (`@holqa/core`). No planned code is listed at the moment.
 
 Every problem Holqa reports is a structured `Diagnostic` with a stable code. Tools, CI scripts, and agents should match on the code, never on the message text, which may be reworded.
 
@@ -124,6 +124,9 @@ JSON form (as emitted by `holqa --json`):
 | `HOLQA_BINDING_CONTRACT_INCOMPATIBLE` | `bindingContractIncompatible` | `validateProvider`, `bindingFailure` (`@holqa/core`) | A provider implements a provider protocol version, contract version, contract, resource kind or service this version of Holqa does not. `details`: `binding`, `failure` (`version`), `transient`. |
 | `HOLQA_BINDING_UNAVAILABLE` | `bindingUnavailable` | `bindingFailure` (`@holqa/core`); providers | Infrastructure a binding needs is temporarily unreachable. The only transient binding failure (`isTransientBindingFailure`). `details`: `binding`, `failure`, `transient` (`true`). |
 | `HOLQA_BINDING_FAILED` | `bindingFailed` | `bindingFailure` (`@holqa/core`); providers | A binding failed permanently, for example because the queue or bucket it connects to does not exist. `details`: `binding`, `failure`, `transient`. |
+| `HOLQA_BINDING_RESOURCE_UNKNOWN` | `bindingResourceUnknown` | `resolveBindings` (`@holqa/bindings`) | A binding configuration selects a provider for a resource identifier, or a resource kind, the application does not declare. `details`: `resource` or `kind`. |
+| `HOLQA_BINDING_KIND_MISMATCH` | `bindingKindMismatch` | `resolveBindings` (`@holqa/bindings`) | A selected provider does not bind the resource's kind, or a service provider does not supply the service. Resolution never falls through to another provider. `details`: `resource`, `kind` or `service`, `binding`, `selection`. |
+| `HOLQA_BINDING_MISSING` | `bindingMissing` | `resolveBindings`, composed bindings (`@holqa/bindings`) | No provider is selected for a declared resource. `details`: `resource`, `kind`. |
 | `HOLQA_BUILD_STALE` | `buildStale` | `loadCompiledApplication` (`@holqa/runtime-bun`) | Build output no longer matches the application: the entry point map belongs to another manifest, or the application name, resources (kind, identifier, settings, requirements), configuration entries, handler exports or triggers differ from the manifest. Schema changes and handler modules added after the build are not detected. Rebuild with `holqa build --manifest`. |
 
 `@holqa/runtime-bun` also reports `HOLQA_INPUT_INVALID` (`400`) for a direct invocation with an invalid `timeoutMs` or with metadata that does not fit the handler's trigger kind, and for a request path with invalid percent-encoding.

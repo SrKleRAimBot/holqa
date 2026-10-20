@@ -90,7 +90,10 @@ describe("diagnosticCodes", () => {
       bindingCredentialsInvalid: "HOLQA_BINDING_CREDENTIALS_INVALID",
       bindingContractIncompatible: "HOLQA_BINDING_CONTRACT_INCOMPATIBLE",
       bindingUnavailable: "HOLQA_BINDING_UNAVAILABLE",
-      bindingFailed: "HOLQA_BINDING_FAILED"
+      bindingFailed: "HOLQA_BINDING_FAILED",
+      bindingResourceUnknown: "HOLQA_BINDING_RESOURCE_UNKNOWN",
+      bindingKindMismatch: "HOLQA_BINDING_KIND_MISMATCH",
+      bindingMissing: "HOLQA_BINDING_MISSING"
     });
   });
 });

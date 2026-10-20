@@ -41,6 +41,7 @@ stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 | `limits.concurrency` | `256` | Concurrent invocations across all handlers. |
 | `limits.queue` | `1024` | Invocations waiting for a slot; beyond it, `HOLQA_RUNTIME_OVERLOADED`. |
 | `limits.timeoutMs` | `30000` | Time limit per invocation, including waiting for a slot. `Infinity` means none; longer finite values are capped at 2^31 − 1 ms. |
+| `limits.bindingStartMs` | `30000` | How long the binding's lifecycle may take to start and become ready. `Infinity` means no limit. |
 | `events.maxDepth` | `16` | The deepest event a handler receives, in hops from its root operation; handlers override it with `events.maxDepth`. See [event lineage and limits](#event-lineage-and-limits). |
 | `events.maxPublications` | `1000` | The most events one invocation may publish; handlers override it with `events.maxPublications`. |
 | `events.maxEventAgeMs` | none | Deliveries sent longer ago than this are not delivered. Applies when the binding reports `LeasedDelivery.sentAt`. |
@@ -66,9 +67,9 @@ stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 | `stopping` | `stop()` | No; in-flight invocations continue |
 | `stopped` | `stop()` finished, or `start()` failed | No |
 
-`start()` runs once. It creates the binding (validating every configuration entry; see [configuration](#configuration)), checks that the binding can deliver every background handler's trigger, installs it with `bindApp`, and then subscribes to the binding's sources (a source can still fail here, for example a schedule with `HOLQA_SCHEDULE_INVALID`). A failure throws `HOLQA_RUNTIME_START_FAILED` followed by its causes and leaves the runtime `stopped`; create a new runtime to retry. Calling `stop()` while `start()` is still running makes the start fail (`HOLQA_RUNTIME_NOT_RUNNING`) and never installs the binding.
+`start()` runs once. It creates the binding (validating every configuration entry; see [configuration](#configuration)), checks that the binding can deliver every background handler's trigger, starts the binding's lifecycle when it has one (`RuntimeBinding.lifecycle.start`: connecting providers, bounded by `limits.bindingStartMs`, default 30 000), installs it with `bindApp`, subscribes to the binding's sources (a source can still fail here, for example a schedule with `HOLQA_SCHEDULE_INVALID`), and finally waits for `lifecycle.ready`. When any step after the lifecycle started fails, the binding is stopped again before the error is reported. A failure throws `HOLQA_RUNTIME_START_FAILED` followed by its causes and leaves the runtime `stopped`; create a new runtime to retry. Calling `stop()` while `start()` is still running makes the start fail (`HOLQA_RUNTIME_NOT_RUNNING`) and never installs the binding.
 
-`stop({ graceMs = 10000, forceMs = 1000, telemetryMs = 5000 })` is idempotent; concurrent calls share one stop. It:
+`stop({ graceMs = 10000, forceMs = 1000, telemetryMs = 5000, bindingMs = 10000 })` is idempotent; concurrent calls share one stop. It:
 
 1. stops receiving queue messages, object events and scheduled runs, and refuses new invocations;
 2. waits up to `graceMs` for admitted invocations to finish, including those still waiting for a slot; scoped values stay usable meanwhile;
@@ -76,7 +77,14 @@ stopOnSignals(server); // graceful stop on SIGINT and SIGTERM
 4. settles every delivery with its source: finished ones are acknowledged, retried or dead-lettered as usual, and those cancelled by the stop are released for immediate redelivery;
 5. aborts the application scope's `signal` and disposes of scoped values in reverse creation order (a failing `dispose` is logged, and the others still run);
 6. removes the binding;
-7. exports the remaining telemetry and shuts exporters down, waiting at most `telemetryMs`.
+7. exports the remaining telemetry and shuts exporters down, waiting at most `telemetryMs`;
+8. stops the binding's lifecycle (`lifecycle.stop`, closing connections), waiting at most `bindingMs`; a failure is logged, and the runtime is stopped either way.
+
+### Binding lifecycle and health
+
+A binding with a `lifecycle` (for example one composed by `createBinding` from `@holqa/bindings`; see [binding contracts](bindings.md#composition)) is owned by the runtime that starts it: started, readied and stopped as above, never shared with another runtime. Exporters in `RuntimeBinding.telemetry` join the exporters in `telemetry.exporters`, so telemetry is enabled when either has one.
+
+`runtime.health()` never rejects and returns `{ status, state, ready, components }`: a `runtime` component (`healthy` while running), followed by the binding's components from `lifecycle.health`. `status` is the worst component status, and `ready` is `true` while the runtime is running and no component is `unhealthy`. Container platforms can use `ready` for readiness and `state` for liveness.
 
 ### Handler versions
 

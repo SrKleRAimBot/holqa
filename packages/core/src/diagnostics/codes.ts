@@ -169,7 +169,13 @@ export const diagnosticCodes = {
   /** Infrastructure a binding needs is temporarily unreachable, for example a broker that refuses connections. Transient: retrying later may succeed. */
   bindingUnavailable: "HOLQA_BINDING_UNAVAILABLE",
   /** A binding failed permanently, for example because a queue or bucket it connects to does not exist. Retrying does not help. */
-  bindingFailed: "HOLQA_BINDING_FAILED"
+  bindingFailed: "HOLQA_BINDING_FAILED",
+  /** A binding configuration selects a provider for a resource the application does not declare. */
+  bindingResourceUnknown: "HOLQA_BINDING_RESOURCE_UNKNOWN",
+  /** A binding configuration selects a provider that does not bind the resource's kind, or a service provider that does not supply the service. */
+  bindingKindMismatch: "HOLQA_BINDING_KIND_MISMATCH",
+  /** No provider is selected for a declared resource. */
+  bindingMissing: "HOLQA_BINDING_MISSING"
 } as const;
 
 /**
