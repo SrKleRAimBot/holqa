@@ -18,6 +18,8 @@ export type {
   Recording
 } from "@/app/recording";
 export { lineageOf } from "@/app/simulation-budget";
+export { withFaults } from "@/bindings/faulty-provider";
+export type { FaultCounters, ProviderFaults } from "@/bindings/faulty-provider";
 export { createMemoryTelemetry, spanTree } from "@/telemetry/memory-telemetry";
 export type {
   MemoryTelemetry,

@@ -91,6 +91,9 @@ export interface LocalProviders {
   readonly state: () => OpenedLocalState | undefined;
 }
 
+/** The environment each local provider belongs to, so tools can reach its state from a provider in a binding configuration. */
+const environments = new WeakMap<object, LocalProviders>();
+
 /**
  * Creates the local binding providers for one state directory (or memory).
  * Creating them opens nothing: the state is opened when a runtime starts a
@@ -247,13 +250,28 @@ export function localEnvironment(options: LocalBindingOptions = {}): LocalProvid
     const state = acquire(context, false);
     return Object.freeze({ sources: Object.freeze({ schedule: state.sources.schedule! }), ...lifecycle() });
   });
-  return Object.freeze({
+  const providers = Object.freeze({
     platform: () => platform,
     queues: () => queues,
     buckets: () => buckets,
     schedules: () => schedules,
     state: () => opened?.state
   });
+  for (const created of [platform, queues, buckets, schedules])
+    environments.set(created, providers);
+  return providers;
+}
+
+/**
+ * Returns the opened local state behind a local provider, for development
+ * tools that inspect and operate on it (`holqa dev`, `holqa state`) when a
+ * binding configuration selected local providers.
+ *
+ * @param provider - Any provider.
+ * @returns The opened state while the provider's environment is open; `undefined` for other providers or a closed environment.
+ */
+export function localStateOf(provider: unknown): OpenedLocalState | undefined {
+  return typeof provider === "object" && provider !== null ? environments.get(provider)?.state() : undefined;
 }
 
 /**

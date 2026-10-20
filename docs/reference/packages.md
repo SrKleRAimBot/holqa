@@ -218,7 +218,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | Export | Kind | Description |
 | --- | --- | --- |
 | `createLocalEnvironment(options)`, `LocalEnvironment`, `LocalEnvironmentOptions`, `SettleOptions` | Function, types | Creates `{ binding, clock, queues, storage, scheduler, settle, close }` over a state directory. The binding provides `operationBudgets` and `idempotency`, kept in the state database. |
-| `local` (`platform`, `queues`, `buckets`, `schedules`, `environment`), `localEnvironment(options?)`, `LocalBindingOptions`, `LocalPersistence`, `LocalProviders`, `OpenedLocalState` | Constant, function, types | The local binding providers, with `sqlite` or `memory` persistence, sharing one state per environment. See [binding providers](local.md#binding-providers). |
+| `local` (`platform`, `queues`, `buckets`, `schedules`, `environment`), `localEnvironment(options?)`, `localStateOf(provider)`, `LocalBindingOptions`, `LocalPersistence`, `LocalProviders`, `OpenedLocalState` | Constant, function, types | The local binding providers, with `sqlite` or `memory` persistence, sharing one state per environment; `localStateOf` reaches the opened state behind any of them. See [binding providers](local.md#binding-providers). |
 | `openLocalState(app, options)`, `LocalState`, `LocalStateOptions` | Function, types | The engine both `createLocalEnvironment` and the providers run on. |
 | `Clock`, `systemClock`, `ManualClock` | Type, constant, class | The injectable time source; `ManualClock` has `advance(ms)`, `jump(ms)` and `nextTimerDue()`. |
 | `LocalQueues`, `LocalQueueMessage`, `LocalMessageState`, `RedriveOptions` | Types | Queue inspection: `messages` (with the sender's `trace` and lineage), `deadLetters`, `redrive` (all, one, or `{ messageId?, limit?, newOperation? }`), `duplicate`, `purge`. |
@@ -234,12 +234,13 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 - **Path:** `packages/testing`
 - **Status:** Implemented (`createTestApp` with recording, replay and causal chains, type assertions). Private. See the [local development guide](../guides/local-development.md).
 - **Entry point:** `@holqa/testing` → `dist/index.js`, `dist/index.d.ts`. `createTestApp` requires Bun; it loads `@holqa/local` only when called, so the type assertions import nothing Bun-specific.
-- **Internal dependencies:** `@holqa/core`, `@holqa/sdk`, `@holqa/local`, `@holqa/runtime-bun`.
+- **Internal dependencies:** `@holqa/core`, `@holqa/sdk`, `@holqa/local`, `@holqa/runtime-bun`; `@holqa/bindings` for its tests.
 
 | Export | Kind | Description |
 | --- | --- | --- |
 | `createTestApp(options)`, `TestApp`, `TestAppOptions`, `TestInvokeOptions`, `DrainOptions`, `InvocationFilter`, `RecordingOptions`, `ReplayOptions` | Function, types | Starts an application on a runtime and a local environment with a temporary state directory and a virtual clock: `fetch`, `invoke`, `send`, `put`, `trigger`, `flush`, `advance`, `drain`, `failNext`, `duplicate`, `duplicateEvent`, `redrive`, inspection (`messages`, `deadLetters`, `events`, `objects`, `read`, `runs`), `logs`, `invocations`, `trace`, `lineage`, `operation`, `recording`, `replay`, `chain`, `telemetry`, `flushTelemetry`, `dispose`. Telemetry is recorded in memory with deterministic identifiers; `telemetry`, `logLevel` and `redact` options pass through to the runtime. `events` sets the runtime's event limits; `maxInvocations` (default 10 000) bounds the work a test runs (`HOLQA_SIMULATION_BUDGET_EXCEEDED`). |
 | `FailureOptions` | Type | `{ times?, error?, when? }` for `failNext`. |
+| `withFaults(provider, faults)`, `ProviderFaults`, `FaultCounters` | Function, types | Wraps a binding provider to inject classified open, readiness, operation, receive, lease and stop failures, latency and health, keeping its declaration. |
 | `Recording`, `RecordedInvocation`, `ChainStep`, `recordingFormat` | Types, constant | `holqa.recording/1` documents: what each handler received (JSON input, trigger metadata, lineage, `replayable`), redacted like logs unless `sanitize: false`; and the steps `chain(rootId)` returns. See [record and replay](../guides/local-development.md#record-and-replay). |
 | `invocationRecords(entries)`, `InvocationRecord` | Function, type | Reads finished invocations (trigger, attempt, outcome, code, `causationId`, `rootId`, `depth`, `emitted`, `blocked`) from runtime log entries. |
 | `lineageOf(records, invocationId)` | Function | The chain of records from an invocation back to its root, root first. |

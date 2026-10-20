@@ -42,6 +42,7 @@
     "@holqa/sdk": "workspace:*"
   },
   "devDependencies": {
+    "@holqa/bindings": "workspace:*",
     "@types/bun": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:"

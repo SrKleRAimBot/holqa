@@ -43,9 +43,14 @@ export interface LocalEnvironmentOptions {
   /**
    * Where queue, event, object and schedule state is kept: a `state.sqlite`
    * database and an `objects/` directory. Created when missing; reusing it
-   * keeps state across restarts.
+   * keeps state across restarts. Ignored with `persistence: "memory"`.
    */
   readonly directory: string;
+  /**
+   * `sqlite` (default) keeps state in `directory`; `memory` keeps everything
+   * in the process, for fast, isolated tests. Memory state is not durable.
+   */
+  readonly persistence?: "sqlite" | "memory";
   /** Configuration values, validated like the runtime's default binding. Defaults to `process.env`. */
   readonly env?: EnvironmentVariables;
   /** The time source for delays, leases, signed URL expiry and schedules. Defaults to the wall clock. */
@@ -132,7 +137,7 @@ export async function createLocalEnvironment(options: LocalEnvironmentOptions): 
     throw new HolqaError(createDiagnostic({ code: diagnosticCodes.appInvalid, severity: "error", message: "The local environment was given a value that is not a Holqa application." }));
   checkOptions(options);
   const configuration = await createEnvironmentBinding(app, options.env ?? process.env);
-  const state = openLocalState(app, options);
+  const state = openLocalState(app, { ...options, directory: options.persistence === "memory" ? undefined : options.directory });
   const binding: RuntimeBinding = Object.freeze({
     name: "local",
     capabilities: localCapabilities,
@@ -260,7 +265,9 @@ function checkOptions(options: LocalEnvironmentOptions): void {
     if (value !== undefined && !(typeof value === "number" && Number.isSafeInteger(value) && value >= 1))
       problems.push(createDiagnostic({ code: diagnosticCodes.declarationInvalid, severity: "error", message: `The local environment option "${name}" must be an integer of at least 1.` }));
   };
-  if (typeof options.directory !== "string" || options.directory === "")
+  if (options.persistence !== undefined && options.persistence !== "sqlite" && options.persistence !== "memory")
+    problems.push(createDiagnostic({ code: diagnosticCodes.declarationInvalid, severity: "error", message: "The local environment option \"persistence\" must be \"sqlite\" or \"memory\"." }));
+  if (options.persistence !== "memory" && (typeof options.directory !== "string" || options.directory === ""))
     problems.push(createDiagnostic({ code: diagnosticCodes.declarationInvalid, severity: "error", message: "The local environment option \"directory\" must be a non-empty path." }));
   positive(options.queues?.defaultMaxAttempts, "queues.defaultMaxAttempts");
   positive(options.queues?.pollIntervalMs, "queues.pollIntervalMs");

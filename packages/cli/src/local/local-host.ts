@@ -71,6 +71,8 @@ export interface DevRequest {
   readonly hot?: boolean;
   /** Whether to serve the development dashboard (only on loopback addresses). Default `true`. */
   readonly dashboard?: boolean;
+  /** A binding configuration module to run with instead of the default local platform, absolute. */
+  readonly bindings?: string;
 }
 
 /** Settings of `holqa doctor`. */
@@ -107,7 +109,8 @@ export async function runDevSession(dependencies: LocalHostDependencies, request
         store?.increment(frameworkMetrics.reloadFailures, { "holqa.reload.stage": event.type === "build.failed" ? "build" : "start" });
       onEvent(event);
     },
-    ...dependencies.env === undefined ? {} : { env: dependencies.env }
+    ...dependencies.env === undefined ? {} : { env: dependencies.env },
+    ...request.bindings === undefined ? {} : { bindingsModule: request.bindings }
   });
   let signalled!: () => void;
   const stopped = new Promise<void>((resolve) => {

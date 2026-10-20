@@ -160,6 +160,18 @@ await pipeline.dispose();
 | `chain(rootId)` | The invocations of one root operation, depth first in causal order, each with its recorded input and the step that caused it. |
 | `dispose()` | Stops the runtime and removes the temporary state. |
 
+`createTestApp({ persistence: "memory" })` keeps the state in the process instead of a temporary SQLite directory: faster, nothing on disk, the same behaviour (`directory` is then `:memory:`). Memory state is never durable; use it for tests only.
+
+### Inject infrastructure faults
+
+`withFaults(provider, faults)` from `@holqa/testing` wraps any binding provider so a test can prove how the application and runtime behave when infrastructure misbehaves: `open` failing with a classification (`unavailable`, `credentials-invalid`, ...), `openHangs` until the start time limit, `ready` failing, `operationFailures` (sends and object reads and writes fail with `HOLQA_BINDING_UNAVAILABLE`), `receiveFailures` (lost connections), `latencyMs`, `lostLeases` (settlements report a lost lease), `stopFails` and a forced `health`. It keeps the provider's declaration, and `counters` records opens, stops and injected failures.
+
+```ts
+const env = localEnvironment({ persistence: "memory" });
+const bindings = defineBindings(app, { defaults: env.platform(), kinds: { queue: withFaults(env.queues(), { receiveFailures: 1 }) } });
+const runtime = createRuntime({ app, handlers, binding: createBinding(resolveBindings(bindings)) });
+```
+
 ### Record and replay
 
 A failing chain can be captured once and replayed as a regression test:

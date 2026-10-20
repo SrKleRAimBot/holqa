@@ -3,8 +3,11 @@
 // `holqa dev` starts one per reload; the operation commands start one in
 // `once` mode when no dev session is running. The CLI sends the request as the
 // first argument and talks to the process over IPC with JSON texts.
-import type { Diagnostic } from "@holqa/core";
-import type { LocalEnvironment } from "@holqa/local";
+import type { AppDescriptor } from "@holqa/core";
+import type {
+  LocalEnvironment,
+  LocalState
+} from "@holqa/local";
 import type {
   CompiledApplication,
   LogSink,
@@ -32,21 +35,22 @@ import {
 } from "node:path";
 
 import {
-  checkCapabilities,
-  checkTriggerDelivery,
   createDiagnostic,
   diagnosticCodes,
   getAppDescriptor,
   getHandlerDescriptor,
-  HolqaError,
   validateInput
 } from "@holqa/core";
-import { createLocalEnvironment } from "@holqa/local";
+import {
+  createLocalEnvironment,
+  openLocalState
+} from "@holqa/local";
 import {
   createRuntime,
   loadCompiledApplication
 } from "@holqa/runtime-bun";
 
+import { createDevBinding } from "@/local/dev-binding";
 import { HotSwapper } from "@/local/hot-swap";
 import {
   executeOperation,
@@ -148,29 +152,11 @@ function readRequest(argument: string | undefined): GenerationRequest {
   const request = JSON.parse(argument ?? "{}") as Partial<GenerationRequest>;
   if ((request.mode !== "serve" && request.mode !== "once") || typeof request.root !== "string" || typeof request.buildDir !== "string" || typeof request.stateDir !== "string" || typeof request.publicOrigin !== "string" || typeof request.generation !== "number")
     throw new Error("The generation process needs a request with mode, root, buildDir, stateDir, publicOrigin and generation.");
+  if (request.bindingsModule !== undefined && typeof request.bindingsModule !== "string")
+    throw new Error("The generation request's bindingsModule must be a path.");
   if (request.revalidateQueues !== undefined && !(Array.isArray(request.revalidateQueues) && request.revalidateQueues.every(queueId => typeof queueId === "string")))
     throw new Error("The generation request's revalidateQueues must be a list of queue identifiers.");
   return request as GenerationRequest;
-}
-
-/**
- * Checks, before anything is started, that the local binding can provide
- * every resource and deliver every handler's trigger, so a reload never
- * replaces a running generation with one that cannot start.
- *
- * @param compiled - The loaded application.
- * @param runtime - The created, not yet started runtime.
- * @param local - The local environment.
- * @throws {HolqaError} `HOLQA_BINDING_CAPABILITY_UNSUPPORTED`, one per problem.
- */
-function precheck(compiled: CompiledApplication, runtime: Runtime, local: LocalEnvironment): void {
-  const descriptor = getAppDescriptor(compiled.app)!;
-  const problems: Diagnostic[] = [
-    ...descriptor.resources.flatMap(resource => checkCapabilities(resource, local.binding.capabilities, local.binding.name)),
-    ...checkTriggerDelivery(descriptor, runtime.handlers, local.binding)
-  ];
-  if (problems.length > 0)
-    throw new HolqaError(problems);
 }
 
 /**
@@ -193,27 +179,31 @@ async function serve(request: GenerationRequest): Promise<void> {
     telemetry?.writeLog(entry);
     send({ type: "log", entry: { ...entry, generation: request.generation } });
   };
-  let local: LocalEnvironment | undefined;
   let runtime: Runtime;
   let compiled: CompiledApplication;
+  let dev: Awaited<ReturnType<typeof createDevBinding>>;
   try {
     compiled = await loadCompiledApplication({ root: request.root, buildDir: request.buildDir });
-    local = await createLocalEnvironment({ app: compiled.app, directory: request.stateDir, root: request.root, storage: { signedUrlBase: `${request.publicOrigin}/_holqa/storage` } });
     telemetry = openProcessTelemetry(request.stateDir, process.env);
-    runtime = createRuntime({ ...compiled, binding: local.binding, log: sink, telemetry: telemetry.options });
-    precheck(compiled, runtime, local);
-    await revalidateQueues(compiled, local, request.revalidateQueues ?? [], sink);
+    const options = telemetry.options;
+    // Every generation runs through the binding layer: the default local platform, or the --bindings configuration.
+    dev = await createDevBinding(compiled.app, binding => createRuntime({ ...compiled, binding, log: sink, telemetry: options }), {
+      stateDir: request.stateDir,
+      root: request.root,
+      signedUrlBase: `${request.publicOrigin}/_holqa/storage`,
+      ...request.bindingsModule === undefined ? {} : { bindingsModule: request.bindingsModule }
+    });
+    runtime = dev.runtime;
+    if (request.bindingsModule === undefined)
+      await revalidateQueues(compiled, request.stateDir, request.revalidateQueues ?? [], sink);
   } catch (error) {
     telemetry?.store.close();
-    local?.close();
     send({ type: "failed", diagnostics: operationDiagnostics(error) });
     process.exit(1);
   }
-  const environment = local;
   const store = telemetry.store;
   shutdown = async () => {
     store.close();
-    environment.close();
     process.exit(0);
   };
   send({ type: "prepared" });
@@ -227,11 +217,12 @@ async function serve(request: GenerationRequest): Promise<void> {
     await runtime.start();
   } catch (error) {
     store.close();
-    environment.close();
     send({ type: "failed", diagnostics: operationDiagnostics(error) });
     process.exit(1);
   }
-  retireStaleSubscriptions(compiled, runtime, environment, sink);
+  const environment = dev.local();
+  if (localStateAvailable(environment))
+    retireStaleSubscriptions(compiled, runtime, environment, sink);
   const origin = new URL(request.publicOrigin);
   const server = Bun.serve({
     hostname: "127.0.0.1",
@@ -272,7 +263,6 @@ async function serve(request: GenerationRequest): Promise<void> {
       } finally {
         await server.stop(true);
         store.close();
-        environment.close();
         swapper.dispose();
         send({ type: "stopped" });
         process.exit(0);
@@ -291,6 +281,21 @@ async function serve(request: GenerationRequest): Promise<void> {
       await shutdown();
       return;
     }
+  }
+}
+
+/**
+ * Reports whether a local environment view has local state behind it.
+ *
+ * @param local - The view.
+ * @returns `false` when no local provider is selected.
+ */
+function localStateAvailable(local: LocalEnvironment): boolean {
+  try {
+    return typeof local.storage.retainSubscriptions === "function";
+  } catch {
+    // The view of a configuration without local providers refuses every local operation.
+    return false;
   }
 }
 
@@ -324,12 +329,32 @@ function retireStaleSubscriptions(compiled: CompiledApplication, runtime: Runtim
  * replaced or left to fail.
  *
  * @param compiled - The loaded application.
- * @param local - The local environment.
+ * @param stateDir - The local state directory.
  * @param queueIds - The queues whose contract changed.
  * @param sink - Where the warnings go.
  */
-async function revalidateQueues(compiled: CompiledApplication, local: LocalEnvironment, queueIds: readonly string[], sink: LogSink): Promise<void> {
+async function revalidateQueues(compiled: CompiledApplication, stateDir: string, queueIds: readonly string[], sink: LogSink): Promise<void> {
+  if (queueIds.length === 0)
+    return;
   const descriptor = getAppDescriptor(compiled.app)!;
+  // A short-lived view of the state the previous generation still serves; SQLite shares it safely.
+  const local = openLocalState(descriptor, { directory: stateDir });
+  try {
+    await revalidateWith(descriptor, local, queueIds, sink);
+  } finally {
+    local.close();
+  }
+}
+
+/**
+ * Checks waiting messages of changed queues against their new contracts.
+ *
+ * @param descriptor - The application descriptor.
+ * @param local - The opened local state.
+ * @param queueIds - The queues whose contract changed.
+ * @param sink - Where the warnings go.
+ */
+async function revalidateWith(descriptor: AppDescriptor, local: Pick<LocalState, "queues">, queueIds: readonly string[], sink: LogSink): Promise<void> {
   for (const queueId of queueIds) {
     const queue = descriptor.resources.find(resource => resource.kind === "queue" && resource.id === queueId);
     if (queue === undefined || queue.kind !== "queue")
