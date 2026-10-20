@@ -24,6 +24,10 @@ import { createLocalQueues } from "@/queue/local-queue";
 import { createLocalScheduler } from "@/schedule/local-scheduler";
 import { openStateDatabase } from "@/state/database";
 import { LeaseStore } from "@/state/lease-store";
+import {
+  createLocalIdempotencyStore,
+  createLocalOperationBudgets
+} from "@/state/safety-stores";
 import { createLocalStorage } from "@/storage/local-storage";
 
 /** Settings of {@link createLocalEnvironment}. */
@@ -98,7 +102,9 @@ const localCapabilities: BindingCapabilities = Object.freeze({
 /**
  * Creates a local environment for an application: SQLite-backed queues with
  * leases, retries and dead-lettering; filesystem-backed buckets with events
- * and development signed URLs; and a scheduler driven by an injectable clock.
+ * and development signed URLs; a scheduler driven by an injectable clock; and
+ * SQLite-backed operation budgets and idempotency keys, shared by every
+ * process that uses the same state directory.
  *
  * @example
  * ```ts
@@ -146,6 +152,8 @@ export async function createLocalEnvironment(options: LocalEnvironmentOptions): 
     capabilities: localCapabilities,
     drivers: Object.freeze({ queue: queues.driver, bucket: storage.driver }),
     sources: Object.freeze({ queue: queues.source, bucket: storage.source, schedule: scheduler.source }),
+    operationBudgets: createLocalOperationBudgets({ database, clock, createId }),
+    idempotency: createLocalIdempotencyStore({ database, clock, createId }),
     config: configuration.config
   });
 

@@ -20,7 +20,7 @@ async function reportText(overrides: Record<string, unknown> = {}): Promise<stri
   const outcome = await compiledOutcome();
   if (!outcome.ok)
     throw new Error("Expected the fixture to compile.");
-  return JSON.stringify({ format: analysisReportFormat, ok: true, manifest: outcome.manifest, entrypoints: outcome.entrypoints, diagnostics: outcome.diagnostics, ...overrides });
+  return JSON.stringify({ format: analysisReportFormat, ok: true, manifest: outcome.manifest, entrypoints: outcome.entrypoints, events: outcome.events, diagnostics: outcome.diagnostics, ...overrides });
 }
 
 describe("readAnalysisReport", () => {
@@ -49,5 +49,14 @@ describe("readAnalysisReport", () => {
     expect(wrongVersion.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_MANIFEST_VERSION_UNSUPPORTED"]);
     const otherManifest = await readAnalysisReport(JSON.stringify({ ...tampered, entrypoints: { ...tampered.entrypoints, manifest: `sha256:${"f".repeat(64)}` } }), "");
     expect(otherManifest.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_MANIFEST_INVALID"]);
+  });
+
+  it("rejects a report whose event analysis is malformed, and accepts one without it", async () => {
+    const outcome = await readAnalysisReport(await reportText({ events: { graph: { nodes: "x", edges: [], unresolved: [] }, cycles: [] } }), "");
+    expect(outcome.ok).toBe(false);
+    expect(outcome.diagnostics.map(diagnostic => diagnostic.code)).toEqual(["HOLQA_ANALYSIS_FAILED"]);
+    const without = await readAnalysisReport(await reportText({ events: undefined }), "");
+    expect(without.ok).toBe(true);
+    expect(without.ok && without.events).toBeUndefined();
   });
 });

@@ -12,6 +12,10 @@ export interface InvocationRecord {
   readonly correlationId: string;
   /** The invocation that sent the message or wrote the object that triggered this one. */
   readonly causationId?: string;
+  /** The root operation the invocation descends from; its own identifier for a root invocation. */
+  readonly rootId: string;
+  /** Event hops from the root operation: 0 for a root invocation. */
+  readonly depth: number;
   /** The trigger kind, for example `queue.message`. */
   readonly trigger?: string;
   /** The resource whose trigger fired. */
@@ -23,6 +27,8 @@ export interface InvocationRecord {
   readonly attempt?: number;
   /** Messages sent and objects changed by the invocation. */
   readonly emitted: readonly EmittedEvent[];
+  /** The code of the event guard that refused something the invocation tried to publish. */
+  readonly blocked?: string;
   readonly durationMs: number;
 }
 
@@ -56,18 +62,24 @@ export function invocationRecords(entries: readonly LogEntry[]): InvocationRecor
     const resourceId = text("resourceId");
     const code = text("code");
     const attempt = number("attempt");
+    const blocked = text("blocked");
+    const invocationId = text("invocationId") ?? "";
     const { emitted } = entry;
     return [Object.freeze({
       handlerId: text("handlerId") ?? "",
-      invocationId: text("invocationId") ?? "",
+      invocationId,
       correlationId: text("correlationId") ?? "",
       ...causationId === undefined ? {} : { causationId },
+      // Root invocations do not log their lineage: they are their own root at depth 0.
+      rootId: text("rootId") ?? invocationId,
+      depth: number("depth") ?? 0,
       ...trigger === undefined ? {} : { trigger },
       ...resourceId === undefined ? {} : { resourceId },
       outcome: entry.message === "invocation completed" ? "ok" as const : "failed" as const,
       ...code === undefined ? {} : { code },
       ...attempt === undefined ? {} : { attempt },
       emitted: readEmitted(emitted),
+      ...blocked === undefined ? {} : { blocked },
       durationMs: number("durationMs") ?? 0
     })];
   });

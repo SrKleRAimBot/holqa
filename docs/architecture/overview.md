@@ -17,7 +17,7 @@ Holqa is organized into layers whose dependencies point **inward**, toward frame
 | **Execution** | Running handlers on Bun; invocation dispatcher and transports. | `@holqa/runtime-bun` (implemented: dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery) | No (Bun) |
 | **Local environment** | Local runtime drivers and emulators. | `@holqa/local` (implemented: SQLite-backed queues, filesystem buckets, clock-driven scheduler) | No |
 | **Testing** | Deterministic test utilities and fixtures. | `@holqa/testing` (implemented: type assertions, `createTestApp`) | No |
-| **Tooling** | Developer CLI composing compiler, runtime, and local environment. | `@holqa/cli` (implemented: `inspect`, `build --manifest`, `dev`, `invoke`, `queue send`, `storage put`, `cron run`, `state`, `doctor`) | No (Bun) |
+| **Tooling** | Developer CLI composing compiler, runtime, and local environment. | `@holqa/cli` (implemented: `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) | No (Bun) |
 | **Integrations** | Adapters for schema libraries, Effect, oRPC, TanStack Query, and others. | `packages/integrations/*` (`@holqa/zod` implemented; others planned) | Depends on integration |
 | **Bindings** | Production runtime drivers and provisioning providers. | Not yet scoped | No |
 

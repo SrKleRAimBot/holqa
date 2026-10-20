@@ -1,6 +1,6 @@
 # Packages
 
-> **Status:** Reference for the current repository state. Seven framework packages, one integration package and seven example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing` and `order-pipeline` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
+> **Status:** Reference for the current repository state. Seven framework packages, one integration package and eight example packages (`package-smoke`, `schema-evolution`, `manifest`, `http-api`, `document-processing`, `order-pipeline` and `event-safety` against the framework, `commerce` against the M0 experiments) exist; all are `"private": true` and unpublished. Other packages are planned.
 
 All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` declarations, and expose a single code entry point (`.`) through their `exports` map. `@holqa/compiler` additionally exports its JSON Schema files. Allowed dependencies are listed in [package boundaries](../architecture/package-boundaries.md).
 
@@ -10,13 +10,14 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | --- | --- | --- | --- |
 | `@holqa/core` | `packages/core` | **Implemented** (contracts) | Framework-neutral contracts: diagnostics, identity, descriptor protocol, resource and trigger registries, runtime binding. |
 | `@holqa/compiler` | `packages/compiler` | **Implemented** (manifest pipeline, schema contracts) | Handler discovery, graph validation, manifest version 1, schema contracts and compatibility checks. |
-| `@holqa/cli` | `packages/cli` | **Implemented** (help, version, `--json`, `inspect`, `build --manifest`, `dev`, `invoke`, `queue send`, `storage put`, `cron run`, `state`, `doctor`) | The `holqa` command-line interface and local development supervisor. |
+| `@holqa/cli` | `packages/cli` | **Implemented** (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) | The `holqa` command-line interface and local development supervisor. |
 | `@holqa/example-package-smoke` | `examples/package-smoke` | **Implemented** | Verifies built package outputs. |
 | `@holqa/example-schema-evolution` | `examples/schema-evolution` | **Implemented** | End-to-end schema contract corpus with Zod. |
 | `@holqa/example-manifest` | `examples/manifest` | **Implemented** | End-to-end compilation of SDK applications through the built CLI. |
 | `@holqa/example-http-api` | `examples/http-api` | **Implemented** | An SDK application with routes, procedures and middleware, compiled by the built CLI and served by `@holqa/runtime-bun`. |
 | `@holqa/example-document-processing` | `examples/document-processing` | **Implemented** | An event-driven SDK application (signed uploads, object events, a queue with retries and dead-lettering, a scheduled cleanup), compiled by the built CLI and run on `@holqa/local`. |
 | `@holqa/example-order-pipeline` | `examples/order-pipeline` | **Implemented** | The local development example: run with `holqa dev`, tested end to end with `createTestApp` and with a real `holqa dev` session. |
+| `@holqa/example-event-safety` | `examples/event-safety` | **Implemented** | Event safety: `holqa inspect --cycles` through the built CLI, runtime depth limits, an allowed cycle and idempotent processing with `createTestApp`. |
 | `@holqa/sdk` | `packages/sdk` | **Implemented** (application and resource model, HTTP routes, RPC procedures, middleware, queue, bucket and schedule operations) | Public developer-facing SDK. |
 | `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP, RPC and background transports. |
 | `@holqa/local` | `packages/local` | **Implemented** (local binding) | Local runtime drivers: SQLite-backed queues, filesystem object storage with events and signed URLs, a clock-driven scheduler, inspection. |
@@ -95,6 +96,10 @@ Planned packages are directories containing only a README. They have no `package
 | `rpcProtocolFormat`, `rpcProtocolVersion`, `rpcVersionHeader`, `rpcMountSegment`, `rpcInputQueryParameter`, `rpcProcedurePath(basePath, id)` | Constants, function | The `holqa.rpc/1` protocol: `"holqa.rpc/1"`, `"1"`, `"holqa-rpc-version"`, `"rpc"`, `"input"`, and `<basePath>/rpc/<id>`. |
 | `RpcRequestEnvelope`, `RpcSuccessEnvelope`, `RpcFailureEnvelope`, `RpcResponseEnvelope` | Types | The RPC request and response envelopes. |
 | `ApplicationScope`, `ScopedDefinition` | Types | The application execution context: values created once per runtime and disposed of when it stops. `InvocationContext` gains optional `correlationId` and `scope`. |
+| `DeliveryTrace`, `InvocationLineage`, `lineageOfDelivery(trace, fallbackRootId)`, `childTrace(lineage, invocationId)` | Types, functions | Event lineage: traces carry `correlationId`, `causationId`, `rootId` and `depth`; `InvocationContext.lineage` and `LeasedDelivery.sentAt` are optional. See [event safety](../concepts/event-safety.md#event-lineage). |
+| `HandlerEventPolicy`, `HandlerCycleAllowance`, `HandlerIdempotencyPolicy`, `IdempotencyKeySource`, `eventPolicyProblems(value)`, `idempotencyPolicyProblems(value)`, `defaultEventLimits`, `maxCycleJustificationLength`, `isEventGuardCode(code)` | Types, functions, constants | The `events` and `idempotency` fields of handler definitions, their structural checks, the default limits (`{ maxDepth: 16, maxPublications: 1000 }`) and the codes whose deliveries end terminally. |
+| `OperationBudgetStore`, `OperationBudgetRequest`, `OperationBudgetResult` | Types | Atomic per-operation accounting a binding provides as `RuntimeBinding.operationBudgets`. |
+| `IdempotencyStore`, `IdempotencyClaim`, `IdempotencyBeginOptions`, `IdempotencyCompleteOptions`, `IdempotencyExtendOptions`, `createIdempotencyKey(parts)`, `createMemoryIdempotencyStore(options?)`, `MemoryIdempotencyStoreOptions` | Types, functions | The deduplication store a binding provides as `RuntimeBinding.idempotency`, the key convention, and a single-process in-memory store. |
 
 Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 characters (for example `order-processing`, `orders.process`). The grammar is an initial proposal and may be revised before 1.0 ([ADR 0004](../architecture/decisions/0004-stable-logical-resource-identities.md)).
 
@@ -117,6 +122,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `QueueConsumer`, `ObjectCreatedHandler`, `ObjectDeletedHandler`, `ScheduleHandler`, `HandlerRegistration` | Types | Handler registrations. |
 | `ObjectCreatedContext`, `ObjectDeletedContext`, `ObjectCreatedOptions`, `ObjectDeletedOptions`, `ObjectInfo`, `DeletedObjectInfo`, `ObjectEventInfo`, `ScheduleContext` | Types | Handler contexts: object handlers receive `event: { id, time, attempt }`; schedule handlers receive `trigger` and `runId`. |
 | `QueueMessageInput`, `QueueMessageOutput`, `QueueConsumerFor`, `ResourceIdOf`, `ResourceIds`, `ResourceById`, `ResourceAliasesOfKind` | Types | Type helpers derived from handles. |
+| `HandlerEventOptions`, `PublishableResource`, `IdempotencyOptions`, `QueueIdempotencyContext`, `ObjectEventIdempotencyContext` | Types | Every handler registration accepts `events: { publishes?, cycle?, maxPublications?, maxDepth? }`; queue consumers and object event handlers also accept `idempotency: true \| { key?, retentionSeconds?, leaseSeconds? }`. Queue, object event and schedule contexts gain `lineage`. See [event safety](../concepts/event-safety.md). |
 | `HolqaTypeError`, `CheckResourceId`, `CheckUniqueResourceIds`, `DuplicateResourceIds`, `ResourceIdProblem`, `CheckDistinctAliases` | Types | Compile-time declaration checks. |
 | `HttpApiHandle.route(options)` | Method | Registers an HTTP route: `{ id, method, path, params?, query?, headers?, body?, responses, middleware?, handler }`. See the [runtime reference](runtime.md#http-routes). |
 | `HttpApiHandle.procedure(options)` | Method | Registers an RPC procedure: `{ id, operation, input?, output, middleware?, handler }`, served at `<basePath>/rpc/<id>`. See [RPC procedures](runtime.md#rpc-procedures). |
@@ -129,15 +135,16 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/runtime-bun`
 
 - **Path:** `packages/runtime-bun`
-- **Status:** Implemented (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, trace propagation, `Bun.serve` adapter). Private. Worker isolation is planned. See the [runtime reference](runtime.md), [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) and [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md).
+- **Status:** Implemented (dispatcher, lifecycle, HTTP routes, RPC procedures, queue, object event and schedule delivery, trace and lineage propagation, event limits, `Bun.serve` adapter). Private. Worker isolation is planned. See the [runtime reference](runtime.md), [ADR 0023](../architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) and [ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md).
 - **Entry point:** `@holqa/runtime-bun` → `dist/index.js`, `dist/index.d.ts`. Requires Bun (`engines.bun >= 1.3.13`) for `serve` and `loadCompiledApplication`.
 - **Internal dependencies:** `@holqa/core`.
 
 | Export | Kind | Description |
 | --- | --- | --- |
 | `createRuntime(options)` | Function | Validates an application and its handlers and returns a `Runtime`: `start`, `stop`, `invoke`, `fetch`, `stats`, `state`, `name`, `handlers`. `start` consumes the binding's sources to deliver queue messages, object events and scheduled runs, and fails when the binding cannot deliver a handler's trigger unless `manualTriggers: true`. |
-| `Runtime`, `RuntimeOptions`, `RuntimeLimits`, `RuntimeHttpOptions`, `RuntimeDeliveryOptions`, `RuntimeState`, `RuntimeStats`, `StopOptions` | Types | The runtime and its settings. `RuntimeStats.delivery` (`TransportStats`, `DeliveryStats`) counts received, acknowledged, retried, dead-lettered, discarded and released deliveries and scheduled runs. |
-| `InvocationRequest`, `InvocationOutcome`, `InvocationSuccess`, `InvocationFailed`, `InvocationFailure`, `DispatchStats` | Types | Normalized invocations (with an optional `causationId`) and their structured outcomes (with `emitted`). |
+| `Runtime`, `RuntimeOptions`, `RuntimeLimits`, `RuntimeHttpOptions`, `RuntimeDeliveryOptions`, `RuntimeState`, `RuntimeStats`, `StopOptions` | Types | The runtime and its settings. `RuntimeStats.delivery` (`TransportStats`, `DeliveryStats`) counts received, acknowledged, retried, dead-lettered, discarded, blocked (ended by an event limit) and released deliveries and scheduled runs. |
+| `RuntimeEventLimits`, `EventGuardViolation` | Types | `RuntimeOptions.events` (`maxDepth`, `maxPublications`, `maxEventAgeMs`, `maxEventsPerOperation`) and the refusal recorded as `blocked` on outcomes. See [event lineage and limits](runtime.md#event-lineage-and-limits). |
+| `InvocationRequest`, `InvocationOutcome`, `InvocationSuccess`, `InvocationFailed`, `InvocationFailure`, `DispatchStats` | Types | Normalized invocations (with optional `causationId`, `rootId` and `depth`) and their structured outcomes (with `emitted`, `lineage` and `blocked`). |
 | `EmittedEvent`, `EmittedQueueMessage`, `EmittedObjectChange` | Types | What an invocation emitted: sent messages and created or deleted objects. |
 | `serve(runtime, options)`, `ServeOptions`, `RunningServer`, `stopOnSignals(server, options?, signals?)` | Functions, types | Serves a runtime with `Bun.serve` (default `127.0.0.1:3000`, 1 MiB bodies) and stops gracefully on signals. |
 | `loadCompiledApplication({ root, buildDir? })`, `LoadCompiledApplicationOptions`, `CompiledApplication` | Function, types | Loads `holqa build --manifest` output and checks it against the code (`HOLQA_BUILD_STALE`); `handlerSources` names each handler's `<module>#<export>`. |
@@ -156,12 +163,12 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 
 | Export | Kind | Description |
 | --- | --- | --- |
-| `createLocalEnvironment(options)`, `LocalEnvironment`, `LocalEnvironmentOptions`, `SettleOptions` | Function, types | Creates `{ binding, clock, queues, storage, scheduler, settle, close }` over a state directory. |
+| `createLocalEnvironment(options)`, `LocalEnvironment`, `LocalEnvironmentOptions`, `SettleOptions` | Function, types | Creates `{ binding, clock, queues, storage, scheduler, settle, close }` over a state directory. The binding provides `operationBudgets` and `idempotency`, kept in the state database. |
 | `Clock`, `systemClock`, `ManualClock` | Type, constant, class | The injectable time source; `ManualClock` has `advance(ms)`, `jump(ms)` and `nextTimerDue()`. |
-| `LocalQueues`, `LocalQueueMessage`, `LocalMessageState` | Types | Queue inspection: `messages` (with the sender's `trace`), `deadLetters`, `redrive`, `duplicate`, `purge`. |
+| `LocalQueues`, `LocalQueueMessage`, `LocalMessageState`, `RedriveOptions` | Types | Queue inspection: `messages` (with the sender's `trace` and lineage), `deadLetters`, `redrive` (all, one, or `{ messageId?, limit?, newOperation? }`), `duplicate`, `purge`. |
 | `LocalStorage`, `LocalObjectEvent` | Types | Object and event inspection (`objects`, `events` with `trace` and per-delivery `visibleAt`, `redriveEvents`, `duplicateEvent`), `retainSubscriptions`, and signed URL serving (`fetch`, `handles`). |
 | `LocalScheduler`, `LocalScheduleRun`, `LocalRunStatus` | Types | Manual runs (`trigger`), run records (`runs`), `nextRun`, `idle`. |
-| `DeliveryState`, `DeliveryError`, `stateVersion`, `stateFileName` | Types, constants | The state format (version 2, `state.sqlite`; version 1 is upgraded in place). |
+| `DeliveryState`, `DeliveryError`, `stateVersion`, `stateFileName`, `readStateFormat(directory)` | Types, constants, function | The state format (version 3, `state.sqlite`; versions 1 and 2 are upgraded in place). |
 | `manualTriggerMetadata(app, definition, options)`, `ManualTriggerOptions` | Function, type | The trusted metadata for invoking a queue, object event or schedule handler directly. |
 
 ## `@holqa/testing`
@@ -173,9 +180,10 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 
 | Export | Kind | Description |
 | --- | --- | --- |
-| `createTestApp(options)`, `TestApp`, `TestAppOptions`, `TestInvokeOptions`, `DrainOptions`, `InvocationFilter` | Function, types | Starts an application on a runtime and a local environment with a temporary state directory and a virtual clock: `fetch`, `invoke`, `send`, `put`, `trigger`, `flush`, `advance`, `drain`, `failNext`, `duplicate`, `duplicateEvent`, `redrive`, inspection (`messages`, `deadLetters`, `events`, `objects`, `read`, `runs`), `logs`, `invocations`, `trace`, `dispose`. |
+| `createTestApp(options)`, `TestApp`, `TestAppOptions`, `TestInvokeOptions`, `DrainOptions`, `InvocationFilter` | Function, types | Starts an application on a runtime and a local environment with a temporary state directory and a virtual clock: `fetch`, `invoke`, `send`, `put`, `trigger`, `flush`, `advance`, `drain`, `failNext`, `duplicate`, `duplicateEvent`, `redrive`, inspection (`messages`, `deadLetters`, `events`, `objects`, `read`, `runs`), `logs`, `invocations`, `trace`, `lineage`, `operation`, `dispose`. `events` sets the runtime's event limits; `maxInvocations` (default 10 000) bounds the work a test runs (`HOLQA_SIMULATION_BUDGET_EXCEEDED`). |
 | `FailureOptions` | Type | `{ times?, error?, when? }` for `failNext`. |
-| `invocationRecords(entries)`, `InvocationRecord` | Function, type | Reads finished invocations (trigger, attempt, outcome, code, `causationId`, `emitted`) from runtime log entries. |
+| `invocationRecords(entries)`, `InvocationRecord` | Function, type | Reads finished invocations (trigger, attempt, outcome, code, `causationId`, `rootId`, `depth`, `emitted`, `blocked`) from runtime log entries. |
+| `lineageOf(records, invocationId)` | Function | The chain of records from an invocation back to its root, root first. |
 | `Equal`, `NotEqual`, `Expect`, `ExpectFalse` | Types | Exact type equality and compile-time assertions (`type _ = Expect<Equal<A, B>>`). |
 | `IsAny`, `IsNever`, `IsUnknown`, `Extends` | Types | Type predicates. |
 | `Accepts<Fn, Arg>` | Type | Whether a function such as `typeof resources.orders.send` accepts an argument type. |
@@ -192,7 +200,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 
 | Export | Kind | Description |
 | --- | --- | --- |
-| `compileApplication(input)` | Function | Compiles `{ app, appModule, modules, runtime, adapters?, sources? }` into `{ ok: true, manifest, entrypoints, diagnostics }` or `{ ok: false, diagnostics }`. Collects every problem. |
+| `compileApplication(input)` | Function | Compiles `{ app, appModule, modules, runtime, adapters?, sources?, appExports?, resolveModule? }` into `{ ok: true, manifest, entrypoints, events, diagnostics }` or `{ ok: false, diagnostics }`. Collects every problem. |
 | `CompileApplicationInput`, `CompileApplicationResult`, `CompileApplicationSuccess`, `CompileApplicationFailure` | Types | Its input and result. |
 | `selectHandlerModules(files, discovery, appModule)`, `HandlerModuleSelection` | Function, type | Selects handler modules from root-relative file paths with the application's patterns. |
 | `compileGlob(pattern)`, `GlobMatcher` | Function, type | Host-independent glob matching (`*`, `?`, `**`, `{a,b}`). |
@@ -205,6 +213,11 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `fingerprintManifest(manifest)`, `manifestFingerprintPrefix` | Function, constant | `sha256:` over the canonical manifest text. |
 | `validateManifest(value)`, `validateEntrypoints(value, manifest)` | Functions | Readers for untrusted documents: `HOLQA_MANIFEST_INVALID`, `HOLQA_MANIFEST_VERSION_UNSUPPORTED`. |
 | `buildResourceGraph(manifest)`, `ResourceGraph`, `GraphNode`, `GraphEdge`, `GraphRelation` | Function, types | The graph of declared relationships. |
+| `EventAnalysis`, `analyzeEvents(input)`, `checkEventPolicies(handlers, resources)`, `AnalyzeEventsInput`, `AnalyzedHandler` | Types, functions | The [event analysis](compiler-specification.md#event-analysis): the event dependency graph and its cycles. |
+| `buildEventGraph(manifest, publications, facts?)`, `EventGraph`, `EventGraphNode`, `EventGraphResourceNode`, `EventGraphHandlerNode`, `EventGraphEdge`, `ConsumptionEdge`, `PublicationEdge`, `ConsumedEvent`, `EventPublication`, `PublicationTarget`, `PublicationOperation`, `PublicationCertainty`, `PublicationOrigin`, `HandlerAnalysisCoverage`, `HandlerEventFacts` | Function, types | The event dependency graph. |
+| `analyzePublications(input)`, `PublicationAnalysisInput`, `HandlerToAnalyze`, `HandlerPublications`, `ModuleResolver`, `ResolvedModule` | Function, types | Static analysis of what handlers publish. |
+| `analyzeEventCycles(graph)`, `eventCycleDiagnostics(cycles, graph)`, `describeCyclePath(path)`, `EventCycle`, `EventCycleStep`, `CycleAllowance` | Functions, types | Cycle detection (strongly connected components), `HOLQA_EVENT_CYCLE` diagnostics and path rendering. |
+| `validateEventAnalysis(value)` | Function | Reader for an untrusted event analysis (`HOLQA_ANALYSIS_FAILED`). |
 | `moduleEvaluationFailure(path, error)` | Function | `HOLQA_MODULE_EVALUATION_FAILED` for an error thrown while a host imported a module. |
 | `sortDiagnostics(diagnostics)`, `hasErrors(diagnostics)` | Functions | Deterministic ordering; error detection. |
 | `canonicalJsonStringify(value)` | Function | Deterministic JSON: sorted keys at every depth, 2-space indent, no trailing newline, `-0` → `0`. Throws `CanonicalJsonError` for values with no canonical form. |
@@ -238,7 +251,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/cli`
 
 - **Path:** `packages/cli`
-- **Status:** Implemented (help, version, `--json`, `inspect`, `build --manifest`, `dev`, `invoke`, `queue send`, `storage put`, `cron run`, `state`, `doctor`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
+- **Status:** Implemented (help, version, `--json`, `inspect` with `--cycles`, `build --manifest`, `dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`). Private. Bundling and `openapi generate` are proposed. See [CLI reference](cli.md).
 - **Purpose:** Holqa developer CLI and local development supervisor.
 - **Entry points:** library `@holqa/cli` → `dist/index.js`; binary `holqa` → `dist/bin.js`; analysis process entry `dist/analyze.js` and generation process entry `dist/generation.js` (internal, spawned by the CLI). Runs on Bun, `engines.bun >= 1.3.13`.
 - **Internal dependencies:** `@holqa/core`, `@holqa/compiler`, `@holqa/local`, `@holqa/runtime-bun`.
@@ -247,7 +260,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | --- | --- | --- |
 | `runCli(argv, io, version, host?)` | Function | Runs the CLI against split arguments; writes through `io`; resolves to an exit code. `host` defaults to `createProcessHost()`. |
 | `CliIo` | Type | `{ stdout(text), stderr(text) }`. |
-| `CliHost`, `AnalysisOutcome`, `AnalysisSuccess`, `AnalysisFailure` | Types | Working directory, analysis and file writing, injected for tests; optional `readFile`, `dev`, `operate` and `doctor` for the local commands. |
+| `CliHost`, `AnalysisOutcome`, `AnalysisSuccess`, `AnalysisFailure` | Types | Working directory, analysis and file writing, injected for tests; optional `readFile`, `dev`, `operate` and `doctor` for the local commands. `AnalysisSuccess.events` (optional) carries the event analysis `inspect --cycles` prints. |
 | `DevEvent`, `ApplicationSummary`, `ResourceSummary`, `HandlerSummary`, `ManifestChange`, `ChangeKind`, `IdentityChanges` | Types | The events of a `holqa dev` session (its `--json` lines) and the classification of a rebuild. |
 | `DevRequest`, `DoctorRequest`, `DoctorCheck`, `AppLocation`, `LocalOperation`, `OperationResponse`, `OperateOutcome`, `OperationTarget`, `PhaseResult` | Types | Requests and results of the local commands. |
 | `createProcessHost(options?)`, `ProcessHostOptions`, `forwardedEnvironment` | Function, type, constant | The default host: analysis in a separate Bun process with an allowlisted environment, `--no-install` and a timeout; the local commands run the application in generation processes with the CLI's environment. |
@@ -285,6 +298,12 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 - **Path:** `examples/order-pipeline`
 - **Status:** Implemented. Private; not published.
 - **Purpose:** The local development example: an order pipeline (HTTP, a queue with retries and dead-lettering, uploads with object events, an hourly schedule) started with `holqa dev`, tested with `createTestApp` under controlled failures, and exercised through a real `holqa dev` session and the operation commands. See its [README](../../examples/order-pipeline/README.md).
+
+## `@holqa/example-event-safety`
+
+- **Path:** `examples/event-safety`
+- **Status:** Implemented. Private; not published.
+- **Purpose:** Event safety end to end: `holqa inspect --cycles` through the built `holqa` binary (an indirect cycle warning, an allowed cycle, prefix-safe object writes), and the same application on `createTestApp`, where the depth limit stops the unbounded cycle with a terminal dead letter and an idempotent consumer charges once. See its [README](../../examples/event-safety/README.md).
 
 ## `@holqa/example-package-smoke`
 

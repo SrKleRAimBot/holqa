@@ -27,12 +27,14 @@ import type {
   InvocationRequest,
   RegisteredHandler
 } from "@/dispatch/dispatcher";
+import type { EventGuard } from "@/dispatch/event-guard";
 import type { StructuredLogger } from "@/logging/log";
 
 import {
   defaultQueueBackoff,
   diagnosticCodes,
   InputValidationError,
+  lineageOfDelivery,
   messageEnvelopeFormat,
   readObjectEvent,
   validateInput
@@ -87,6 +89,10 @@ export interface TransportsOptions {
   readonly dispatch: (request: InvocationRequest) => Promise<InvocationOutcome>;
   readonly stopping: () => boolean;
   readonly logger: StructuredLogger;
+  /** Applies depth and age limits to every delivery. */
+  readonly guard: EventGuard;
+  /** The wall clock, in epoch milliseconds, for event age. */
+  readonly now: () => number;
 }
 
 /** Event types by object trigger kind. */
@@ -285,9 +291,10 @@ export class Transports {
    * @returns A worker that is not started yet.
    */
   private worker<Body>(handler: RegisteredHandler, source: DeliverySource<Body>, policy: DeliveryPolicy, concurrency: number, prepare: (delivery: LeasedDelivery<Body>) => Promise<PreparedDelivery>): DeliveryWorker<Body> {
-    const { timeoutMs, delivery, dispatch, stopping, logger } = this.options;
+    const { timeoutMs, delivery, dispatch, stopping, logger, guard, now } = this.options;
+    const handlerId = handler.definition.id;
     return new DeliveryWorker<Body>({
-      handlerId: handler.definition.id,
+      handlerId,
       source,
       policy,
       concurrency,
@@ -296,7 +303,8 @@ export class Transports {
       prepare,
       dispatch,
       stopping,
-      logger: logger.child({ transport: handler.definition.trigger.kind })
+      logger: logger.child({ transport: handler.definition.trigger.kind }),
+      admit: received => guard.checkDelivery(handlerId, lineageOfDelivery(received.trace, received.id), received.sentAt, now())
     });
   }
 

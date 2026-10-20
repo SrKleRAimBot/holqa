@@ -376,7 +376,7 @@ export function createLocalStorage(settings: LocalStorageSettings): {
         .all(bucketId)
         .filter(object => object.key.startsWith(prefix))
         .map(metadataOf),
-      redriveEvents: (bucketId: string, subscription: string, eventId?: string) => store.redrive(eventChannel(bucketId, subscription), eventId),
+      redriveEvents: (bucketId: string, subscription: string, eventId?: string) => store.redrive(eventChannel(bucketId, subscription), eventId === undefined ? {} : { id: eventId }),
       duplicateEvent: (bucketId: string, subscription: string, eventId: string) => store.duplicate(eventChannel(bucketId, subscription), eventId),
       retainSubscriptions: (bucketId: string, subscriptions: readonly string[]) => database.transaction(() => {
         const keep = new Set(subscriptions);

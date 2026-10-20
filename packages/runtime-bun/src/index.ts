@@ -9,6 +9,7 @@ export type {
   InvocationRequest,
   InvocationSuccess
 } from "@/dispatch/dispatcher";
+export type { EventGuardViolation, RuntimeEventLimits } from "@/dispatch/event-guard";
 export type { InvocationFailure } from "@/dispatch/failure";
 export type {
   EmittedEvent,

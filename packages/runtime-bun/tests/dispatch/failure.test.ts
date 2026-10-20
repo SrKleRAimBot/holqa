@@ -30,6 +30,14 @@ describe("failureFromError", () => {
     expect(abortFailure("shutdown").message).toContain("stopping");
   });
 
+  it("keeps event guard codes and in-progress idempotency keys, with generic messages", () => {
+    const guard = failureFromError(new HolqaError({ code: "HOLQA_EVENT_DEPTH_EXCEEDED", severity: "error", message: "A message to queue \"internal-jobs\" was refused." }));
+    expect(guard).toMatchObject({ code: "HOLQA_EVENT_DEPTH_EXCEEDED", status: 500 });
+    expect(guard.message).not.toContain("internal-jobs");
+    const held = failureFromError(new HolqaError({ code: "HOLQA_IDEMPOTENCY_IN_PROGRESS", severity: "error", message: "Another delivery holds the key." }));
+    expect(held).toMatchObject({ code: "HOLQA_IDEMPOTENCY_IN_PROGRESS", status: 503 });
+  });
+
   it("keeps response contract violations as server errors with a generic message", () => {
     const error = new HolqaError({ code: "HOLQA_RESPONSE_INVALID", severity: "error", message: "The 200 response of GET /x has total -1." });
     const failure = failureFromError(error);

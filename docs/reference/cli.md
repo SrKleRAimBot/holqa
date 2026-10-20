@@ -1,6 +1,6 @@
 # CLI reference
 
-> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect`, `holqa build --manifest`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa storage put`, `holqa cron run`, `holqa state` and `holqa doctor`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
+> **Status:** **Implemented** for `--help`, `--version`, `--json`, `holqa inspect` (including `--cycles`), `holqa build --manifest`, `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`, `holqa state` and `holqa doctor`. Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are **proposed and not implemented**.
 
 The `holqa` binary is provided by `@holqa/cli` (`packages/cli`). It runs on Bun (`#!/usr/bin/env bun`; `engines.bun >= 1.3.13`). The package is private and not published, so the CLI is only available inside this repository.
 
@@ -17,11 +17,12 @@ Within the workspace, packages that depend on `@holqa/cli` (such as `examples/pa
 
 ```text
 holqa [--help] [--version] [--json]
-holqa inspect [--app <path>] [--json]
+holqa inspect [--cycles] [--app <path>] [--json]
 holqa build --manifest [--app <path>] [--out-dir <dir>] [--json]
 holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--json]
 holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]
 holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]
+holqa queue redrive <queue> [--message <id>] [--limit <n>] [--dry-run] [--new-operation] [--app <path>] [--state-dir <dir>] [--json]
 holqa storage put <bucket> <file> [--key <key>] [--content-type <type>] [--app <path>] [--state-dir <dir>] [--json]
 holqa cron run <schedule> [--app <path>] [--state-dir <dir>] [--json]
 holqa state [--app <path>] [--state-dir <dir>] [--json]
@@ -43,12 +44,13 @@ holqa doctor [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] 
 | `--port <port>` | `dev`, `doctor`: the dev server's port, `0` to `65535`. Default `3000`; `0` picks a free port. | — |
 | `--host <host>` | `dev`, `doctor`: the interface to listen on. Default `127.0.0.1`. | — |
 | `--no-watch` | `dev`: do not rebuild on file changes. | — |
+| `--cycles` | `inspect`: print the event dependency graph and its cycles instead of the summary. | — |
 
 Options take their value as `--app path` or `--app=path`. Positional arguments (`<handler>`, `<queue>`, ...) are required and counted exactly; an argument after `--` is always positional. Help text is always plain text, even with `--json`. It lists the implemented commands, then the proposed commands under "Proposed commands (not implemented yet)".
 
 ## Commands
 
-> **Every command except `--help` and `--version` runs your application's code.** `inspect` and `build` import the application module, every handler module and everything those import, in a separate Bun process with an allowlisted environment. The local commands (`dev`, `invoke`, `queue send`, `storage put`, `cron run`, `state`, `doctor`) analyze the same way and then **run** the application in a separate Bun process with the CLI's full environment, as any server you start would, including `.env` files Bun loads from the application root. None of this is a sandbox. See the [security model](compiler-specification.md#security-model).
+> **Every command except `--help` and `--version` runs your application's code.** `inspect` and `build` import the application module, every handler module and everything those import, in a separate Bun process with an allowlisted environment. The local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) analyze the same way and then **run** the application in a separate Bun process with the CLI's full environment, as any server you start would, including `.env` files Bun loads from the application root. None of this is a sandbox. See the [security model](compiler-specification.md#security-model).
 
 ### `holqa inspect`
 
@@ -62,6 +64,16 @@ interface InspectJsonOutput {
   entrypoints: EntrypointMap; // holqa.entrypoints/1
   graph: ResourceGraph; // nodes and edges, see the compiler specification
   manifest: Manifest; // manifest version 1
+}
+```
+
+With `--cycles`, it prints the application's [event dependency graph](../concepts/event-safety.md) instead: every handler with its trigger, analysis coverage, declared limits and publications (operation, target, certainty, the call and its location), then the cycles (reported ones as `warning` or `info`, allowed ones with their justifications), then the publications analysis could not resolve. `HOLQA_EVENT_CYCLE` diagnostics go to standard error like every warning. Cycles do not fail the command: the exit code is `0` whenever analysis succeeds. With `--json`, standard output receives one canonical JSON document:
+
+```ts
+interface InspectCyclesJsonOutput {
+  cycles: EventCycle[]; // reported first, then allowed; see the compiler specification
+  diagnostics: Diagnostic[]; // warnings and information, including HOLQA_EVENT_CYCLE
+  events: EventGraph; // nodes, edges and unresolved publications; locations relative to the application root
 }
 ```
 
@@ -124,12 +136,13 @@ With `--json`, standard output receives one JSON object per line, tagged with `t
 
 ### Operation commands
 
-`invoke`, `queue send`, `storage put`, `cron run` and `state` act on the local application. When a `holqa dev` session runs for the same application and state directory, they run in it (`"target": "dev"`), so they share its runtime, module state and logs. Otherwise they analyze and build the application (into `.holqa/dev/operation-build`) and run the operation in a process started for it (`"target": "standalone"`); that process never consumes queues or events, so queued work waits for the next `holqa dev`. While a session runs, an operation never falls back to a standalone process: a session that does not answer reports `HOLQA_LOCAL_OPERATION_FAILED` (the operation may have run), and a session with another state directory reports `HOLQA_DEV_SESSION_ACTIVE`.
+`invoke`, `queue send`, `queue redrive`, `storage put`, `cron run` and `state` act on the local application. When a `holqa dev` session runs for the same application and state directory, they run in it (`"target": "dev"`), so they share its runtime, module state and logs. Otherwise they analyze and build the application (into `.holqa/dev/operation-build`) and run the operation in a process started for it (`"target": "standalone"`); that process never consumes queues or events, so queued work waits for the next `holqa dev`. While a session runs, an operation never falls back to a standalone process: a session that does not answer reports `HOLQA_LOCAL_OPERATION_FAILED` (the operation may have run), and a session with another state directory reports `HOLQA_DEV_SESSION_ACTIVE`.
 
 | Command | Does | JSON result (standard output) |
 | --- | --- | --- |
 | `holqa invoke <handler> [--input <json>] [--attempt <n>]` | Invokes a queue consumer, object event handler or schedule handler once, with generated trusted metadata (a first delivery of a new message or event, or a manual run now). The handler validates `--input`. Nothing is recorded in queue, event or schedule history. HTTP routes and procedures are rejected with `HOLQA_OPERATION_INVALID`; call them over HTTP. | `{ target, handlerId, outcome: { ok, handlerId, invocationId, correlationId, durationMs, emitted, value? \| failure? }, logs }` |
 | `holqa queue send <queue> --data <json> [--delay <seconds>]` | Validates the message with the queue's schema, as a producer's `send` does, and stores it. | `{ target, queueId, messageId, schemaVersion, delaySeconds? }` |
+| `holqa queue redrive <queue> [--message <id>] [--limit <n>] [--dry-run] [--new-operation]` | Makes dead-lettered messages due again with a fresh attempt count, oldest first: all of them, the one `--message` names, or at most `--limit`. `--dry-run` only lists them. Redriven messages keep their [lineage](runtime.md#event-lineage-and-limits), so a message refused for its depth or budget is refused again; `--new-operation` starts a new root operation (depth 0, a fresh budget, a new send time for `maxEventAgeMs`) for each, keeping its correlation. | `{ target, queueId, dryRun, newOperation?, count, messages: [{ messageId, attempts, sentAt, lastError?, trace? }] }` |
 | `holqa storage put <bucket> <file> [--key <key>] [--content-type <type>]` | Stores a file (at most 64 MiB) under `--key` (default: the file name), which emits `object.created`. The content type defaults to the one Bun derives from the file extension. | `{ target, bucketId, object: { key, size, contentType?, etag, lastModified } }` |
 | `holqa cron run <schedule>` | Starts a manual run through the runtime and the schedule's overlap policy and records it in the schedule's history. | `{ target, scheduleId, run: { runId, status, trigger, ... }, logs }` |
 | `holqa state` | Prints the local state: queue messages with their state, attempts, last error and trace; stored objects and object events with each subscription's delivery state; schedule runs and the next cron run. | `{ target, application, queues: [{ id, counts, messages }], buckets: [{ id, objects, events }], schedules: [{ id, cron, timezone, nextRun?, runs }] }` |
@@ -143,7 +156,7 @@ A standalone operation also reports what the application printed, as `output` in
 | The operation failed (unknown resource or handler, invalid message, the application does not analyze) | `1` | `{"diagnostics":[...]}`, for example `HOLQA_RESOURCE_NOT_FOUND`, `HOLQA_HANDLER_NOT_FOUND`, `HOLQA_INPUT_INVALID`, `HOLQA_OPERATION_INVALID` |
 | A file cannot be read | `1` | `HOLQA_FILE_UNREADABLE` |
 | The process running the application failed or did not answer | `1` | `HOLQA_LOCAL_OPERATION_FAILED` |
-| Malformed arguments, for example `--data` that is not JSON or a missing `<queue>` | `2` | `HOLQA_CLI_ARGUMENT_INVALID` |
+| Malformed arguments, for example `--data` that is not JSON, `--limit 0` or a missing `<queue>` | `2` | `HOLQA_CLI_ARGUMENT_INVALID` |
 
 ### `holqa doctor`
 

@@ -27,8 +27,8 @@ describe("findProposedCommand", () => {
   });
 
   it("no longer lists implemented commands as proposed", () => {
-    expect(implementedCommands.map(command => command.name)).toEqual(["inspect", "build --manifest", "dev", "invoke", "queue send", "storage put", "cron run", "state", "doctor"]);
-    for (const words of [["inspect"], ["build"], ["dev"], ["invoke"], ["queue", "send"], ["storage", "put"], ["cron", "run"], ["doctor"]])
+    expect(implementedCommands.map(command => command.name)).toEqual(["inspect", "build --manifest", "dev", "invoke", "queue send", "queue redrive", "storage put", "cron run", "state", "doctor"]);
+    for (const words of [["inspect"], ["build"], ["dev"], ["invoke"], ["queue", "send"], ["queue", "redrive"], ["storage", "put"], ["cron", "run"], ["doctor"]])
       expect(findProposedCommand(words)).toBeUndefined();
   });
 });

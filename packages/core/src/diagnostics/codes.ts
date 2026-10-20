@@ -133,7 +133,21 @@ export const diagnosticCodes = {
   /** A `holqa doctor` check found a problem with the project or the local environment. */
   doctorCheckFailed: "HOLQA_DOCTOR_CHECK_FAILED",
   /** A local operation of the CLI (invoke, queue send, storage put, cron run, state) failed unexpectedly, for example because the process running the application exited. */
-  localOperationFailed: "HOLQA_LOCAL_OPERATION_FAILED"
+  localOperationFailed: "HOLQA_LOCAL_OPERATION_FAILED",
+  /** Static analysis found handlers that may publish events which trigger themselves, directly or through other handlers. A warning, not an error: cycles may terminate. */
+  eventCycle: "HOLQA_EVENT_CYCLE",
+  /** An event was refused because it would be, or is, deeper in its causal chain than the receiving handler's `maxDepth`. Terminal: the event is not retried. */
+  eventDepthExceeded: "HOLQA_EVENT_DEPTH_EXCEEDED",
+  /** An invocation tried to publish more events than its `maxPublications` limit. Terminal for the delivery that ran it. */
+  eventPublicationLimitExceeded: "HOLQA_EVENT_PUBLICATION_LIMIT_EXCEEDED",
+  /** A delivery is older than `maxEventAgeMs` and was not delivered. Terminal: the event is not retried. */
+  eventAgeExceeded: "HOLQA_EVENT_AGE_EXCEEDED",
+  /** A root operation published more events than its per-operation budget allows. Terminal for the delivery that ran into it. */
+  executionBudgetExceeded: "HOLQA_EXECUTION_BUDGET_EXCEEDED",
+  /** Another delivery with the same idempotency key is being processed; this one is retried later. */
+  idempotencyInProgress: "HOLQA_IDEMPOTENCY_IN_PROGRESS",
+  /** A test application ran more invocations than its simulation budget allows, usually because of an event cycle. */
+  simulationBudgetExceeded: "HOLQA_SIMULATION_BUDGET_EXCEEDED"
 } as const;
 
 /**

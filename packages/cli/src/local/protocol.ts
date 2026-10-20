@@ -18,6 +18,7 @@ import { readDiagnostic } from "@/analysis/report";
 export type LocalOperation
   = | { readonly kind: "invoke"; readonly handlerId: string; readonly input?: JsonValue; readonly attempt?: number }
     | { readonly kind: "queue.send"; readonly queueId: string; readonly message: JsonValue; readonly delaySeconds?: number }
+    | { readonly kind: "queue.redrive"; readonly queueId: string; readonly messageId?: string; readonly limit?: number; readonly dryRun?: boolean; readonly newOperation?: boolean }
     | { readonly kind: "storage.put"; readonly bucketId: string; readonly key: string; readonly contentType?: string; readonly body: string }
     | { readonly kind: "cron.run"; readonly scheduleId: string }
     | { readonly kind: "state" }
@@ -80,6 +81,9 @@ interface RawFields {
   readonly result?: unknown;
   readonly message?: unknown;
   readonly level?: unknown;
+  readonly dryRun?: unknown;
+  readonly newOperation?: unknown;
+  readonly messageId?: unknown;
 }
 
 /**
@@ -180,6 +184,15 @@ export function readOperation(candidate: unknown): LocalOperation | undefined {
       if (queueId === undefined || message === undefined || delaySeconds === null)
         return undefined;
       return { kind: "queue.send", queueId, message, ...delaySeconds === undefined ? {} : { delaySeconds } };
+    }
+    case "queue.redrive": {
+      const queueId = text("queueId");
+      const messageId = text("messageId");
+      const limit = integer("limit");
+      const flags = [value.dryRun, value.newOperation];
+      if (queueId === undefined || (value.messageId !== undefined && messageId === undefined) || limit === null || (limit !== undefined && limit < 1) || flags.some(flag => flag !== undefined && typeof flag !== "boolean"))
+        return undefined;
+      return { kind: "queue.redrive", queueId, ...messageId === undefined ? {} : { messageId }, ...limit === undefined ? {} : { limit }, ...value.dryRun === true ? { dryRun: true } : {}, ...value.newOperation === true ? { newOperation: true } : {} };
     }
     case "storage.put": {
       const bucketId = text("bucketId");

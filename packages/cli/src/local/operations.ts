@@ -97,6 +97,8 @@ export async function executeOperation(context: OperationContext, operation: Loc
       const receipt = await context.local.binding.drivers.queue!(queue).send({ format: messageEnvelopeFormat, schemaVersion: queue.config.schemaVersion, payload }, delaySeconds === 0 ? {} : { delaySeconds });
       return { queueId: queue.id, messageId: receipt.messageId, schemaVersion: queue.config.schemaVersion, ...delaySeconds === 0 ? {} : { delaySeconds } };
     }
+    case "queue.redrive":
+      return redrive(context, operation);
     case "storage.put": {
       const bucket = resourceOf(context.descriptor, "bucket", operation.bucketId);
       const problem = checkObjectKey(operation.key, `bucket "${bucket.id}" put`);
@@ -131,6 +133,32 @@ export function operationDiagnostics(error: unknown): Diagnostic[] {
   if (carried.length > 0)
     return [...carried];
   return [createDiagnostic({ code: diagnosticCodes.localOperationFailed, severity: "error", message: `The operation failed: ${error instanceof Error ? error.message : String(error)}` })];
+}
+
+/**
+ * Redrives dead-lettered messages of a local queue, or lists the ones it
+ * would redrive (`dryRun`). Redriven messages keep their lineage unless
+ * `newOperation` starts a new root operation for each of them.
+ *
+ * @param context - The operation context.
+ * @param operation - The queue, the selection and the flags.
+ * @returns The queue, whether it was a dry run, how many messages, and each selected message.
+ * @throws {HolqaError} `HOLQA_RESOURCE_NOT_FOUND` for an undeclared queue.
+ */
+function redrive(context: OperationContext, operation: Extract<LocalOperation, { readonly kind: "queue.redrive" }>): JsonObject {
+  const queue = resourceOf(context.descriptor, "queue", operation.queueId);
+  const selected = context.local.queues.deadLetters(queue.id)
+    .filter(message => operation.messageId === undefined || message.messageId === operation.messageId)
+    .slice(0, operation.limit ?? Number.POSITIVE_INFINITY);
+  const messages = selected.map(message => toJson({ messageId: message.messageId, attempts: message.attempts, sentAt: message.sentAt, ...message.lastError === undefined ? {} : { lastError: message.lastError }, ...message.trace === undefined ? {} : { trace: message.trace } }));
+  if (operation.dryRun === true)
+    return { queueId: queue.id, dryRun: true, count: selected.length, messages };
+  const count = context.local.queues.redrive(queue.id, {
+    ...operation.messageId === undefined ? {} : { messageId: operation.messageId },
+    ...operation.limit === undefined ? {} : { limit: operation.limit },
+    ...operation.newOperation === true ? { newOperation: true } : {}
+  });
+  return { queueId: queue.id, dryRun: false, newOperation: operation.newOperation === true, count, messages };
 }
 
 /**

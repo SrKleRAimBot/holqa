@@ -22,7 +22,7 @@ or provider code. See [package boundaries](../../docs/architecture/package-bound
 | `queue()`, `bucket()`, `schedule()`, `http.api()` | Resource declarations returning typed handles. |
 | `secret()`, `variable()` | Configuration entries. |
 | `send(message, { delaySeconds? })` (queues); `put()`, `get()`, `head()`, `delete()`, `list()`, `signedUrl()` (buckets) | Operations through the bound runtime; `send` resolves to `{ messageId }`. |
-| `consume()`, `onObjectCreated()`, `onObjectDeleted()`, `handle()` (on handles) | Declarative handler registration. |
+| `consume()`, `onObjectCreated()`, `onObjectDeleted()`, `handle()` (on handles) | Declarative handler registration. Every registration accepts `events` (declared publications, an intentional `cycle` with its justification, `maxDepth`, `maxPublications`); queue consumers and object event handlers accept `idempotency`; handler contexts carry `lineage` ([event safety](../../docs/concepts/event-safety.md)). |
 | `route()`, `procedure()` (on `http.api` handles), `reply` | HTTP routes and RPC procedures; see the [runtime reference](../../docs/reference/runtime.md). |
 | `middleware()`, `middleware.requires()` | Typed middleware for applications, APIs, routes and procedures. |
 | `scoped()` | Application-scoped values (pools, clients) created once per runtime. |

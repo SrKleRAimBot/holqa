@@ -71,6 +71,14 @@ describe("operations without a dev session", () => {
     expect(existsSync(join(app.root, ".holqa", "local", "state.sqlite"))).toBe(true);
   });
 
+  it("redrive dead letters, reporting none when the queue has none", async () => {
+    const location = locateApp(app.root, undefined, undefined);
+    const dry = await operateLocally(dependencies(), location, { kind: "queue.redrive", queueId: "jobs", dryRun: true });
+    expect(dry.response).toEqual({ ok: true, result: { queueId: "jobs", dryRun: true, count: 0, messages: [] } });
+    const redriven = await operateLocally(dependencies(), location, { kind: "queue.redrive", queueId: "jobs", newOperation: true });
+    expect(redriven.response).toEqual({ ok: true, result: { queueId: "jobs", dryRun: false, newOperation: true, count: 0, messages: [] } });
+  });
+
   it("invoke background handlers and run schedules once, without consuming queued work", async () => {
     const location = locateApp(app.root, undefined, undefined);
     const invoked = await operateLocally(dependencies(), location, { kind: "invoke", handlerId: "jobs.run", input: "now", attempt: 2 });
@@ -101,6 +109,7 @@ describe("operations without a dev session", () => {
     expect(await codes({ kind: "queue.send", queueId: "nope", message: "x" })).toEqual(["HOLQA_RESOURCE_NOT_FOUND"]);
     expect(await codes({ kind: "queue.send", queueId: "jobs", message: "x", delaySeconds: -1 })).toEqual(["HOLQA_OPERATION_INVALID"]);
     expect(await codes({ kind: "storage.put", bucketId: "nope", key: "a", body: "" })).toEqual(["HOLQA_RESOURCE_NOT_FOUND"]);
+    expect(await codes({ kind: "queue.redrive", queueId: "nope" })).toEqual(["HOLQA_RESOURCE_NOT_FOUND"]);
     expect(await codes({ kind: "state" }).then(() => operateLocally(dependencies(), locateApp(app.root, "missing.ts", undefined), { kind: "state" })).then(outcome => outcome.response.ok ? [] : outcome.response.diagnostics.map(diagnostic => diagnostic.code))).toEqual(["HOLQA_APP_NOT_FOUND"]);
   });
 });

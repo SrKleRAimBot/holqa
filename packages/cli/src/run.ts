@@ -33,7 +33,7 @@ export type { CliIo } from "@/io";
  *
  * Supported: `--help`/`-h` (or no arguments), `--version`/`-v`,
  * `holqa inspect [--app <path>]`, `holqa build --manifest [--app <path>] [--out-dir <dir>]`,
- * the local commands (`dev`, `invoke`, `queue send`, `storage put`,
+ * the local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`,
  * `cron run`, `state`, `doctor`), and `--json` anywhere, which switches
  * output to machine-readable JSON (JSON lines for `holqa dev`).
  * Errors are reported as diagnostics: `{ "diagnostics": [...] }` on standard
@@ -66,14 +66,14 @@ export async function runCli(argv: readonly string[], io: CliIo, version: string
 
   const [command, ...rest] = args;
   if (command === "inspect" || command === "build") {
-    const options = parseOptions(rest, command === "inspect" ? { flags: [], values: ["app"] } : { flags: ["manifest"], values: ["app", "out-dir"] });
+    const options = parseOptions(rest, command === "inspect" ? { flags: ["cycles"], values: ["app"] } : { flags: ["manifest"], values: ["app", "out-dir"] });
     if (!options.ok) {
       reportDiagnostics(io, json, options.problems.map(problem => usageError(`holqa ${command}: ${problem}`, command)));
       return exitCodes.usage;
     }
     const app = options.values.get("app");
     if (command === "inspect")
-      return inspectCommand(host ?? createProcessHost(), io, json, app);
+      return inspectCommand(host ?? createProcessHost(), io, json, app, options.flags.has("cycles"));
     if (!options.flags.has("manifest")) {
       reportError(io, json, createDiagnostic({
         code: diagnosticCodes.cliNotImplemented,
@@ -153,11 +153,12 @@ function renderHelp(version: string): string {
     `holqa ${version}`,
     "",
     "Usage: holqa [--help] [--version] [--json]",
-    "       holqa inspect [--app <path>] [--json]",
+    "       holqa inspect [--cycles] [--app <path>] [--json]",
     "       holqa build --manifest [--app <path>] [--out-dir <dir>] [--json]",
     "       holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--json]",
     "       holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]",
     "       holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]",
+    "       holqa queue redrive <queue> [--message <id>] [--limit <n>] [--dry-run] [--new-operation] [--app <path>] [--state-dir <dir>] [--json]",
     "       holqa storage put <bucket> <file> [--key <key>] [--content-type <type>] [--app <path>] [--state-dir <dir>] [--json]",
     "       holqa cron run <schedule> [--app <path>] [--state-dir <dir>] [--json]",
     "       holqa state [--app <path>] [--state-dir <dir>] [--json]",
@@ -172,6 +173,7 @@ function renderHelp(version: string): string {
     "  --state-dir <dir>   The local state directory (default: .holqa/local next to the application module).",
     "  --port <port>       The dev server's port (default: 3000; 0 picks a free one).",
     "  --host <host>       The dev server's interface (default: 127.0.0.1).",
+    "  --cycles            inspect: print the event dependency graph and its cycles instead of the summary.",
     "",
     "Commands:",
     list(implementedCommands),

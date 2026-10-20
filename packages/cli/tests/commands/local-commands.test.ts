@@ -71,6 +71,22 @@ async function run(argv: string[], host: CliHost): Promise<{ readonly code: numb
 const ok = (result: Record<string, never> | object): OperateOutcome => ({ target: "dev", response: { ok: true, result: result as never }, output: "", warnings: [] });
 
 describe("local operation commands", () => {
+  it("redrives dead letters with a selection, or lists them with --dry-run", async () => {
+    const { host, recorded } = await localHost(operation => ok({ queueId: "orders", dryRun: operation.kind === "queue.redrive" && operation.dryRun === true, count: 1, messages: [{ messageId: "m-1", attempts: 1, lastError: { code: "HOLQA_EVENT_DEPTH_EXCEEDED", message: "too deep" } }] }));
+    const dry = await run(["queue", "redrive", "orders", "--dry-run", "--limit", "5", "--message", "m-1"], host);
+    expect(dry.code).toBe(0);
+    expect(dry.stdout).toContain("Would redrive 1 dead-lettered message(s) of queue orders in the running dev session.");
+    expect(dry.stdout).toContain("m-1  attempts 1  last error HOLQA_EVENT_DEPTH_EXCEEDED: too deep");
+    const real = await run(["queue", "redrive", "orders", "--new-operation", "--json"], host);
+    expect(JSON.parse(real.stdout)).toMatchObject({ target: "dev", queueId: "orders", count: 1 });
+    expect(recorded.operations.map(entry => entry.operation)).toEqual([
+      { kind: "queue.redrive", queueId: "orders", messageId: "m-1", limit: 5, dryRun: true },
+      { kind: "queue.redrive", queueId: "orders", newOperation: true }
+    ]);
+    const invalid = await run(["queue", "redrive", "orders", "--limit", "0"], host);
+    expect(invalid.code).toBe(2);
+  });
+
   it("sends queue messages, resolving the application and state directory", async () => {
     const { host, recorded } = await localHost(() => ok({ queueId: "orders", messageId: "m-1" }));
     const result = await run(["queue", "send", "orders", "--data", "{\"orderId\":\"123\"}", "--delay", "30", "--app", "apps/infra.ts", "--json"], host);

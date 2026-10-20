@@ -119,7 +119,30 @@ Moving a file or renaming an export changes the entry point map and its contents
 | `triggers` | resource → handler (label: the trigger kind) |
 | `schema` | resource, handler or configuration entry → schema (label: the role) |
 
-Only relationships the declarations state are recorded. Which resources a handler calls at run time (for example `send` on another queue) and which configuration it reads are not derivable from declarations and are not in the graph. Declared dependencies are **Planned** ([resource graph](../concepts/resource-graph.md#dependencies-and-least-privilege)).
+Only relationships the declarations state are recorded. Which resources a handler publishes to at run time (for example `send` on another queue) is found by [event analysis](#event-analysis) instead, and is not part of this graph or of the manifest. Which configuration a handler reads is not recorded. Declared dependencies are **Planned** ([resource graph](../concepts/resource-graph.md#dependencies-and-least-privilege)).
+
+## Event analysis
+
+`compileApplication` also returns `events`, an `EventAnalysis` with the application's event dependency graph and its cycles ([event safety](../concepts/event-safety.md), [ADR 0026](../architecture/decisions/0026-event-safety-analysis-lineage-and-execution-guards.md)). It is not part of the manifest: publications follow from handler code, so implementation changes must not change the manifest or its fingerprint. `holqa inspect --cycles` prints it.
+
+| Input | Use |
+| --- | --- |
+| `sources` | Each handler's code is located (the `handler` property of the registration whose `id` is the handler's identifier, or the function it names) and scanned for `send`, `put` and `delete` calls. Without sources, only declared publications are known and handlers are `unavailable`. |
+| `modules`, `app`, `appExports` | Evaluated namespaces. A call's receiver (`resources.orders`, an alias, a destructured name, an import) is resolved by reading own data properties of evaluated values, never by running getters, and kept only when it is a queue or bucket handle. |
+| `resolveModule(specifier, from)` | Resolves imports as the runtime does. The CLI passes Bun's resolver, limited to modules inside the application root and outside `node_modules`. Without it, relative specifiers and `@/`, `~/` and `#` aliases are matched against known paths. |
+| Handler `events` | Declared `publishes` (known edges), `cycle` allowances and limits. Malformed policies are `HOLQA_DECLARATION_INVALID` errors; a declared target the application does not declare is `HOLQA_RESOURCE_NOT_FOUND`; only queues and buckets can be targets; `idempotency` is only valid on queue consumers and object event handlers. |
+
+| Graph element | Content |
+| --- | --- |
+| Resource node | `{ key: "resource:<id>", type, id, kind }` |
+| Handler node | `{ key: "handler:<id>", type, id, trigger, coverage, location?, cycle?, maxDepth?, maxPublications? }`; `coverage` is `complete`, `partial` (unresolved calls, or the registration was not found and the whole module was scanned as `potential`) or `unavailable`. |
+| Consumption edge | `{ from: resource, to: handler, relation: "consumes", event, prefix? }`; `event` is `queue.message`, `object.created`, `object.deleted`, `schedule.tick` or `http.request`. |
+| Publication edge | `{ from: handler, to: resource, relation: "publishes", operation, certainty, origin, call?, location?, keyPrefix?, keyExact?, via? }`; `certainty` is `known` or `potential`, `origin` is `analysis` or `declared`. |
+| `unresolved` | Publication-like calls whose receiver could not be resolved (`certainty: "unknown"`, no target). |
+
+Cycles are strongly connected components of the handler graph (a publication leads to every handler that consumes the event it causes, when the object key can match the handler's prefix). Each `EventCycle` is `{ status, certainty, handlers, path, allowedBy? }`: `reported` cycles avoid every handler with an `events.cycle` allowance and produce one `HOLQA_EVENT_CYCLE` diagnostic (a warning when the representative path is all `known`, information otherwise); `allowed` cycles pass through such a handler and produce none. Diagnostics never fail compilation. The analysis is deterministic: module order, discovery order and absolute paths do not change it.
+
+Helper functions are followed up to four calls deep, in the same module or in an application module whose source is available; publications found through them, through a handle passed to another function, or with an object key whose prefix may or may not match are `potential`.
 
 ## Determinism
 
@@ -208,13 +231,15 @@ Every problem is a `Diagnostic` with a registered code ([diagnostic codes](diagn
 
 | Export (`@holqa/compiler`) | Purpose |
 | --- | --- |
-| `compileApplication(input)` | Compiles `{ app, appModule, modules, runtime, adapters?, sources? }` into `{ ok, manifest, entrypoints, diagnostics }` or `{ ok: false, diagnostics }`. |
+| `compileApplication(input)` | Compiles `{ app, appModule, modules, runtime, adapters?, sources?, appExports?, resolveModule? }` into `{ ok, manifest, entrypoints, events, diagnostics }` or `{ ok: false, diagnostics }`. |
 | `selectHandlerModules(files, discovery, appModule)`, `compileGlob(pattern)` | Handler module selection with host-independent glob semantics. |
 | `discoverHandlers(modules)` | Handler registrations among evaluated modules' exports. |
 | `serializeManifest`, `serializeEntrypoints`, `fingerprintManifest` | Canonical serialization and the manifest fingerprint. |
 | `validateManifest`, `validateEntrypoints` | Readers for untrusted documents. |
 | `manifestJsonSchema`, `entrypointsJsonSchema`, `manifestVersion`, `entrypointsFormat` | The formats. |
 | `buildResourceGraph(manifest)` | The graph view. |
+| `analyzeEvents`, `checkEventPolicies`, `analyzePublications`, `buildEventGraph`, `analyzeEventCycles`, `eventCycleDiagnostics`, `describeCyclePath` | The [event analysis](#event-analysis) steps, for hosts that run them separately. |
+| `validateEventAnalysis(value)` | Reader for an untrusted event analysis, for example from another process. |
 | `moduleEvaluationFailure(path, error)`, `sortDiagnostics`, `hasErrors` | Helpers for hosts. |
 
 ## Related

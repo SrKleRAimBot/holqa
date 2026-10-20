@@ -1,8 +1,10 @@
 import type {
   BucketAccess,
   BucketDriver,
+  HandlerEventPolicy,
   HandlerInvoke,
   InvocationContext,
+  InvocationLineage,
   InvocationLogger,
   ListObjectsOptions,
   ObjectEventMetadata,
@@ -17,6 +19,12 @@ import type {
 } from "@holqa/core";
 
 import type {
+  HandlerEventOptions,
+  IdempotencyOptions,
+  ReadIdempotency
+} from "@/internal/event-options";
+import type {
+  AnyResource,
   HandlerRegistration,
   ResourceHandle
 } from "@/resources/handle";
@@ -40,6 +48,11 @@ import {
   freezeJson,
   requireOptions
 } from "@/internal/declaration";
+import {
+  readEventOptions,
+  readIdempotencyOptions,
+  runIdempotently
+} from "@/internal/event-options";
 import { ownerOf } from "@/internal/ownership";
 
 /** The access policies a bucket may require. */
@@ -90,6 +103,8 @@ export interface ObjectEventInfo {
 export interface ObjectCreatedContext {
   readonly object: ObjectInfo;
   readonly event: ObjectEventInfo;
+  /** The event's lineage (root operation, cause and depth), when the runtime tracks it. */
+  readonly lineage?: InvocationLineage;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
 }
@@ -98,8 +113,20 @@ export interface ObjectCreatedContext {
 export interface ObjectDeletedContext {
   readonly object: DeletedObjectInfo;
   readonly event: ObjectEventInfo;
+  /** The event's lineage (root operation, cause and depth), when the runtime tracks it. */
+  readonly lineage?: InvocationLineage;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
+}
+
+/**
+ * What an idempotency key function of an object event handler receives.
+ *
+ * @typeParam Info - The object description.
+ */
+export interface ObjectEventIdempotencyContext<Info> {
+  readonly object: Info;
+  readonly event: ObjectEventInfo;
 }
 
 /**
@@ -114,6 +141,10 @@ export interface ObjectCreatedOptions<HandlerId extends string> {
   readonly prefix?: string;
   /** Runs once per delivery. Throwing requests a redelivery. */
   readonly handler: (context: ObjectCreatedContext) => Promise<void> | void;
+  /** Event safety declarations: publications analysis cannot see, an intentional cycle, limits. */
+  readonly events?: HandlerEventOptions;
+  /** Skips events whose idempotency key (default: the event identifier) already completed. Requires a binding with an idempotency store. */
+  readonly idempotency?: boolean | IdempotencyOptions<ObjectEventIdempotencyContext<ObjectInfo>>;
 }
 
 /**
@@ -128,6 +159,10 @@ export interface ObjectDeletedOptions<HandlerId extends string> {
   readonly prefix?: string;
   /** Runs once per delivery. Throwing requests a redelivery. */
   readonly handler: (context: ObjectDeletedContext) => Promise<void> | void;
+  /** Event safety declarations: publications analysis cannot see, an intentional cycle, limits. */
+  readonly events?: HandlerEventOptions;
+  /** Skips events whose idempotency key (default: the event identifier) already completed. Requires a binding with an idempotency store. */
+  readonly idempotency?: boolean | IdempotencyOptions<ObjectEventIdempotencyContext<DeletedObjectInfo>>;
 }
 
 /**
@@ -315,15 +350,16 @@ export function bucket<const Id extends string>(options: BucketOptions<Id> & Che
       return driver.signUrl(key, checked);
     },
     onObjectCreated: <const HandlerId extends string>(registration: ObjectCreatedOptions<HandlerId> & CheckResourceId<HandlerId>) => {
-      const handlerId = readEventRegistration(registration, `object-created handler`, id);
-      const invoke: HandlerInvoke<"bucket.object-created"> = eventInvoke(objectInfoSchema, `object event for bucket "${id}"`, (object, event, context) => registration.handler({ object, event, signal: context.signal, log: context.log }));
+      const { handlerId, events, idempotency } = readEventRegistration<ObjectInfo>(registration, `object-created handler`, id);
+      const invoke: HandlerInvoke<"bucket.object-created"> = eventInvoke(objectInfoSchema, `object event for bucket "${id}"`, { handle, handlerId, idempotency }, (object, event, context) => registration.handler({ object, event, ...context.lineage === undefined ? {} : { lineage: context.lineage }, signal: context.signal, log: context.log }));
       const handler: ObjectCreatedHandler<Id, HandlerId> = Object.freeze({
         [descriptorKey]: Object.freeze({
           protocol: descriptorProtocol,
           type: "handler" as const,
           definition: freezeJson({
             id: handlerId,
-            trigger: { kind: "bucket.object-created" as const, resource: { kind: "bucket" as const, id }, options: definedEntries({ prefix: registration.prefix }) }
+            trigger: { kind: "bucket.object-created" as const, resource: { kind: "bucket" as const, id }, options: definedEntries({ prefix: registration.prefix }) },
+            ...definedEntries({ events, idempotency: idempotency?.policy })
           }),
           schemas: Object.freeze({ object: objectInfoSchema }),
           invoke
@@ -335,15 +371,16 @@ export function bucket<const Id extends string>(options: BucketOptions<Id> & Che
       return handler;
     },
     onObjectDeleted: <const HandlerId extends string>(registration: ObjectDeletedOptions<HandlerId> & CheckResourceId<HandlerId>) => {
-      const handlerId = readEventRegistration(registration, `object-deleted handler`, id);
-      const invoke: HandlerInvoke<"bucket.object-deleted"> = eventInvoke(deletedObjectSchema, `object event for bucket "${id}"`, (object, event, context) => registration.handler({ object, event, signal: context.signal, log: context.log }));
+      const { handlerId, events, idempotency } = readEventRegistration<DeletedObjectInfo>(registration, `object-deleted handler`, id);
+      const invoke: HandlerInvoke<"bucket.object-deleted"> = eventInvoke(deletedObjectSchema, `object event for bucket "${id}"`, { handle, handlerId, idempotency }, (object, event, context) => registration.handler({ object, event, ...context.lineage === undefined ? {} : { lineage: context.lineage }, signal: context.signal, log: context.log }));
       const handler: ObjectDeletedHandler<Id, HandlerId> = Object.freeze({
         [descriptorKey]: Object.freeze({
           protocol: descriptorProtocol,
           type: "handler" as const,
           definition: freezeJson({
             id: handlerId,
-            trigger: { kind: "bucket.object-deleted" as const, resource: { kind: "bucket" as const, id }, options: definedEntries({ prefix: registration.prefix }) }
+            trigger: { kind: "bucket.object-deleted" as const, resource: { kind: "bucket" as const, id }, options: definedEntries({ prefix: registration.prefix }) },
+            ...definedEntries({ events, idempotency: idempotency?.policy })
           }),
           schemas: Object.freeze({ object: deletedObjectSchema }),
           invoke
@@ -365,15 +402,33 @@ export function bucket<const Id extends string>(options: BucketOptions<Id> & Che
  *
  * @param schema - The schema of the event's object description.
  * @param subject - What is validated, for messages.
+ * @param handler - The bucket, the handler's identifier and its idempotency policy.
  * @param run - Calls the user's handler with the validated object and the event's identity.
  * @returns The `invoke` function.
  */
-function eventInvoke<Info>(schema: StandardJsonSchemaV1<Info>, subject: string, run: (object: Info, event: ObjectEventInfo, context: InvocationContext<ObjectEventMetadata>) => Promise<void> | void): (input: unknown, context: InvocationContext<ObjectEventMetadata>) => Promise<unknown> {
+function eventInvoke<Info>(schema: StandardJsonSchemaV1<Info>, subject: string, handler: EventHandlerIdentity<Info>, run: (object: Info, event: ObjectEventInfo, context: InvocationContext<ObjectEventMetadata>) => Promise<void> | void): (input: unknown, context: InvocationContext<ObjectEventMetadata>) => Promise<unknown> {
   return async (input, context) => {
     const object = await validateInput(schema, input, subject);
-    await run(object, eventInfo(context.metadata), context);
+    const event = eventInfo(context.metadata);
+    const { idempotency, handlerId } = handler;
+    if (idempotency === undefined)
+      await run(object, event, context);
+    else
+      await runIdempotently({ app: ownerOf(handler.handle, `handler "${handlerId}"`), handlerId, policy: idempotency.policy, key: idempotency.key === undefined ? event.id : idempotency.key({ object, event }), log: context.log }, () => run(object, event, context));
     return undefined;
   };
+}
+
+/**
+ * Which handler an object event `invoke` belongs to, for idempotency.
+ *
+ * @typeParam Info - The object description.
+ */
+interface EventHandlerIdentity<Info> {
+  /** The bucket handle, which knows its application. */
+  readonly handle: AnyResource;
+  readonly handlerId: ResourceId;
+  readonly idempotency: ReadIdempotency<ObjectEventIdempotencyContext<Info>> | undefined;
 }
 
 /**
@@ -382,18 +437,20 @@ function eventInvoke<Info>(schema: StandardJsonSchemaV1<Info>, subject: string, 
  * @param registration - The untrusted registration options.
  * @param label - What is registered, for messages.
  * @param bucketId - The bucket's identifier, for messages.
- * @returns The handler's validated identifier.
+ * @returns The handler's validated identifier, event policy and idempotency policy.
  * @throws {HolqaError} `HOLQA_RESOURCE_ID_INVALID` or `HOLQA_DECLARATION_INVALID`.
  */
-function readEventRegistration(registration: object, label: string, bucketId: string): ResourceId {
-  const raw = requireOptions(registration as { readonly id?: unknown; readonly prefix?: unknown; readonly handler?: unknown }, `${label} of bucket "${bucketId}"`);
+function readEventRegistration<Info>(registration: object, label: string, bucketId: string): { readonly handlerId: ResourceId; readonly events: HandlerEventPolicy | undefined; readonly idempotency: ReadIdempotency<ObjectEventIdempotencyContext<Info>> | undefined } {
+  const raw = requireOptions(registration as { readonly id?: unknown; readonly prefix?: unknown; readonly handler?: unknown; readonly events?: unknown; readonly idempotency?: unknown }, `${label} of bucket "${bucketId}"`);
   const problems = new DeclarationProblems(`${label} "${String(raw.id)}" of bucket "${bucketId}"`);
   const handlerIdCandidate = problems.identifier(raw.id, "handler id");
   if (raw.prefix !== undefined && typeof raw.prefix !== "string")
     problems.invalid("\"prefix\" must be a string.");
   if (typeof raw.handler !== "function")
     problems.invalid("\"handler\" must be a function.");
-  return problems.valid(handlerIdCandidate);
+  const events = readEventOptions(raw.events, problems);
+  const idempotency = readIdempotencyOptions<ObjectEventIdempotencyContext<Info>>(raw.idempotency, problems);
+  return { handlerId: problems.valid(handlerIdCandidate), events, idempotency };
 }
 
 /**

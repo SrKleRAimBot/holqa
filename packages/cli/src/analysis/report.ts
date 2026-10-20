@@ -8,6 +8,7 @@ import type { AnalysisOutcome } from "@/analysis/host";
 import {
   hasErrors,
   validateEntrypoints,
+  validateEventAnalysis,
   validateManifest
 } from "@holqa/compiler";
 import {
@@ -27,6 +28,8 @@ export interface AnalysisReport {
   readonly manifest?: unknown;
   /** The entry point map, present only when `ok` is `true`. */
   readonly entrypoints?: unknown;
+  /** The event dependency graph and its cycles, present only when `ok` is `true`. */
+  readonly events?: unknown;
   readonly diagnostics: readonly Diagnostic[];
 }
 
@@ -36,8 +39,8 @@ const knownCodes: ReadonlySet<string> = new Set(Object.values(diagnosticCodes));
 /**
  * Reads the report an analysis process sent. The process ran application
  * code, so its output is untrusted: the report must be well-formed JSON,
- * every diagnostic must use a registered code, and the manifest and entry
- * point map must pass the compiler's validators.
+ * every diagnostic must use a registered code, and the manifest, entry
+ * point map and event analysis must pass the compiler's validators.
  *
  * @param text - The raw message.
  * @param output - What the process printed, attached to the outcome.
@@ -68,7 +71,12 @@ export async function readAnalysisReport(text: string, output: string): Promise<
   const entrypoints = await validateEntrypoints("entrypoints" in report ? report.entrypoints : undefined, manifest.value);
   if (!entrypoints.ok)
     return { ok: false, diagnostics: entrypoints.error, output };
-  return { ok: true, manifest: manifest.value, entrypoints: entrypoints.value, diagnostics, output };
+  if (!("events" in report) || report.events === undefined)
+    return { ok: true, manifest: manifest.value, entrypoints: entrypoints.value, diagnostics, output };
+  const events = validateEventAnalysis(report.events);
+  if (!events.ok)
+    return { ok: false, diagnostics: events.error, output };
+  return { ok: true, manifest: manifest.value, entrypoints: entrypoints.value, events: events.value, diagnostics, output };
 }
 
 /**

@@ -13,11 +13,11 @@ What exists today:
 - A pnpm + Turborepo monorepo with strict TypeScript, ESLint, Bun tests, and enforced package boundaries.
 - `@holqa/core`: `Result`, structured `Diagnostic` values, a diagnostic code registry, validated `ResourceId`s, and the descriptor protocol and runtime binding contract behind the resource model.
 - `@holqa/sdk`: `defineApp`, resource declarations (`queue`, `bucket`, `schedule`, `http.api`), configuration (`secret`, `variable`), typed resource handles inferred from source, handlers for queues, buckets (object created and deleted) and schedules, queue sends with delays, object operations with bounded listings and signed URLs, and HTTP routes, RPC procedures and typed middleware.
-- `@holqa/testing`: compile-time type assertions and `createTestApp` for deterministic integration tests (virtual clock, event flushing, failure injection, duplicate delivery).
-- `@holqa/compiler`: deterministic canonical JSON, schema contracts, and compilation of an application into a validated resource graph and a deterministic manifest (version 1) with an entry point map. See the [compiler specification](reference/compiler-specification.md).
-- `@holqa/runtime-bun`: an invocation dispatcher with lifecycle, limits, cancellation and structured logs that executes compiled applications' HTTP routes and RPC procedures on Bun, and delivers queue messages, object events and scheduled runs with retries, backoff, dead-lettering and graceful shutdown. See the [runtime reference](reference/runtime.md).
+- `@holqa/testing`: compile-time type assertions and `createTestApp` for deterministic integration tests (virtual clock, event flushing, failure injection, duplicate delivery, a simulation budget and publication chain inspection).
+- `@holqa/compiler`: deterministic canonical JSON, schema contracts, compilation of an application into a validated resource graph and a deterministic manifest (version 1) with an entry point map, and an event dependency graph with cycle detection. See the [compiler specification](reference/compiler-specification.md) and [event safety](concepts/event-safety.md).
+- `@holqa/runtime-bun`: an invocation dispatcher with lifecycle, limits, cancellation and structured logs that executes compiled applications' HTTP routes and RPC procedures on Bun, and delivers queue messages, object events and scheduled runs with retries, backoff, dead-lettering, event lineage, depth and budget limits and graceful shutdown. See the [runtime reference](reference/runtime.md).
 - `@holqa/local`: a local binding with SQLite-backed queues, filesystem object storage with events and development signed URLs, and a clock-driven scheduler, plus inspection. See the [local environment reference](reference/local.md).
-- `@holqa/cli`: a `holqa` binary that prints help and version information, inspects an application (`holqa inspect`), writes its manifest (`holqa build --manifest`), runs it locally with reloads (`holqa dev`), invokes handlers and sends events (`holqa invoke`, `queue send`, `storage put`, `cron run`), prints local state (`holqa state`), checks the project (`holqa doctor`), and reports structured diagnostics (with `--json`). See the [local development guide](guides/local-development.md).
+- `@holqa/cli`: a `holqa` binary that prints help and version information, inspects an application and its event cycles (`holqa inspect`, `--cycles`), writes its manifest (`holqa build --manifest`), runs it locally with reloads (`holqa dev`), invokes handlers and sends events (`holqa invoke`, `queue send`, `storage put`, `cron run`), redrives dead letters (`holqa queue redrive`), prints local state (`holqa state`), checks the project (`holqa doctor`), and reports structured diagnostics (with `--json`). See the [local development guide](guides/local-development.md).
 
 Disposable prototypes from the [M0 milestone](milestones/m0/index.md) live in [`experiments/`](../experiments/README.md); they are not part of the framework.
 
@@ -31,6 +31,7 @@ Everything else (`holqa openapi generate`, module hot-swapping, worker isolation
 | See what is built and what comes next | [Roadmap](roadmap.md) |
 | Try the repository or contribute | [Getting started](getting-started/index.md), [Development setup](contributing/development.md) |
 | Run, debug and test an application locally | [Local development guide](guides/local-development.md) |
+| Find event cycles and bound event-driven work | [Event safety guide](guides/event-safety.md) |
 | Understand the architecture | [Architecture overview](architecture/overview.md) |
 | Look up a package, CLI flag, or diagnostic code | [Reference](#reference) |
 
@@ -45,6 +46,7 @@ Everything else (`holqa openapi generate`, module hot-swapping, worker isolation
 | [Resource graph](concepts/resource-graph.md) | How resources, triggers, handlers, and dependencies form one model. |
 | [Type safety and schemas](concepts/type-safety-and-schemas.md) | Source-based inference, Standard Schema, runtime validation, compatibility. |
 | [Triggers and execution](concepts/triggers-and-execution.md) | HTTP, RPC, queues, storage events, schedules, and the Bun execution model. |
+| [Event safety](concepts/event-safety.md) | Event cycle analysis, event lineage, runtime limits, idempotency and replay (**Implemented**). |
 | [Infrastructure providers](concepts/infrastructure-providers.md) | Contracts, runtime drivers, provisioning providers, capability negotiation. |
 | [Local development](concepts/local-development.md) | The local environment: `@holqa/local` drivers, `holqa dev`, reloads and `createTestApp` (**Implemented**). |
 | [Agent-native development](concepts/agent-native-development.md) | Structured output, stable diagnostics, skills, and safe automation. |
@@ -88,6 +90,9 @@ Everything else (`holqa openapi generate`, module hot-swapping, worker isolation
 | [0021](architecture/decisions/0021-schema-contracts-wire-payloads-and-compatibility.md) | Schema contracts, wire payloads and compatibility |
 | [0022](architecture/decisions/0022-manifest-v1-and-entry-point-map.md) | Manifest version 1 and a separate entry point map |
 | [0023](architecture/decisions/0023-common-invocation-engine-and-http-rpc-execution.md) | A common invocation engine, with HTTP and RPC as its first transports |
+| [0024](architecture/decisions/0024-event-delivery-sources-and-local-drivers.md) | Event delivery through binding sources, with local drivers as the first binding |
+| [0025](architecture/decisions/0025-dev-supervisor-and-process-generations.md) | A development supervisor with one process per generation |
+| [0026](architecture/decisions/0026-event-safety-analysis-lineage-and-execution-guards.md) | Event safety: static cycle analysis, event lineage and execution guards |
 
 ## Milestones
 

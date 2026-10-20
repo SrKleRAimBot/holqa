@@ -26,6 +26,9 @@ Framework-neutral contracts and primitives shared by every Holqa package.
 | `RuntimeBinding`, `bindApp()`, `resolveDriver()`, `readConfig()`, `checkCapabilities()` | How logical resources resolve to drivers at run time. |
 | `ResourceSources`, `QueueSource`, `ObjectEventSource`, `ScheduleSource`, `DeliverySource`, `LeasedDelivery` | The consuming half of a binding: leased deliveries and due scheduled runs that runtimes deliver to handlers. |
 | `DeliveryTrace`, `DriverOperationContext` | The trace a runtime passes to drivers when handler code sends or writes, and that bindings return with deliveries (`LeasedDelivery.trace`). |
+| `InvocationLineage`, `lineageOfDelivery()`, `childTrace()` | Event lineage: root operation, cause and depth of every invocation ([event safety](../../docs/concepts/event-safety.md)). |
+| `HandlerEventPolicy`, `HandlerIdempotencyPolicy`, `eventPolicyProblems()`, `defaultEventLimits`, `isEventGuardCode()` | The `events` and `idempotency` declarations of handlers, their checks and the default event limits. |
+| `OperationBudgetStore`, `IdempotencyStore`, `createIdempotencyKey()`, `createMemoryIdempotencyStore()` | Stores a binding provides for per-operation budgets and duplicate suppression, the key convention, and a single-process store. |
 | `ObjectEvent`, `readObjectEvent()`, `checkObjectKey()` | The portable `holqa.object-event/1` envelope and object key rules. |
 | `parseCronSchedule()`, `nextCronTime()`, `backoffDelaySeconds()` | Cron evaluation in an IANA time zone (with defined daylight-saving behavior) and deterministic redelivery delays. |
 | `HttpInvocationInput`, `HttpRejectedError`, `HttpErrorBody`, `rpcProtocolFormat`, `RpcResponseEnvelope`, ... | HTTP and `holqa.rpc/1` wire contracts shared by the SDK, runtimes and future clients. |

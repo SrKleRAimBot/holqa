@@ -16,8 +16,9 @@ import type {
   CheckMiddlewareChain,
   MiddlewareChainContext
 } from "@/http/middleware";
-import type { HandlerRegistration } from "@/resources/handle";
+import type { HandlerEventOptions } from "@/internal/event-options";
 
+import type { HandlerRegistration } from "@/resources/handle";
 import {
   decodeJsonPayload,
   descriptorKey,
@@ -49,6 +50,7 @@ import {
   freezeJson,
   requireOptions
 } from "@/internal/declaration";
+import { readEventOptions } from "@/internal/event-options";
 
 /** What a procedure handler receives. `input` is validated before the handler runs. */
 export interface ProcedureContext<Input, Context extends object> {
@@ -88,6 +90,8 @@ export interface ProcedureOptions<
   readonly middleware?: Middleware & CheckMiddlewareChain<Context, Middleware>;
   /** The implementation. Returns the output in the output schema's input form; it is validated and sent in its output form. */
   readonly handler: (context: ProcedureContext<Input, MiddlewareChainContext<Context, Middleware>>) => NoInfer<InferInput<Output> | Promise<InferInput<Output>>>;
+  /** Event safety declarations: publications analysis cannot see, and the publication limit. */
+  readonly events?: HandlerEventOptions;
 }
 
 /**
@@ -133,6 +137,7 @@ interface RuntimeProcedureOptions {
   readonly output: StandardSchemaV1;
   readonly middleware?: readonly AnyHttpMiddleware[];
   readonly handler: (context: never) => unknown;
+  readonly events?: HandlerEventOptions;
 }
 
 /**
@@ -155,6 +160,7 @@ export function createProcedure(host: ProcedureHost, options: RuntimeProcedureOp
   const ownMiddleware = middlewareList(raw.middleware, problems);
   if (typeof raw.handler !== "function")
     problems.invalid("\"handler\" must be a function.");
+  const events = readEventOptions(raw.events, problems);
   const id = problems.valid(idCandidate);
   const subject = `procedure "${id}"`;
 
@@ -196,7 +202,8 @@ export function createProcedure(host: ProcedureHost, options: RuntimeProcedureOp
       type: "handler" as const,
       definition: freezeJson({
         id,
-        trigger: { kind: "http.procedure" as const, resource: { kind: "http.api" as const, id: host.apiId }, options: { operation: options.operation } }
+        trigger: { kind: "http.procedure" as const, resource: { kind: "http.api" as const, id: host.apiId }, options: { operation: options.operation } },
+        ...definedEntries({ events })
       }),
       schemas: Object.freeze({ ...definedEntries({ input: options.input }), output: options.output }),
       invoke

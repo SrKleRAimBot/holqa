@@ -1,6 +1,6 @@
 # Local development
 
-> **Status:** **Implemented** for the local drivers (`@holqa/local`), the Bun runtime (`@holqa/runtime-bun`), the development supervisor `holqa dev` with reload by process restart, the operation commands (`holqa invoke`, `queue send`, `storage put`, `cron run`, `state`, `doctor`) and `createTestApp` in `@holqa/testing`. Module-level hot-swapping, worker isolation and the Vite integration are **Planned**. All packages are private and unpublished. See Phase 3 of the [roadmap](../roadmap.md).
+> **Status:** **Implemented** for the local drivers (`@holqa/local`), the Bun runtime (`@holqa/runtime-bun`), the development supervisor `holqa dev` with reload by process restart, the operation commands (`holqa invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor`) and `createTestApp` in `@holqa/testing`. Module-level hot-swapping, worker isolation and the Vite integration are **Planned**. All packages are private and unpublished. See Phase 3 of the [roadmap](../roadmap.md).
 
 Local development is central to Holqa. A developer should be able to clone an application and run it, including its queues, storage, and schedules, without cloud credentials, Docker, or several terminal processes. This page describes the local environment, what exists of it today, and the constraints it must respect. For a step-by-step walkthrough, see the [local development guide](../guides/local-development.md); for every command and its JSON output, see the [CLI reference](../reference/cli.md).
 
@@ -31,6 +31,7 @@ Local development is central to Holqa. A developer should be able to clone an ap
 | `holqa dev` | Run the application locally with the local drivers, and rebuild when files change. |
 | `holqa invoke <handler>` | Invoke a queue, object event or schedule handler once with a test input. |
 | `holqa queue send <queue>` | Send a validated message to a local queue. |
+| `holqa queue redrive <queue>` | Redrive (or, with `--dry-run`, list) dead-lettered messages; `--new-operation` gives each a fresh lineage. See [event safety](event-safety.md#replay). |
 | `holqa storage put <bucket> <file>` | Upload a file to a local bucket, which emits `object.created`. |
 | `holqa cron run <schedule>` | Run a schedule's handler now, recorded as a manual run. |
 | `holqa state` | Print local queue messages, objects, events and schedule runs. |

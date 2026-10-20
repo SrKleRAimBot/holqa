@@ -11,11 +11,13 @@ import type {
   InvocationOutcome,
   InvocationRequest
 } from "@/dispatch/dispatcher";
+import type { EventGuardViolation } from "@/dispatch/event-guard";
 import type { StructuredLogger } from "@/logging/log";
 
 import {
   backoffDelaySeconds,
-  diagnosticCodes
+  diagnosticCodes,
+  lineageOfDelivery
 } from "@holqa/core";
 
 import { describeError } from "@/logging/log";
@@ -46,6 +48,8 @@ export interface DeliveryStats {
   readonly retried: number;
   readonly deadLettered: number;
   readonly discarded: number;
+  /** Deliveries an event guard (depth, age, publication limit or operation budget) ended without a retry; also counted as dead-lettered or discarded. */
+  readonly blocked: number;
   /** Deliveries released for another attempt because the runtime stopped while they ran. */
   readonly released: number;
   /** Settlements that had no effect because the lease had already expired. */
@@ -72,6 +76,8 @@ export interface DeliveryWorkerOptions<Body> {
   readonly logger: StructuredLogger;
   /** Waits before retrying after the source failed; resolves early when `signal` aborts. Defaults to one second. */
   readonly pause?: (signal: AbortSignal) => Promise<void>;
+  /** Checks a delivery's depth and age before it is prepared; a violation ends it without a retry. */
+  readonly admit?: (delivery: LeasedDelivery<Body>) => EventGuardViolation | undefined;
 }
 
 /** Codes that mean the runtime, not the handler, ended the invocation during shutdown. */
@@ -100,7 +106,7 @@ export class DeliveryWorker<Body> {
   /** The receive loop, once started. */
   private loop: Promise<void> | undefined;
   /** Counters. */
-  private counts = { received: 0, acknowledged: 0, retried: 0, deadLettered: 0, discarded: 0, released: 0, leasesLost: 0 };
+  private counts = { received: 0, acknowledged: 0, retried: 0, deadLettered: 0, discarded: 0, blocked: 0, released: 0, leasesLost: 0 };
 
   /**
    * Creates a worker; nothing happens until {@link start}.
@@ -208,6 +214,13 @@ export class DeliveryWorker<Body> {
         await this.exhaust(delivery, { code: diagnosticCodes.deliveryAttemptsExhausted, message: `The delivery was received ${delivery.attempt} times without being settled; at most ${policy.maxAttempts} attempts are allowed.`, attempt: delivery.attempt }, log);
         return;
       }
+      const refused = this.options.admit?.(delivery);
+      if (refused !== undefined) {
+        this.counts.blocked += 1;
+        log.write("warn", "an event guard refused the delivery; it is not retried", { code: refused.code });
+        await this.exhaust(delivery, { code: refused.code, message: refused.message, attempt: delivery.attempt }, log);
+        return;
+      }
       let prepared: PreparedDelivery;
       try {
         prepared = await this.options.prepare(delivery);
@@ -229,17 +242,33 @@ export class DeliveryWorker<Body> {
       if (prepared.kind === "fail") {
         failure = { code: prepared.code, message: prepared.message, attempt: delivery.attempt };
       } else {
+        // Retries keep the delivery's lineage: only newly published events are one hop deeper.
+        const lineage = lineageOfDelivery(delivery.trace, delivery.id);
         const outcome = await this.withRenewedLease(delivery, log, () => this.options.dispatch({
           handlerId,
           input: prepared.input,
           metadata: prepared.metadata,
-          correlationId: delivery.trace?.correlationId ?? delivery.id,
-          ...delivery.trace?.causationId === undefined ? {} : { causationId: delivery.trace.causationId },
+          correlationId: lineage.correlationId,
+          ...lineage.causationId === undefined ? {} : { causationId: lineage.causationId },
+          rootId: lineage.rootId,
+          depth: lineage.depth,
           timeoutMs,
           logFields: { deliveryId: delivery.id, attempt: delivery.attempt }
         }));
         if (outcome.ok) {
           await this.settle(delivery, "acknowledged", () => this.options.source.acknowledge(delivery.receipt), log);
+          return;
+        }
+        // A handler stopped by an event guard would run into the same limit
+        // on every retry: end the delivery now, with the guard's code, even
+        // when the handler wrapped the guard's error in its own.
+        // Only this invocation's own refusal counts: a guard code thrown by
+        // application code (or copied from elsewhere) is an ordinary failure.
+        const { blocked } = outcome;
+        if (blocked !== undefined) {
+          this.counts.blocked += 1;
+          log.write("warn", "an event guard stopped the handler; the delivery is not retried", { code: blocked.code });
+          await this.exhaust(delivery, { code: blocked.code, message: blocked.message, attempt: delivery.attempt, invocationId: outcome.invocationId }, log);
           return;
         }
         failure = { code: outcome.failure.code, message: outcome.failure.message, attempt: delivery.attempt, invocationId: outcome.invocationId };
@@ -355,7 +384,7 @@ async function pauseOneSecond(signal: AbortSignal): Promise<void> {
  * @returns The totals.
  */
 export function sumDeliveryStats(stats: readonly DeliveryStats[]): DeliveryStats {
-  const total = { received: 0, acknowledged: 0, retried: 0, deadLettered: 0, discarded: 0, released: 0, leasesLost: 0 };
+  const total = { received: 0, acknowledged: 0, retried: 0, deadLettered: 0, discarded: 0, blocked: 0, released: 0, leasesLost: 0 };
   for (const entry of stats) {
     for (const key of Object.keys(total) as Array<keyof DeliveryStats>)
       total[key] += entry[key];
