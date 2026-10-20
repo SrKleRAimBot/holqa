@@ -12,3 +12,5 @@ export {
   toUnixNano
 } from "@/otlp-json";
 export type { OtlpAnyValue, OtlpKeyValue } from "@/otlp-json";
+export { otlp } from "@/provider";
+export type { OtlpTelemetryOptions } from "@/provider";

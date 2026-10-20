@@ -69,8 +69,10 @@ export class MemoryS3 {
   readonly subscriptions = new Map<string, { readonly bucket: string; readonly queue: Queued[] }>();
   /** Requests answered with this status next, for fault injection. */
   failNext: number | undefined;
-  /** Whether notifications carry user metadata, as MinIO's do. */
+  /** Whether notifications carry user metadata, as MinIO's and RustFS's do. */
   includeUserMetadata = true;
+  /** How notifications name user metadata: MinIO keeps the `X-Amz-Meta-` prefix, RustFS drops it. */
+  userMetadataPrefix = "X-Amz-Meta-";
   requests = 0;
   private sequence = 0;
 
@@ -200,7 +202,7 @@ export class MemoryS3 {
    */
   private notify(bucket: string, eventName: string, key: string, size: number | undefined, etag: string | undefined, headers: Readonly<Record<string, string>>): void {
     const sequencer = String(++this.sequence).padStart(16, "0");
-    const userMetadata = Object.fromEntries(Object.entries(headers).filter(([name]) => name.startsWith("x-amz-meta-")).map(([name, value]) => [name.replace(/^x-amz-meta-/, "X-Amz-Meta-"), value]));
+    const userMetadata = Object.fromEntries(Object.entries(headers).filter(([name]) => name.startsWith("x-amz-meta-")).map(([name, value]) => [name.replace(/^x-amz-meta-/, this.userMetadataPrefix), value]));
     const record = { eventName, eventTime: new Date(this.clock.now()).toISOString(), s3: { bucket: { name: bucket }, object: { key: encodeURIComponent(key).replaceAll("%2F", "/").replaceAll("%20", "+"), ...size === undefined ? {} : { size }, ...etag === undefined ? {} : { eTag: etag }, sequencer, ...this.includeUserMetadata ? { userMetadata } : {} } } };
     const bytes = new TextEncoder().encode(JSON.stringify({ EventName: eventName, Key: `${bucket}/${key}`, Records: [record] }));
     for (const subscription of this.subscriptions.values()) {

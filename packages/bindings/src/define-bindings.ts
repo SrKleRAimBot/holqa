@@ -88,6 +88,14 @@ export interface BindingsConfig<App extends BindableApp> {
    * default provider when it implements it.
    */
   readonly extensions?: readonly AnyBindingProvider[];
+  /**
+   * How many processes run the application in this environment, for example
+   * container replicas. Default 1. Providers whose state lives in one process
+   * (an in-process scheduler) or on one machine cannot serve several replicas
+   * correctly, which validation reports instead of letting runs duplicate or
+   * messages stay on one replica.
+   */
+  readonly replicas?: number;
 }
 
 /** A compile-time error carried as a type, so the message appears in the editor. */
@@ -145,6 +153,8 @@ export interface BindingsDefinition<App extends BindableApp = BindableApp> {
   readonly "resources": Readonly<Record<string, AnyBindingProvider>>;
   readonly "services": ServiceBindings;
   readonly "extensions": readonly AnyBindingProvider[];
+  /** How many processes run the application; absent means one. */
+  readonly "replicas"?: number;
   /** Phantom marker that keeps the application's type for tools; never set. */
   readonly "~app"?: App;
 }
@@ -190,7 +200,7 @@ export function defineBindings<const App extends BindableApp, const Config exten
   if (typeof input !== "object" || input === null)
     throw invalid(["the configuration must be an object."]);
   for (const key of Object.keys(input)) {
-    if (!["name", "defaults", "kinds", "resources", "services", "extensions"].includes(key))
+    if (!["name", "defaults", "kinds", "resources", "services", "extensions", "replicas"].includes(key))
       problems.push(`"${key}" is not a binding configuration setting.`);
   }
   const name = input.name ?? "default";
@@ -221,6 +231,8 @@ export function defineBindings<const App extends BindableApp, const Config exten
     if (!["config", "telemetry", "idempotency", "operation-budgets"].includes(key))
       problems.push(`"services.${key}" is not a service; the services are config, telemetry, idempotency and operation-budgets.`);
   }
+  if (input.replicas !== undefined && !(Number.isSafeInteger(input.replicas) && input.replicas >= 1 && input.replicas <= 10_000))
+    problems.push("\"replicas\" must be a whole number from 1 to 10000.");
   if (problems.length > 0)
     throw invalid(problems);
   return Object.freeze({
@@ -231,7 +243,8 @@ export function defineBindings<const App extends BindableApp, const Config exten
     kinds: Object.freeze({ ...kinds }) as BindingsDefinition<App>["kinds"],
     resources: Object.freeze({ ...resources }) as BindingsDefinition<App>["resources"],
     services: Object.freeze(Object.fromEntries(Object.entries(services).map(([key, value]) => [key, Array.isArray(value) ? Object.freeze([...value]) : value]))) as ServiceBindings,
-    extensions: Object.freeze([...extensions as readonly AnyBindingProvider[]])
+    extensions: Object.freeze([...extensions as readonly AnyBindingProvider[]]),
+    ...input.replicas === undefined ? {} : { replicas: input.replicas }
   });
 }
 

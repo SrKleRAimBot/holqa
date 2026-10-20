@@ -4,7 +4,7 @@ import { defineBindings } from "@holqa/bindings";
 import { localEnvironment } from "@holqa/local";
 
 import app from "@test/support/app";
-import { container } from "@/host";
+import { container } from "@/providers";
 
 /** The host serves HTTP and static files; the local platform, in memory, the rest. */
 const host = container.host({ root: import.meta.dir });

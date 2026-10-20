@@ -35,7 +35,7 @@ function columns(rows: readonly (readonly string[])[]): string[] {
  * @returns The text, without a trailing newline.
  */
 export function formatBindingReport(report: BindingReport): string {
-  const lines = [`Bindings "${report.name}" for application "${report.application}"`, "", "Resources:"];
+  const lines = [`Bindings "${report.name}" for application "${report.application}"${(report.replicas ?? 1) > 1 ? ` (${report.replicas} replicas)` : ""}`, "", "Resources:"];
   lines.push(...columns(report.resources.map(resource => [
     resource.id,
     resource.kind,

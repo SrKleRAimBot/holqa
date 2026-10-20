@@ -42,6 +42,8 @@ export interface BindingManifest {
   readonly application: string;
   /** The `sha256:` fingerprint of the application manifest this binding was resolved against. */
   readonly applicationManifest: string;
+  /** How many processes run the application in this environment. */
+  readonly replicas: number;
   /** The provider protocol version and the contract versions of the Holqa that produced it, for compatibility checks. */
   readonly compatibility: {
     readonly bindingProtocol: BindingProtocolVersion;
@@ -85,6 +87,7 @@ export function createBindingManifest(report: BindingReport, options: { readonly
     name: report.name,
     application: report.application,
     applicationManifest: options.applicationManifest,
+    replicas: report.replicas,
     compatibility: { bindingProtocol: bindingProtocolVersion, contracts: { ...bindingContracts } },
     resources: report.resources,
     services: report.services,

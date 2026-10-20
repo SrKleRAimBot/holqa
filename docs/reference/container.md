@@ -39,6 +39,13 @@ export default defineBindings(app, {
 
 The host needs no credentials and provisions nothing. Static sites are served from files with path containment and single-page fallback, as in the [local environment](local.md).
 
+## Scheduling and secrets
+
+| Provider | Role | Behaviour |
+| --- | --- | --- |
+| `container.schedules({ name? })` | Resource (`schedule`) | Evaluates cron expressions and time zones in the application process and starts runs through the shared runtime, with the local scheduler's overlap policies (`skip`, `allow`), daylight-saving rules and missed-run behaviour: runs due while the process is down are not backfilled, and after a late wake-up only the latest due run starts. Its state is in the process (`topology.state: "process"`), so a configuration with `replicas` above 1 is rejected. |
+| `container.secretFiles({ directory?, name? })` | Service (`config`) | Reads one value per file named like the value (default directory `/run/secrets`, where container platforms mount secrets), without a trailing newline; other entries such as `..data` are ignored. `refresh` reads the directory again, so rotated secrets reach credentials resolved afterwards. A missing directory fails the start with `HOLQA_BINDING_FAILED`. Combine it with the environment: `services: { config: [container.secretFiles(), environmentConfig()] }`. |
+
 ## Packaging
 
 ```bash

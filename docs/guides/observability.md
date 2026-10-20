@@ -143,6 +143,32 @@ const store = createLocalTelemetryStore({ directory: ".holqa/local" });
 const runtime = createRuntime({ app, handlers, binding: env.binding, log: store.writeLog, telemetry: { exporters: [store.exporter] } });
 ```
 
+## Select the telemetry destination in a binding configuration
+
+`otlp.telemetry(options)` from `@holqa/opentelemetry` is a telemetry service provider, so the destination is chosen per environment, independently of compute and resources:
+
+```ts
+import { defineBindings } from "@holqa/bindings";
+import { credentialRef } from "@holqa/core";
+import { otlp } from "@holqa/opentelemetry";
+
+export default defineBindings(app, {
+  name: "staging",
+  defaults: platformProvider, // a platform provider
+  services: { telemetry: otlp.telemetry({ endpoint: "http://collector:4318", headers: { authorization: credentialRef("OTLP_AUTHORIZATION") } }) }
+});
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `endpoint` | required | The OTLP/HTTP receiver's base URL. URLs with credentials are rejected. |
+| `headers` | none | Header values as credential references, resolved when the binding starts and never logged. |
+| `signals` | all | `{ traces, metrics, logs }`; log records are handed over only when the runtime's `telemetry.exportLogs` is set. |
+| `timeoutMs` | `10000` | The time limit of one export request. |
+| `name` | `otlp` | The provider's name. |
+
+Exports run in the runtime's bounded background pipeline: a receiver that is down loses only the affected batches and never fails an invocation. The binding manifest lists the receiver as a connector and the header references as credentials.
+
 ## Propagate the trace to outgoing calls
 
 Handler and middleware arguments include `telemetry` when telemetry is recorded. Pass its `traceparent` to services you call, so their spans join the trace:

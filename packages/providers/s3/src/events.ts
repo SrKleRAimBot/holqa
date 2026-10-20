@@ -26,7 +26,7 @@ export interface S3EventRecord {
   readonly sequencer: string;
   /** The store's event name, for example `s3:ObjectCreated:Put`. */
   readonly eventName: string;
-  /** The writer's trace, when the store includes user metadata in notifications (MinIO does; AWS S3 does not). */
+  /** The writer's trace, when the store includes user metadata in notifications (MinIO and RustFS do; AWS S3 does not). */
   readonly trace?: DeliveryTrace;
 }
 
@@ -39,7 +39,8 @@ export interface S3EventRecord {
 function traceFrom(metadata: unknown): DeliveryTrace | undefined {
   if (typeof metadata !== "object" || metadata === null)
     return undefined;
-  const entry = Object.entries(metadata).find(([name]) => name.toLowerCase() === "x-amz-meta-holqa-trace");
+  // MinIO reports user metadata with its "X-Amz-Meta-" prefix, RustFS without it.
+  const entry = Object.entries(metadata).find(([name]) => ["x-amz-meta-holqa-trace", "holqa-trace"].includes(name.toLowerCase()));
   if (entry === undefined || typeof entry[1] !== "string")
     return undefined;
   try {
