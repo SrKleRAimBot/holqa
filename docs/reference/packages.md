@@ -124,7 +124,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/sdk`
 
 - **Path:** `packages/sdk`
-- **Status:** Implemented (application and resource model, HTTP routes, RPC procedures, middleware, scoped values, queue, bucket and schedule operations, static sites). Private. `staticSite` is proposed.
+- **Status:** Implemented (application and resource model, HTTP routes, RPC procedures, middleware, scoped values, queue, bucket and schedule operations, static sites). Private.
 - **Purpose:** Declare applications, resources, configuration and handlers with types inferred from source. Runtime-neutral.
 - **Entry point:** `@holqa/sdk` → `dist/index.js`, `dist/index.d.ts`.
 - **Internal dependencies:** `@holqa/core`.
