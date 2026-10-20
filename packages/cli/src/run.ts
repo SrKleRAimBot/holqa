@@ -26,6 +26,7 @@ import {
   localCommand,
   matchLocalCommand
 } from "@/commands/local-commands";
+import { packageCommand } from "@/commands/package";
 import {
   matchTelemetryCommand,
   telemetryCommand
@@ -42,6 +43,7 @@ export type { CliIo } from "@/io";
  * Supported: `--help`/`-h` (or no arguments), `--version`/`-v`,
  * `holqa inspect [--app <path>]` (with `--cycles` or `--capabilities [--bindings <path>]`), `holqa build --manifest [--app <path>] [--out-dir <dir>]`,
  * `holqa bindings inspect` and `holqa bindings validate` (`--bindings <path>`),
+ * `holqa package [--bindings <path>] [--app <path>] [--out-dir <dir>]`,
  * the local commands (`dev`, `invoke`, `queue send`, `queue redrive`, `storage put`,
  * `cron run`, `state`, `doctor`), the telemetry commands (`logs`, `traces list`,
  * `traces inspect`, `events inspect`, `metrics`), and `--json` anywhere, which switches
@@ -100,6 +102,15 @@ export async function runCli(argv: readonly string[], io: CliIo, version: string
       return exitCodes.failure;
     }
     return buildCommand(host ?? createProcessHost(), io, json, { app, outDir: options.values.get("out-dir") });
+  }
+
+  if (command === "package") {
+    const options = parseOptions(rest, { flags: [], values: ["app", "bindings", "out-dir"] });
+    if (!options.ok) {
+      reportDiagnostics(io, json, options.problems.map(problem => usageError(`holqa package: ${problem}`, command)));
+      return exitCodes.usage;
+    }
+    return packageCommand(host ?? createProcessHost(), io, json, { app: options.values.get("app"), bindings: options.values.get("bindings"), outDir: options.values.get("out-dir") });
   }
 
   const bindings = matchBindingsCommand(args);
@@ -179,6 +190,7 @@ function renderHelp(version: string): string {
     "       holqa build --manifest [--app <path>] [--out-dir <dir>] [--json]",
     "       holqa bindings inspect [--bindings <path>] [--app <path>] [--json]",
     "       holqa bindings validate [--bindings <path>] [--app <path>] [--json]",
+    "       holqa package [--bindings <path>] [--app <path>] [--out-dir <dir>] [--json]",
     "       holqa dev [--app <path>] [--port <port>] [--host <host>] [--state-dir <dir>] [--no-watch] [--no-hot] [--no-dashboard] [--json]",
     "       holqa invoke <handler> [--input <json>] [--attempt <n>] [--app <path>] [--state-dir <dir>] [--json]",
     "       holqa queue send <queue> --data <json> [--delay <seconds>] [--app <path>] [--state-dir <dir>] [--json]",
@@ -198,7 +210,7 @@ function renderHelp(version: string): string {
     "  -v, --version       Print the CLI version.",
     "  --json              Emit machine-readable JSON output (JSON lines for dev).",
     "  --app <path>        The application module (default: infra.ts).",
-    "  --out-dir <dir>     Where build writes its output (default: .holqa/build next to the application module).",
+    "  --out-dir <dir>     Where build or package writes its output (default: .holqa/build, or .holqa/package/<binding name>, next to the application module).",
     "  --state-dir <dir>   The local state directory (default: .holqa/local next to the application module).",
     "  --port <port>       The dev server's port (default: 3000; 0 picks a free one).",
     "  --host <host>       The dev server's interface (default: 127.0.0.1).",
@@ -207,7 +219,7 @@ function renderHelp(version: string): string {
     "  --no-dashboard      dev: do not serve the development dashboard at /_holqa/dashboard.",
     "  --cycles            inspect: print the event dependency graph and its cycles instead of the summary.",
     "  --capabilities      inspect: print every resource's required capabilities (with --bindings, how providers meet them).",
-    "  --bindings <path>   The binding configuration module (default for bindings commands: bindings.ts next to the application).",
+    "  --bindings <path>   The binding configuration module (default for bindings commands and package: bindings.ts next to the application).",
     "  --follow            logs: keep printing new entries until interrupted.",
     "",
     "Commands:",

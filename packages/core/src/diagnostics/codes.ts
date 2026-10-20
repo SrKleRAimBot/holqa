@@ -183,7 +183,13 @@ export const diagnosticCodes = {
   /** A required extension (or an extension another one depends on) has no implementation in the binding. */
   extensionMissing: "HOLQA_EXTENSION_MISSING",
   /** An extension is implemented in another version than the one used, or for a runtime the host does not run. */
-  extensionIncompatible: "HOLQA_EXTENSION_INCOMPATIBLE"
+  extensionIncompatible: "HOLQA_EXTENSION_INCOMPATIBLE",
+  /** `holqa package` could not produce a deployment artifact, for example because bundling failed or a static site's directory is missing. */
+  packageFailed: "HOLQA_PACKAGE_FAILED",
+  /** A deployment artifact is incomplete or altered, or does not match what runs: a file's hash differs, a manifest is missing or malformed, or the binding resolved at start differs from the packaged binding manifest. */
+  artifactInvalid: "HOLQA_ARTIFACT_INVALID",
+  /** A container setting read from the environment (port, interface, shutdown periods) is invalid. */
+  containerSettingsInvalid: "HOLQA_CONTAINER_SETTINGS_INVALID"
 } as const;
 
 /**

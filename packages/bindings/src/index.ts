@@ -26,6 +26,8 @@ export type {
   ResourceReport,
   ServiceReport
 } from "@/inspect";
+export { bindingManifestFormat, createBindingManifest } from "@/manifest";
+export type { BindingManifest, ConnectorReport } from "@/manifest";
 export { assertResolved, resolveBindings } from "@/resolve";
 export type {
   ExtensionSelection,

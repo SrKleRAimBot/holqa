@@ -50,6 +50,7 @@ export type {
   ObjectEventSummary
 } from "@/state/delivery-history";
 export type { DeliveryError, DeliveryState } from "@/state/lease-store";
+export { contentTypeOf, createLocalStaticSites } from "@/static/static-sites";
 export type { LocalObjectEvent, LocalStorage } from "@/storage/local-storage";
 export {
   createLocalTelemetryStore,

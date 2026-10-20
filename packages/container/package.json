@@ -1,0 +1,51 @@
+{
+  "name": "@holqa/container",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The conventional Bun container runtime for Holqa: a host provider for HTTP APIs and static sites, and a start-up sequence that verifies a packaged artifact, resolves its bindings, serves HTTP with liveness and readiness probes, runs background deliveries and drains on termination signals.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SrKleRAimBot/holqa.git",
+    "directory": "packages/container"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "bun": ">=1.3.13"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@holqa/bindings": "workspace:*",
+    "@holqa/core": "workspace:*",
+    "@holqa/local": "workspace:*",
+    "@holqa/runtime-bun": "workspace:*"
+  },
+  "devDependencies": {
+    "@holqa/sdk": "workspace:*",
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "zod": "catalog:"
+  }
+}

@@ -664,6 +664,9 @@ importers:
       '@holqa/compiler':
         specifier: workspace:*
         version: link:../compiler
+      '@holqa/container':
+        specifier: workspace:*
+        version: link:../container
       '@holqa/core':
         specifier: workspace:*
         version: link:../core
@@ -718,6 +721,37 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+
+  packages/container:
+    dependencies:
+      '@holqa/bindings':
+        specifier: workspace:*
+        version: link:../bindings
+      '@holqa/core':
+        specifier: workspace:*
+        version: link:../core
+      '@holqa/local':
+        specifier: workspace:*
+        version: link:../local
+      '@holqa/runtime-bun':
+        specifier: workspace:*
+        version: link:../runtime-bun
+    devDependencies:
+      '@holqa/sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@types/bun':
+        specifier: 'catalog:'
+        version: 1.4.3
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.23.1(typescript@6.0.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.7
 
   packages/core:
     devDependencies:

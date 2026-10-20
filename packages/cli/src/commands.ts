@@ -18,6 +18,7 @@ export const implementedCommands: readonly ProposedCommand[] = [
   { name: "bindings inspect", summary: "Show which provider binds each resource and service, why it was selected, and how it meets each requirement." },
   { name: "bindings validate", summary: "Check a binding configuration: providers, contract versions, capabilities, topology and credentials." },
   { name: "build --manifest", summary: "Write the application's manifest and entry point map." },
+  { name: "package", summary: "Bundle the application for a binding configuration into a deployment artifact: server.js, manifests, static files, a Dockerfile and file hashes." },
   { name: "dev", summary: "Run the application locally with emulated resources, and rebuild on changes." },
   { name: "invoke", summary: "Invoke a queue, object event or schedule handler once with a test input." },
   { name: "queue send", summary: "Send a message to a local queue." },
