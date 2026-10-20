@@ -84,7 +84,7 @@ A logical resource describes **what** the application needs and **which guarante
 | `bucket({ id, access })` | Access policy (`private`, `public-read`). | **Implemented** |
 | `schedule({ id, cron, timezone, overlap })` | Five-field cron expression, IANA time zone, overlap policy (`skip`, `allow`). | **Implemented** |
 | `http.api({ id, basePath, docs? })` | Base path, documentation metadata and API middleware; routes and RPC procedures are registered on its handle. | **Implemented** |
-| `staticSite(...)` | Source root, build command and output, SPA fallback. | Proposed |
+| `staticSite({ id, directory, basePath?, spa? })` | Built artifacts relative to the application, URL base path, single-page application fallback. The frontend build itself (for example `vite build`) is run by the frontend tool, not declared ([ADR 0031](../architecture/decisions/0031-static-sites-as-a-resource-kind.md)). | **Implemented** |
 | `secret(schema)` / `variable(schema, { default? })` | Configuration value schema; default for variables only. | **Implemented** |
 
 Future kinds (topics, WebSocket endpoints, workflows) are listed in [triggers and execution](triggers-and-execution.md). Adding one means adding an entry to the typed kind registry in `@holqa/core` ([resource model](../architecture/resource-model.md#adding-a-kind)).

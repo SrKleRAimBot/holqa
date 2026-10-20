@@ -22,6 +22,8 @@ describe("requiredCapabilities", () => {
     expect(requiredCapabilities({ kind: "bucket", requirements: { access: "public-read" } })).toEqual(["bucket", "bucket.access.public-read"]);
     expect(requiredCapabilities({ kind: "schedule", requirements: { overlap: "skip" } })).toEqual(["schedule", "schedule.overlap.skip"]);
     expect(requiredCapabilities({ kind: "http.api", requirements: {} })).toEqual(["http.api"]);
+    expect(requiredCapabilities({ kind: "static.site", requirements: { spaFallback: true } })).toEqual(["static.site", "static.site.spa-fallback"]);
+    expect(requiredCapabilities({ kind: "static.site", requirements: { spaFallback: false } })).toEqual(["static.site"]);
   });
 });
 
@@ -44,5 +46,6 @@ describe("providedCapabilities", () => {
     ]);
     expect(providedCapabilities("schedule", { overlap: ["allow"] })).toEqual(["schedule", "schedule.overlap.allow"]);
     expect(providedCapabilities("http.api", {})).toEqual(["http.api"]);
+    expect(providedCapabilities("static.site", { spaFallback: true })).toEqual(["static.site", "static.site.spa-fallback"]);
   });
 });

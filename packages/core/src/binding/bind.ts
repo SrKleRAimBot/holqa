@@ -119,7 +119,7 @@ export function readConfig(app: AppDescriptor, entry: ConfigDescriptor): unknown
 }
 
 /** Resource kinds that have drivers. Kept in sync with `DrivenResourceKind` by the `satisfies` clause. */
-const drivenKinds = { queue: true, bucket: true } as const satisfies Record<DrivenResourceKind, true>;
+const drivenKinds = { "queue": true, "bucket": true, "static.site": true } as const satisfies Record<DrivenResourceKind, true>;
 
 /**
  * Reports whether resources of a kind perform operations through a driver.

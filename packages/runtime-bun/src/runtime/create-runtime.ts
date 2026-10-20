@@ -5,6 +5,7 @@ import type {
   Diagnostic,
   HandlerDefinition,
   HealthStatus,
+  ResourceDescriptorOf,
   RuntimeBinding
 } from "@holqa/core";
 
@@ -44,7 +45,8 @@ import {
   getAppDescriptor,
   getHandlerDescriptor,
   HolqaError,
-  queueBackoffProblem
+  queueBackoffProblem,
+  resolveDriver
 } from "@holqa/core";
 
 import { Transports } from "@/delivery/transports";
@@ -329,6 +331,15 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     problems.push(createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: "\"redact.keys\" must be a list of field names." }));
   const { table, problems: routeProblems } = buildRouteTable(app, [...handlers.values()].map(handler => handler.definition));
   problems.push(...routeProblems);
+  const siteBases = new Map<string, string>();
+  for (const resource of app.resources) {
+    if (resource.kind !== "static.site")
+      continue;
+    const other = siteBases.get(resource.config.basePath);
+    if (other !== undefined)
+      problems.push(createDiagnostic({ code: diagnosticCodes.routeConflict, severity: "error", message: `The static sites "${other}" and "${resource.id}" are both served under ${resource.config.basePath}.`, hint: "Give each static site its own basePath." }));
+    siteBases.set(resource.config.basePath, resource.id);
+  }
   let cors: CorsPolicy | undefined;
   try {
     cors = options.http?.cors === undefined ? undefined : new CorsPolicy(options.http.cors);
@@ -401,7 +412,37 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     dispatch: (request, instrumentation) => dispatcher.dispatch(request, instrumentation),
     now: () => wallClock().getTime()
   });
-  const fetch = createHttpHandler({ table, dispatcher, logger, ...cors === undefined ? {} : { cors }, trustCorrelationHeader: options.http?.trustCorrelationHeader ?? true, telemetry, now: monotonicNow });
+  const sites = app.resources
+    .filter((resource): resource is ResourceDescriptorOf<"static.site"> => resource.kind === "static.site")
+    .sort((left, right) => right.config.basePath.length - left.config.basePath.length);
+  /**
+   * Serves a request from the static site whose base path is the longest
+   * prefix of the path, through the binding's static site driver.
+   *
+   * @param request - The request, `GET` or `HEAD`.
+   * @param pathname - The request's path.
+   * @returns The site's response and route template, or `undefined` when no site answers.
+   */
+  const serveStatic = async (request: Request, pathname: string): Promise<{ readonly response: Response; readonly route: string } | undefined> => {
+    if (state !== "running")
+      return undefined;
+    for (const site of sites) {
+      const base = site.config.basePath;
+      if (base !== "/" && pathname !== base && !pathname.startsWith(`${base}/`))
+        continue;
+      const path = base === "/" ? pathname : pathname.slice(base.length) || "/";
+      try {
+        const response = await resolveDriver(app, site, `static site "${site.id}"`).fetch(path, request);
+        if (response !== undefined)
+          return { response, route: `${base === "/" ? "" : base}/*` };
+      } catch (error) {
+        logger.write("error", "a static site failed to answer", { resourceId: site.id, error: error instanceof Error ? error.message : String(error) });
+        return { response: new Response("The file could not be served.", { status: 500, headers: { "content-type": "text/plain; charset=utf-8" } }), route: `${base === "/" ? "" : base}/*` };
+      }
+    }
+    return undefined;
+  };
+  const fetch = createHttpHandler({ table, dispatcher, logger, ...cors === undefined ? {} : { cors }, trustCorrelationHeader: options.http?.trustCorrelationHeader ?? true, telemetry, now: monotonicNow, ...sites.length === 0 ? {} : { staticSites: serveStatic } });
 
   /**
    * Stops the started binding's lifecycle once; failures are logged, because the runtime is stopped either way.

@@ -18,6 +18,9 @@ import {
   FieldReader
 } from "@/analysis/fields";
 
+/** A relative path with `/` separators and no empty, `.` or `..` segments, for a static site's artifacts. */
+const sitePathPattern = { expression: /^(?![a-z]:)(?:(?!\.\.?(?:\/|$))[^/\\]+\/)*(?!\.\.?$)[^/\\]+$/i, description: "a relative path such as \"web/dist\" with \"/\" separators and no empty, \".\" or \"..\" segments" };
+
 /** `/`, or a path of non-empty segments that starts with `/` and does not end with one. */
 const basePathPattern = { expression: /^\/$|^(?:\/[\w.~-]+)+$/, description: "\"/\" or a path such as \"/api\" that starts with \"/\" and does not end with one" };
 
@@ -84,6 +87,16 @@ const resourceKindRules: { readonly [Kind in ResourceKind]: ResourceKindRule<Kin
       config: { basePath, docs: { title: reader.string(docs.title, "config.docs.title"), version: reader.string(docs.version, "config.docs.version") } },
       requirements: {},
       capabilities: requiredCapabilities({ kind: "http.api", requirements: {} })
+    };
+  },
+  "static.site": (config, requirements, reader) => {
+    const rawConfig = reader.object(config, "config", ["directory", "basePath"]);
+    const raw = reader.object(requirements, "requirements", ["spaFallback"]);
+    const spaFallback = reader.boolean(raw.spaFallback, "requirements.spaFallback");
+    return {
+      config: { directory: reader.string(rawConfig.directory, "config.directory", sitePathPattern), basePath: reader.string(rawConfig.basePath, "config.basePath", basePathPattern) },
+      requirements: { spaFallback },
+      capabilities: requiredCapabilities({ kind: "static.site", requirements: { spaFallback } })
     };
   }
 };
@@ -197,7 +210,8 @@ const resourceSchemaRoles: { readonly [Kind in ResourceKind]: SchemaRoleSpec } =
   "queue": { required: ["message"], optional: [], responses: false },
   "bucket": noSchemas,
   "schedule": noSchemas,
-  "http.api": noSchemas
+  "http.api": noSchemas,
+  "static.site": noSchemas
 };
 
 /** The schema roles of each trigger kind. */

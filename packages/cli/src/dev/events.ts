@@ -128,5 +128,7 @@ function describeResource(resource: ManifestResource): string {
       return `access ${resource.requirements.access}`;
     case "schedule":
       return `"${resource.config.cron}" ${resource.config.timezone}, overlap ${resource.requirements.overlap}`;
+    case "static.site":
+      return `${resource.config.directory} at ${resource.config.basePath}${resource.requirements.spaFallback ? ", SPA fallback" : ""}`;
   }
 }

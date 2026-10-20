@@ -36,7 +36,8 @@ const requirementChecks: { readonly [Kind in ResourceKind]: RequirementCheck<Kin
   ],
   "bucket": (requirements, capabilities) => capabilities.access.includes(requirements.access) ? [] : [{ requirement: `bucket.access.${requirements.access}`, reason: `${requirements.access} access is required` }],
   "schedule": (requirements, capabilities) => capabilities.overlap.includes(requirements.overlap) ? [] : [{ requirement: `schedule.overlap.${requirements.overlap}`, reason: `the "${requirements.overlap}" overlap policy is required` }],
-  "http.api": () => []
+  "http.api": () => [],
+  "static.site": (requirements, capabilities) => !requirements.spaFallback || capabilities.spaFallback ? [] : [{ requirement: "static.site.spa-fallback", reason: "single-page application fallback is required" }]
 };
 
 /**

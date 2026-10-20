@@ -50,6 +50,8 @@ export interface LocalBindingOptions {
   readonly env?: EnvironmentVariables;
   /** The time source for delays, leases, signed URL expiry and schedules. Defaults to the wall clock. */
   readonly clock?: Clock;
+  /** The application root that static sites' directories are relative to. Defaults to the working directory when the binding starts. */
+  readonly root?: string;
   /** Creates message, event, run and lease identifiers. Defaults to `crypto.randomUUID`. */
   readonly createId?: () => string;
   readonly queues?: LocalEnvironmentOptions["queues"];
@@ -65,7 +67,7 @@ export interface OpenedLocalState extends LocalState {
 }
 
 /** The kinds and services of the local platform. */
-type PlatformKinds = "queue" | "bucket" | "schedule" | "http.api";
+type PlatformKinds = "queue" | "bucket" | "schedule" | "http.api" | "static.site";
 
 /** The services of the local platform. */
 type PlatformServices = "config" | "telemetry" | "idempotency" | "operation-budgets";
@@ -135,6 +137,7 @@ export function localEnvironment(options: LocalBindingOptions = {}): LocalProvid
     const state = openLocalState(context.app, {
       directory,
       ...options.clock === undefined ? {} : { clock: options.clock },
+      ...options.root === undefined ? {} : { root: options.root },
       ...options.createId === undefined ? {} : { createId: options.createId },
       ...options.queues === undefined ? {} : { queues: options.queues },
       ...options.storage === undefined ? {} : { storage: options.storage }
@@ -203,8 +206,8 @@ export function localEnvironment(options: LocalBindingOptions = {}): LocalProvid
   const bucketCapabilities = localCapabilities.bucket!;
   const scheduleCapabilities = localCapabilities.schedule!;
   const platform = provider<BindingProvider<PlatformKinds, PlatformServices>>("", "platform", {
-    contracts: Object.freeze({ "execution": 1, "http.api": 1, "queue": 1, "bucket": 1, "bucket.events": 1, "schedule": 1, "config": 1, "telemetry": 1, "idempotency": 1, "operation-budgets": 1 }),
-    resources: Object.freeze({ "queue": queueCapabilities, "bucket": bucketCapabilities, "schedule": scheduleCapabilities, "http.api": Object.freeze({}) }),
+    contracts: Object.freeze({ "execution": 1, "http.api": 1, "queue": 1, "bucket": 1, "bucket.events": 1, "schedule": 1, "static.site": 1, "config": 1, "telemetry": 1, "idempotency": 1, "operation-budgets": 1 }),
+    resources: Object.freeze({ "queue": queueCapabilities, "bucket": bucketCapabilities, "schedule": scheduleCapabilities, "http.api": Object.freeze({}), "static.site": localCapabilities["static.site"]! }),
     services: Object.freeze({ "config": true, "telemetry": true, "idempotency": true, "operation-budgets": true }),
     execution: Object.freeze({ runtimes: Object.freeze(["bun"]), mode: "long-running" })
   }, (context) => {

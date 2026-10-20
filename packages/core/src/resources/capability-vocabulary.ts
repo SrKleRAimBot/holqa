@@ -45,6 +45,8 @@ export function requiredCapabilities(resource: CapabilitySubject): string[] {
       return ["schedule", `schedule.overlap.${resource.requirements.overlap}`];
     case "http.api":
       return ["http.api"];
+    case "static.site":
+      return ["static.site", ...resource.requirements.spaFallback ? ["static.site.spa-fallback"] : []];
     default: {
       const unknown: never = resource;
       return [String((unknown as { readonly kind?: unknown }).kind)];
@@ -83,6 +85,10 @@ export function providedCapabilities<Kind extends ResourceKind>(kind: Kind, capa
     }
     case "schedule":
       provided.push(...(capabilities as ResourceKindMap["schedule"]["capabilities"]).overlap.map(overlap => `schedule.overlap.${overlap}`));
+      break;
+    case "static.site":
+      if ((capabilities as ResourceKindMap["static.site"]["capabilities"]).spaFallback)
+        provided.push("static.site.spa-fallback");
       break;
     default:
       break;

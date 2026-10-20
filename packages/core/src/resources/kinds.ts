@@ -285,6 +285,48 @@ export interface HttpApiSchemas {}
 /** What a binding advertises for HTTP APIs. Nothing is negotiated yet. */
 export interface HttpApiCapabilities {}
 
+/** Normalized static site settings. */
+export interface StaticSiteConfig {
+  /**
+   * Where the built artifacts are, relative to the application root, for
+   * example `web/dist`. A build step (Vite, another bundler) writes them; Holqa
+   * only serves them.
+   */
+  readonly directory: string;
+  /** The URL path prefix the site is served under: `/` or a path that starts with `/` and does not end with one. */
+  readonly basePath: string;
+}
+
+/** Behaviour a static site requires from its binding. */
+export interface StaticSiteRequirements {
+  /**
+   * Whether requests for paths that name no file and have no file extension
+   * are answered with the site's `index.html`, so a single-page application's
+   * client-side router can handle them.
+   */
+  readonly spaFallback: boolean;
+}
+
+/** Static sites declare no schemas. */
+export interface StaticSiteSchemas {}
+
+/** What a binding advertises for static sites. */
+export interface StaticSiteCapabilities {
+  /** Whether the binding can answer unknown extension-less paths with `index.html`. */
+  readonly spaFallback: boolean;
+}
+
+/** Data-plane operations of a static site: answering requests for its files. */
+export interface StaticSiteDriver {
+  /**
+   * Answers a `GET` or `HEAD` request for a path relative to the site's base
+   * path (`/` for the root), or resolves to `undefined` when the site has no
+   * file for it and no fallback applies. Responses carry a content type
+   * derived from the file name.
+   */
+  readonly fetch: (path: string, request: Request) => Promise<Response | undefined>;
+}
+
 /**
  * The registry of resource kinds understood by this version of the descriptor
  * protocol, keyed by kind name. Readers treat kinds missing from their copy of
@@ -295,6 +337,7 @@ export interface ResourceKindMap {
   readonly "bucket": ResourceKindSpec<BucketConfig, BucketRequirements, BucketSchemas, BucketCapabilities, BucketDriver>;
   readonly "schedule": ResourceKindSpec<ScheduleConfig, ScheduleRequirements, ScheduleSchemas, ScheduleCapabilities, never>;
   readonly "http.api": ResourceKindSpec<HttpApiConfig, HttpApiRequirements, HttpApiSchemas, HttpApiCapabilities, never>;
+  readonly "static.site": ResourceKindSpec<StaticSiteConfig, StaticSiteRequirements, StaticSiteSchemas, StaticSiteCapabilities, StaticSiteDriver>;
 }
 
 /** The name of a resource kind, for example `queue` or `http.api`. */
@@ -310,7 +353,8 @@ const kindSet = {
   "queue": true,
   "bucket": true,
   "schedule": true,
-  "http.api": true
+  "http.api": true,
+  "static.site": true
 } as const satisfies Record<ResourceKind, true>;
 
 /** Every resource kind this version of the protocol defines, in a stable order. */

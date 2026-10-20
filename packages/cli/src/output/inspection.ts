@@ -56,6 +56,8 @@ function describeResource(resource: ManifestResource): string {
       return `"${resource.config.cron}" ${resource.config.timezone}, overlap ${resource.requirements.overlap}`;
     case "http.api":
       return `base path ${resource.config.basePath}`;
+    case "static.site":
+      return `${resource.config.directory} at ${resource.config.basePath}${resource.requirements.spaFallback ? ", SPA fallback" : ""}`;
   }
 }
 

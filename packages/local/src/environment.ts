@@ -29,6 +29,7 @@ import {
   createLocalIdempotencyStore,
   createLocalOperationBudgets
 } from "@/state/safety-stores";
+import { createLocalStaticSites } from "@/static/static-sites";
 import {
   filesystemBlobs,
   memoryBlobs
@@ -49,6 +50,8 @@ export interface LocalEnvironmentOptions {
   readonly env?: EnvironmentVariables;
   /** The time source for delays, leases, signed URL expiry and schedules. Defaults to the wall clock. */
   readonly clock?: Clock;
+  /** The application root that static sites' directories are relative to. Defaults to the working directory. */
+  readonly root?: string;
   /** Creates message, event, run and lease identifiers. Defaults to `crypto.randomUUID`. */
   readonly createId?: () => string;
   readonly queues?: {
@@ -101,7 +104,8 @@ export const localCapabilities: BindingCapabilities = Object.freeze({
   "queue": Object.freeze({ delivery: Object.freeze(["at-least-once" as const]), maxAttempts: 100, deadLetter: true, backoff: Object.freeze(["fixed" as const, "exponential" as const]), maxDelaySeconds: 900 }),
   "bucket": Object.freeze({ access: Object.freeze(["private" as const, "public-read" as const]), events: Object.freeze(["object.created" as const, "object.deleted" as const]), signedUrls: Object.freeze({ maxExpiresInSeconds: 604_800 }) }),
   "schedule": Object.freeze({ overlap: Object.freeze(["skip" as const, "allow" as const]) }),
-  "http.api": Object.freeze({})
+  "http.api": Object.freeze({}),
+  "static.site": Object.freeze({ spaFallback: true })
 });
 
 /**
@@ -210,7 +214,7 @@ export function openLocalState(app: AppDescriptor, options: LocalStateOptions): 
   const scheduler = createLocalScheduler({ database, clock, createId });
   return Object.freeze({
     clock,
-    drivers: Object.freeze({ queue: queues.driver, bucket: storage.driver }),
+    drivers: Object.freeze({ "queue": queues.driver, "bucket": storage.driver, "static.site": createLocalStaticSites(options.root ?? process.cwd()) }),
     sources: Object.freeze({ queue: queues.source, bucket: storage.source, schedule: scheduler.source }),
     operationBudgets: createLocalOperationBudgets({ database, clock, createId }),
     idempotency: createLocalIdempotencyStore({ database, clock, createId }),

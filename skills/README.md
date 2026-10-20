@@ -15,7 +15,7 @@ Holqa is at the bootstrap stage. What exists today is limited to:
 | `holqa --help`, `--version`, `--json` (from a repository checkout; packages are private) | **Implemented** |
 | Structured diagnostics with stable codes (`HOLQA_CLI_NOT_IMPLEMENTED`, `HOLQA_RESOURCE_ID_INVALID`, ...) | **Implemented** |
 | Resource ID validation (`parseResourceId` in `@holqa/core`, not yet a public package) | **Implemented** |
-| `@holqa/sdk` (`defineApp`, `http.api` with routes, RPC procedures and middleware, `queue`, `bucket`, `schedule`, `secret`, `variable`) | **Implemented** (private, unpublished); `staticSite` is proposed |
+| `@holqa/sdk` (`defineApp`, `http.api` with routes, RPC procedures and middleware, `queue`, `bucket`, `schedule`, `staticSite`, `secret`, `variable`) | **Implemented** (private, unpublished) |
 | `@holqa/runtime-bun` (serving HTTP routes and RPC procedures of a compiled application; delivering queue messages, object events and scheduled runs with retries and dead-lettering) | **Implemented** (private, unpublished) |
 | `@holqa/local` (local queues, object storage with events and signed URLs, a clock-driven scheduler, inspection) | **Implemented** (private, unpublished) |
 | `holqa inspect` (with `--cycles`), `build --manifest`, `dev` (with hot handler replacement and a local development dashboard), `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`, `doctor` | **Implemented** |

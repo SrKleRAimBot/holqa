@@ -228,7 +228,7 @@ function hasEvents(capabilities: unknown): boolean {
 function capabilityProblems(kind: ResourceKind, value: unknown): string[] {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return ["they must be an object"];
-  const capabilities = value as Readonly<Record<string, unknown>> & Fields<"deadLetter" | "signedUrls">;
+  const capabilities = value as Readonly<Record<string, unknown>> & Fields<"deadLetter" | "signedUrls" | "spaFallback">;
   const problems: string[] = [];
   /**
    * Records a problem unless a field is a list drawn from allowed values.
@@ -280,6 +280,10 @@ function capabilityProblems(kind: ResourceKind, value: unknown): string[] {
       list("overlap", ["skip", "allow"]);
       break;
     case "http.api":
+      break;
+    case "static.site":
+      if (typeof capabilities.spaFallback !== "boolean")
+        problems.push("\"spaFallback\" must be a boolean");
       break;
     default: {
       const unknown: never = kind;

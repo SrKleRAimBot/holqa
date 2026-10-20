@@ -26,7 +26,7 @@ bun packages/cli/dist/bin.js --version --json
 cd examples/order-pipeline && pnpm exec holqa dev --app app/infra.ts   # runs the example locally
 ```
 
-Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations such as the `infra.ts` below (without `staticSite`, which is proposed). `holqa inspect --app infra.ts` prints its resources and handlers, and `holqa build --manifest` writes its manifest; both run the application's modules. Inside the repository, `createRuntime(await loadCompiledApplication({ root }))` and `serve(runtime)` from `@holqa/runtime-bun` serve the compiled routes and procedures (see `examples/http-api`), and `createLocalEnvironment` from `@holqa/local` provides queues, buckets and schedules locally (see `examples/document-processing`). `holqa dev` composes both and reloads on changes (see `examples/order-pipeline` and the `local-development` skill). Do not try to install `@holqa/sdk` from npm; it is not published.
+Inside the Holqa repository, `@holqa/sdk` type-checks and validates declarations such as the `infra.ts` below. `holqa inspect --app infra.ts` prints its resources and handlers, and `holqa build --manifest` writes its manifest; both run the application's modules. Inside the repository, `createRuntime(await loadCompiledApplication({ root }))` and `serve(runtime)` from `@holqa/runtime-bun` serve the compiled routes and procedures (see `examples/http-api`), and `createLocalEnvironment` from `@holqa/local` provides queues, buckets and schedules locally (see `examples/document-processing`). `holqa dev` composes both and reloads on changes (see `examples/order-pipeline` and the `local-development` skill). Do not try to install `@holqa/sdk` from npm; it is not published.
 
 ## Planned workflow
 

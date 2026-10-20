@@ -42,6 +42,12 @@ export interface HttpHandlerOptions {
   readonly telemetry: RuntimeTelemetry;
   /** A monotonic clock in milliseconds, for request durations. */
   readonly now: () => number;
+  /**
+   * Serves `GET` and `HEAD` requests that match no route from the
+   * application's static sites. Resolves to `undefined` when no site has a
+   * file for the request; routes always take precedence.
+   */
+  readonly staticSites?: (request: Request, pathname: string) => Promise<{ readonly response: Response; readonly route: string } | undefined>;
 }
 
 /** Methods recorded as themselves in metrics; anything else is `_OTHER`, as OpenTelemetry's HTTP conventions require, so callers cannot create series. */
@@ -141,8 +147,16 @@ function createRequestHandler(options: HttpHandlerOptions): (request: Request, s
     }
     if (match.kind === "malformed")
       return reject(runtimeFailure(diagnosticCodes.inputInvalid, "The request path is not valid percent-encoding.", {}, 400), match.transport);
-    if (match.kind === "not-found")
+    if (match.kind === "not-found") {
+      if ((request.method === "GET" || request.method === "HEAD") && options.staticSites !== undefined) {
+        const site = await options.staticSites(request, url.pathname);
+        if (site !== undefined) {
+          served.route = site.route;
+          return site.response;
+        }
+      }
       return reject(runtimeFailure(diagnosticCodes.httpRouteNotFound, `No route or procedure serves ${url.pathname}.`), match.transport);
+    }
     if (match.kind === "method-not-allowed")
       return reject(runtimeFailure(diagnosticCodes.httpMethodNotAllowed, `${request.method} is not allowed for ${url.pathname}.`, { allow: match.allowed.join(", ") }), match.transport);
 

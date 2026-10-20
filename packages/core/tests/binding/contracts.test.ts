@@ -23,6 +23,7 @@ describe("binding contracts", () => {
       "bucket": 1,
       "bucket.events": 1,
       "schedule": 1,
+      "static.site": 1,
       "config": 1,
       "telemetry": 1,
       "idempotency": 1,
@@ -32,7 +33,7 @@ describe("binding contracts", () => {
   });
 
   it("makes every contract mandatory for a platform except the optional event safety stores", () => {
-    expect(mandatoryBindingContracts).toEqual(["execution", "http.api", "queue", "bucket", "bucket.events", "schedule", "config", "telemetry"]);
+    expect(mandatoryBindingContracts).toEqual(["execution", "http.api", "queue", "bucket", "bucket.events", "schedule", "static.site", "config", "telemetry"]);
     expect(mandatoryBindingContracts.every(isBindingContractName)).toBe(true);
   });
 

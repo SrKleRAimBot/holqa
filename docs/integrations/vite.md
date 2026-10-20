@@ -10,7 +10,7 @@ Vite is the planned integration for frontend development and static builds. Holq
 | --- | --- |
 | Frontend HMR | Vite keeps full ownership of frontend module graphs and hot module replacement. |
 | Single-origin development | API and RPC requests from the frontend reach the Holqa backend on the same origin, so cookies, CORS, and relative URLs behave as in production. |
-| Static builds | A `staticSite` resource uses Vite's build output. |
+| Static builds | A `staticSite` resource (**Implemented**) serves Vite's build output: `staticSite({ id: "web", directory: "web/dist", spa: true })`. Running `vite build` stays Vite's job. |
 | Generated clients | Generated browser-safe clients are regenerated when public contracts change, and Vite picks them up through normal HMR. |
 
 ## Intended shape
@@ -35,13 +35,8 @@ export default defineConfig({
 ```
 
 ```ts
-// infra.ts (illustrative)
-web: staticSite({
-  id: "web",
-  root: "./web",
-  build: { command: "bun run build", output: "dist" },
-  spaFallback: true
-})
+// infra.ts: staticSite is implemented; the Vite integration above is not.
+web: staticSite({ id: "web", directory: "web/dist", spa: true })
 ```
 
 ## Considerations

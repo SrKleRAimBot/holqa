@@ -31,22 +31,23 @@ export function queueProvider(overrides: Partial<Record<keyof AnyBindingProvider
  * @param overrides - Fields to replace, for negative tests.
  * @returns A provider that implements every mandatory contract.
  */
-export function platformProvider(overrides: Partial<Record<keyof AnyBindingProvider, unknown>> = {}): BindingProvider<"queue" | "bucket" | "schedule" | "http.api", "config" | "telemetry"> {
+export function platformProvider(overrides: Partial<Record<keyof AnyBindingProvider, unknown>> = {}): BindingProvider<"queue" | "bucket" | "schedule" | "http.api" | "static.site", "config" | "telemetry"> {
   return {
     bindingProtocol: 1,
     provider: "example.platform",
     name: "platform",
     role: "platform",
-    contracts: { "execution": 1, "http.api": 1, "queue": 1, "bucket": 1, "bucket.events": 1, "schedule": 1, "config": 1, "telemetry": 1 },
+    contracts: { "execution": 1, "http.api": 1, "queue": 1, "bucket": 1, "bucket.events": 1, "schedule": 1, "static.site": 1, "config": 1, "telemetry": 1 },
     resources: {
       "queue": { delivery: ["at-least-once"], maxAttempts: 10, deadLetter: true },
       "bucket": { access: ["private"], events: ["object.created"] },
       "schedule": { overlap: ["skip"] },
-      "http.api": {}
+      "http.api": {},
+      "static.site": { spaFallback: true }
     },
     services: { config: true, telemetry: true },
     execution: { runtimes: ["bun"], mode: "long-running" },
     open: async (): Promise<ProviderInstance> => ({}),
     ...overrides
-  } as BindingProvider<"queue" | "bucket" | "schedule" | "http.api", "config" | "telemetry">;
+  } as BindingProvider<"queue" | "bucket" | "schedule" | "http.api" | "static.site", "config" | "telemetry">;
 }

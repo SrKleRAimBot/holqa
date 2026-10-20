@@ -77,7 +77,8 @@ Planned packages are directories containing only a README. They have no `package
 | `descriptorKey`, `descriptorProtocol` | Constants | `"~holqa"` and `1`. |
 | `AppDescriptor`, `ResourceDescriptor`, `ResourceDescriptorOf<K>`, `HandlerDescriptor`, `HandlerDescriptorOf<T>`, `ConfigDescriptor`, `Described<D>` | Types | The descriptor protocol. |
 | `getDescriptor`, `getAppDescriptor`, `getResourceDescriptor`, `getHandlerDescriptor`, `getConfigDescriptor` | Functions | Structural descriptor readers; return `undefined` for other protocol versions, unknown kinds and malformed values. |
-| `ResourceKindMap`, `ResourceKind`, `DrivenResourceKind`, `resourceKinds`, `isResourceKind` | Types, constant, function | The resource kind registry (`queue`, `bucket`, `schedule`, `http.api`) and its per-kind `config`, `requirements`, `schemas`, `capabilities` and `driver` types. |
+| `ResourceKindMap`, `ResourceKind`, `DrivenResourceKind`, `resourceKinds`, `isResourceKind` | Types, constant, function | The resource kind registry (`queue`, `bucket`, `schedule`, `http.api`, `static.site`) and its per-kind `config`, `requirements`, `schemas`, `capabilities` and `driver` types. |
+| `StaticSiteConfig`, `StaticSiteRequirements`, `StaticSiteSchemas`, `StaticSiteCapabilities`, `StaticSiteDriver` | Types | The `static.site` kind: artifacts directory and base path, the `spaFallback` requirement and capability, and the driver's `fetch(path, request)`. |
 | `QueueBackoff`, `QueueBackoffStrategy`, `FixedQueueBackoff`, `ExponentialQueueBackoff`, `QueueSendOptions`, `QueueSendReceipt`, `backoffDelaySeconds(backoff, failedAttempt)`, `longestBackoffDelaySeconds(backoff)`, `queueBackoffProblem(value)`, `defaultQueueBackoff` | Types, functions, constant | Queue backoff requirements, send options (`delaySeconds`) and receipts (`messageId`), and the deterministic backoff computation. `QueueDriver.send(envelope, options)` receives the `holqa.message/1` envelope and returns a receipt. |
 | `ObjectMetadata`, `ListObjectsOptions`, `ObjectList`, `SignedUrl`, `SignedUrlMethod`, `SignedUrlOptions`, `ObjectEventType` | Types | Bucket operations: `BucketDriver` has `put`, `get`, `head`, `delete`, `list` and `signUrl`; `BucketCapabilities` gains `events` and `signedUrls`. |
 | `ObjectEvent`, `ObjectEventObject`, `objectEventFormat`, `objectEventTypes`, `readObjectEvent(value, subject)` | Types, constants, function | The portable `holqa.object-event/1` envelope and its structural reader (`HOLQA_PAYLOAD_MALFORMED`). |
@@ -122,7 +123,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 ## `@holqa/sdk`
 
 - **Path:** `packages/sdk`
-- **Status:** Implemented (application and resource model, HTTP routes, RPC procedures, middleware, scoped values, queue, bucket and schedule operations). Private. `staticSite` is proposed.
+- **Status:** Implemented (application and resource model, HTTP routes, RPC procedures, middleware, scoped values, queue, bucket and schedule operations, static sites). Private.
 - **Purpose:** Declare applications, resources, configuration and handlers with types inferred from source. Runtime-neutral.
 - **Entry point:** `@holqa/sdk` → `dist/index.js`, `dist/index.d.ts`.
 - **Internal dependencies:** `@holqa/core`.
@@ -132,6 +133,7 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | `defineApp(definition)` | Function | Validates and defines an application; returns `{ name, resources, env, "~holqa" }`. See [application model](../concepts/application-model.md). |
 | `defineResources(group)`, `composeResources(...groups)` | Functions | Typed resource groups for registries split across modules; `composeResources` rejects duplicate aliases. |
 | `queue`, `bucket`, `schedule`, `http.api` | Functions | Resource factories returning typed handles. Queues accept `delivery: { maxAttempts?, deadLetter?, backoff? }`; `send(message, { delaySeconds? })` resolves to `{ messageId }`. Buckets have `put`, `get`, `head`, `delete`, `list`, `signedUrl`, `onObjectCreated` and `onObjectDeleted`; the object event schemas implement Standard JSON Schema (vendor `holqa`), so compilers can record them. Schedules validate their cron expression at declaration. See the [runtime reference](runtime.md#queue-delivery). |
+| `staticSite({ id, directory, basePath?, spa? })`, `StaticSiteHandle`, `StaticSiteOptions` | Function, types | Declares a static frontend: built artifacts relative to the application, served under `basePath` (default `/`) when no route matches, with an optional single-page application fallback. See [static sites](runtime.md#static-sites). |
 | `secret(schema)`, `variable(schema, { default? })` | Functions | Configuration entries. |
 | `App`, `AppDefinition`, `ConfigValues`, `HandlerDiscoveryOptions` | Types | Application types. |
 | `QueueHandle`, `BucketHandle`, `ScheduleHandle`, `HttpApiHandle`, `ResourceHandle`, `AnyResource`, `ResourceRecord` | Types | Handle types. |

@@ -301,7 +301,12 @@ export type {
   ScheduleSchemas,
   SignedUrl,
   SignedUrlMethod,
-  SignedUrlOptions
+  SignedUrlOptions,
+  StaticSiteCapabilities,
+  StaticSiteConfig,
+  StaticSiteDriver,
+  StaticSiteRequirements,
+  StaticSiteSchemas
 } from "@/resources/kinds";
 export type {
   ResourceDescriptor,

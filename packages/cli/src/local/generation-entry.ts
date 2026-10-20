@@ -198,7 +198,7 @@ async function serve(request: GenerationRequest): Promise<void> {
   let compiled: CompiledApplication;
   try {
     compiled = await loadCompiledApplication({ root: request.root, buildDir: request.buildDir });
-    local = await createLocalEnvironment({ app: compiled.app, directory: request.stateDir, storage: { signedUrlBase: `${request.publicOrigin}/_holqa/storage` } });
+    local = await createLocalEnvironment({ app: compiled.app, directory: request.stateDir, root: request.root, storage: { signedUrlBase: `${request.publicOrigin}/_holqa/storage` } });
     telemetry = openProcessTelemetry(request.stateDir, process.env);
     runtime = createRuntime({ ...compiled, binding: local.binding, log: sink, telemetry: telemetry.options });
     precheck(compiled, runtime, local);
@@ -425,7 +425,7 @@ async function runOnce(request: GenerationRequest, operation: LocalOperation): P
   try {
     const compiled = await loadCompiledApplication({ root: request.root, buildDir: request.buildDir });
     try {
-      local = await createLocalEnvironment({ app: compiled.app, directory: scratch ?? request.stateDir, storage: { signedUrlBase: `${request.publicOrigin}/_holqa/storage` } });
+      local = await createLocalEnvironment({ app: compiled.app, directory: scratch ?? request.stateDir, root: request.root, storage: { signedUrlBase: `${request.publicOrigin}/_holqa/storage` } });
     } catch (error) {
       if (operation.kind !== "doctor")
         throw error;

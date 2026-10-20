@@ -1,4 +1,5 @@
 import {
+  id,
   queueDescriptor,
   scheduleDescriptor
 } from "@test/support/descriptors";
@@ -59,5 +60,12 @@ describe("checkCapabilities", () => {
     ]);
     const fixed = queueDescriptor("orders", { backoff: { strategy: "fixed", delaySeconds: 5 } });
     expect(checkCapabilities(fixed, { queue: { ...base, backoff: ["fixed"], maxDelaySeconds: 5 } }, "local")).toEqual([]);
+  });
+
+  it("requires single-page application fallback only when a static site declares it", () => {
+    const site = { protocol: 1, type: "resource", kind: "static.site", id: id("web"), config: { directory: "dist", basePath: "/" }, requirements: { spaFallback: true }, schemas: {} } as const;
+    expect(checkCapabilities(site, { "static.site": { spaFallback: true } }, "local")).toEqual([]);
+    expect(checkCapabilities(site, { "static.site": { spaFallback: false } }, "cdn").map(diagnostic => diagnostic.details)).toEqual([{ resource: "web", kind: "static.site", binding: "cdn", requirement: "static.site.spa-fallback" }]);
+    expect(checkCapabilities({ ...site, requirements: { spaFallback: false } }, { "static.site": { spaFallback: false } }, "cdn")).toEqual([]);
   });
 });

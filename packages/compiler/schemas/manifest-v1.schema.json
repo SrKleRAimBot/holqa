@@ -71,6 +71,9 @@
         },
         {
           "$ref": "#/$defs/resource-http-api"
+        },
+        {
+          "$ref": "#/$defs/resource-static-site"
         }
       ]
     },
@@ -317,6 +320,58 @@
           },
           "required": [
             "overlap"
+          ],
+          "type": "object"
+        },
+        "schemas": {
+          "$ref": "#/$defs/schemaReferences"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "config",
+        "requirements",
+        "schemas"
+      ],
+      "type": "object"
+    },
+    "resource-static-site": {
+      "additionalProperties": false,
+      "properties": {
+        "config": {
+          "additionalProperties": false,
+          "properties": {
+            "basePath": {
+              "pattern": "^/$|^(?:/[\\w.~-]+)+$",
+              "type": "string"
+            },
+            "directory": {
+              "pattern": "^(?![a-zA-Z]:)(?:(?!\\.\\.?(?:/|$))[^/\\\\]+/)*(?!\\.\\.?$)[^/\\\\]+$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "directory",
+            "basePath"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "$ref": "#/$defs/identifier"
+        },
+        "kind": {
+          "const": "static.site"
+        },
+        "requirements": {
+          "additionalProperties": false,
+          "properties": {
+            "spaFallback": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "spaFallback"
           ],
           "type": "object"
         },
