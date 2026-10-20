@@ -18,6 +18,10 @@ export default defineBindings(app, {
 });
 ```
 
+## Storage event channel
+
+`rabbitmq.eventChannel({ url })` carries an object store's S3 event notifications to a storage provider such as `s3.buckets({ events: { channel } })`. Each subscription (one object event handler) reads its own queue `<queuePrefix><bucket>.<handler>` (default prefix `holqa.events.`), which provisioning binds to the exchange the store publishes to (`exchange`, default `holqa.storage-events`, recorded for inspection). Deliveries have the same leases, attempt counts, delay-queue retries (`delayedDelivery`, default `delay-queues`) and dead-letter queue (`deadLetter`, default `true`) as queue messages. Like the queue provider it never creates queues, exchanges or bindings: a missing queue fails with `HOLQA_BINDING_FAILED`.
+
 ## Options
 
 | Option | Default | Meaning |

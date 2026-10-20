@@ -48,6 +48,7 @@ const allowedDependencies: Readonly<Record<string, readonly string[]>> = {
   "@holqa/conformance": ["@holqa/core"],
   // Provider packages depend inward on core; their tests run the conformance suite.
   "@holqa/rabbitmq": ["@holqa/core", "@holqa/conformance"],
+  "@holqa/s3": ["@holqa/core", "@holqa/conformance"],
   "@holqa/local": ["@holqa/core", "@holqa/runtime-bun", "@holqa/conformance"],
   "@holqa/testing": ["@holqa/core", "@holqa/sdk", "@holqa/bindings", "@holqa/local", "@holqa/runtime-bun"],
   "@holqa/cli": ["@holqa/core", "@holqa/bindings", "@holqa/compiler", "@holqa/local", "@holqa/runtime-bun", "@holqa/opentelemetry"]

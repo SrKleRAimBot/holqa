@@ -1,6 +1,12 @@
+export { eventChannel } from "@/event-channel";
+export type { RabbitMqEventChannelOptions } from "@/event-channel";
 export { rabbitmq } from "@/provider";
 export type { RabbitMqQueuesOptions } from "@/provider";
-export { createQueueBinding, headers } from "@/queue";
+export {
+  createLeasedBinding,
+  createQueueBinding,
+  headers
+} from "@/queue";
 export type { QueueBindingSettings } from "@/queue";
 export {
   delayStep,

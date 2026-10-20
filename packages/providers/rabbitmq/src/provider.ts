@@ -25,6 +25,7 @@ import {
   isCredentialReference
 } from "@holqa/core";
 
+import { eventChannel } from "@/event-channel";
 import { createQueueBinding } from "@/queue";
 import {
   delaySteps,
@@ -273,5 +274,5 @@ function queues(options: RabbitMqQueuesOptions): BindingProvider<"queue"> {
   });
 }
 
-/** RabbitMQ binding providers. */
-export const rabbitmq = Object.freeze({ queues });
+/** RabbitMQ binding providers: queues, and an event channel for storage notifications. */
+export const rabbitmq = Object.freeze({ queues, eventChannel });

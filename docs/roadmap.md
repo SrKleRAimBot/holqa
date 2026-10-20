@@ -292,6 +292,7 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 | The local development workflow through the binding layer (`holqa dev` composes the local platform or a `--bindings` configuration; binding changes restart the generation), in-memory test state and provider fault injection (`withFaults`) | **Implemented** |
 | Typed, versioned provider extensions: definitions, required and optional declarations, selection in binding configurations, start-time checks, credential isolation, and the reference `holqa.app-cache` extension ([ADR 0032](architecture/decisions/0032-typed-versioned-provider-extensions.md)) | **Implemented** |
 | A RabbitMQ queue provider (`@holqa/rabbitmq`), passing the queue conformance suite against an in-memory broker and RabbitMQ 4 in CI | **Implemented** |
+| An S3-compatible bucket provider (`@holqa/s3`) with object events through an event channel, passing the bucket conformance suites against an in-memory store and a real S3-compatible store in CI | **Implemented** |
 
 ### Goals
 

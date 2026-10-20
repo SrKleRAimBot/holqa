@@ -64,8 +64,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
+      object-store:
+        image: rustfs/rustfs:latest
+        ports:
+          - 9000:9000
+        env:
+          RUSTFS_ACCESS_KEY: holqatest
+          RUSTFS_SECRET_KEY: holqa-test-secret
     env:
       HOLQA_RABBITMQ_URL: amqp://guest:guest@localhost:5672
+      HOLQA_S3_ENDPOINT: http://localhost:9000
+      HOLQA_S3_ACCESS_KEY_ID: holqatest
+      HOLQA_S3_SECRET_ACCESS_KEY: holqa-test-secret
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -88,4 +98,4 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run provider tests against real infrastructure
-        run: pnpm turbo run test --filter=@holqa/rabbitmq
+        run: pnpm turbo run test --filter=@holqa/rabbitmq --filter=@holqa/s3
