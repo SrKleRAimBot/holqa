@@ -1,5 +1,6 @@
 import type {
   DeliveryFailure,
+  DeliverySource,
   DeliveryTrace,
   JsonObject,
   LeasedDelivery,
@@ -57,11 +58,11 @@ export interface QueueBindingSettings {
 }
 
 /** A delivery the broker handed over, waiting to be leased or settled. */
-interface Held {
+interface Held<Body> {
   readonly receipt: string;
   readonly message: AmqpMessage;
   readonly generation: number;
-  readonly delivery: LeasedDelivery<MessageEnvelope>;
+  readonly delivery: LeasedDelivery<Body>;
   readonly settle: (settlement: AmqpSettlement) => void;
   leased: boolean;
   cancelTimer?: () => void;
@@ -117,9 +118,22 @@ function traceOf(value: unknown): DeliveryTrace | undefined {
  * @returns The driver and the source.
  */
 export function createQueueBinding(settings: QueueBindingSettings): { readonly driver: QueueDriver; readonly source: QueueSource; readonly stop: () => Promise<void> } {
+  return createLeasedBinding<MessageEnvelope>(settings, body => decodeMessageEnvelope(new TextDecoder().decode(body), `message for queue "${settings.topology.queue}"`));
+}
+
+/**
+ * Creates the driver and source of one broker queue with any body format:
+ * {@link createQueueBinding} decodes Holqa envelopes, an event channel passes
+ * raw notifications. A body `decode` rejects is quarantined.
+ *
+ * @param settings - Transport, topology and limits.
+ * @param decode - Turns message bytes into a delivery body; throws for bytes it cannot read.
+ * @returns The driver (for envelopes), the source and the stop function.
+ */
+export function createLeasedBinding<Body>(settings: QueueBindingSettings, decode: (body: Uint8Array) => Body): { readonly driver: QueueDriver; readonly source: DeliverySource<Body> & Pick<QueueSource, "defaultMaxAttempts" | "pending">; readonly stop: () => Promise<void> } {
   const { binding, transport, topology } = settings;
   const encoder = new TextEncoder();
-  const held = new Map<string, Held>();
+  const held = new Map<string, Held<Body>>();
   const waiters = new Set<() => void>();
   let consumer: Promise<{ readonly close: () => Promise<void> }> | undefined;
   let stopped = false;
@@ -148,7 +162,7 @@ export function createQueueBinding(settings: QueueBindingSettings): { readonly d
    * @param entry - The held message.
    * @param settlement - Acknowledge or requeue.
    */
-  const finish = (entry: Held, settlement: AmqpSettlement): void => {
+  const finish = (entry: Held<Body>, settlement: AmqpSettlement): void => {
     if (entry.settled)
       return;
     entry.settled = true;
@@ -165,7 +179,7 @@ export function createQueueBinding(settings: QueueBindingSettings): { readonly d
    * @param extra - Headers to add, for example the failure.
    * @returns Whether the copy was published.
    */
-  const forward = async (entry: Held, queue: string, extra: Readonly<Record<string, string | number>> = {}): Promise<boolean> => {
+  const forward = async (entry: Held<Body>, queue: string, extra: Readonly<Record<string, string | number>> = {}): Promise<boolean> => {
     const metadata: Record<string, string | number> = {};
     for (const [name, value] of Object.entries(entry.message.headers)) {
       if (typeof value === "string" || typeof value === "number")
@@ -189,7 +203,7 @@ export function createQueueBinding(settings: QueueBindingSettings): { readonly d
    * @param receipt - The receipt the delivery was leased with.
    * @returns The entry, when it can still be settled.
    */
-  const current = (receipt: string): Held | undefined => {
+  const current = (receipt: string): Held<Body> | undefined => {
     const entry = held.get(receipt);
     if (entry === undefined || entry.settled || !entry.leased || entry.generation !== transport.generation())
       return undefined;
@@ -201,7 +215,7 @@ export function createQueueBinding(settings: QueueBindingSettings): { readonly d
    * @param entry - The delivery.
    * @param leaseMs - The lease length.
    */
-  const lease = (entry: Held, leaseMs: number): void => {
+  const lease = (entry: Held<Body>, leaseMs: number): void => {
     entry.cancelTimer?.();
     entry.cancelTimer = settings.setTimer(leaseMs, () => {
       // An expired lease makes the message due again, one attempt further.
@@ -240,9 +254,9 @@ export function createQueueBinding(settings: QueueBindingSettings): { readonly d
   const startConsumer = (): Promise<{ readonly close: () => Promise<void> }> => {
     consumer ??= transport.consume(topology.queue, settings.prefetch, (message, generation) => new Promise<AmqpSettlement>((resolve) => {
       const receipt = settings.createId();
-      let envelope: MessageEnvelope;
+      let body: Body;
       try {
-        envelope = decodeMessageEnvelope(new TextDecoder().decode(message.body), `message for queue "${topology.queue}"`);
+        body = decode(message.body);
       } catch {
         void quarantine(message, resolve);
         return;
@@ -251,7 +265,7 @@ export function createQueueBinding(settings: QueueBindingSettings): { readonly d
       const redeliveries = message.headers[headers.deliveryCount] === undefined ? (message.redelivered ? 1 : 0) : count(message.headers[headers.deliveryCount]);
       const trace = traceOf(message.headers[headers.trace]);
       const sentAt = typeof message.headers[headers.sentAt] === "string" ? message.headers[headers.sentAt] as string : undefined;
-      const entry: Held = {
+      const entry: Held<Body> = {
         receipt,
         message,
         generation,
@@ -259,7 +273,7 @@ export function createQueueBinding(settings: QueueBindingSettings): { readonly d
           receipt,
           id: message.messageId ?? receipt,
           attempt: previous + redeliveries + 1,
-          body: envelope,
+          body,
           ...trace === undefined ? {} : { trace },
           ...sentAt === undefined ? {} : { sentAt }
         }),
@@ -289,11 +303,11 @@ export function createQueueBinding(settings: QueueBindingSettings): { readonly d
     }
   });
 
-  const source = Object.freeze<QueueSource>({
+  const source = Object.freeze<DeliverySource<Body> & Pick<QueueSource, "defaultMaxAttempts" | "pending">>({
     defaultMaxAttempts: settings.defaultMaxAttempts,
     receive: async ({ max, leaseMs }) => {
       await startConsumer();
-      const deliveries: Array<LeasedDelivery<MessageEnvelope>> = [];
+      const deliveries: Array<LeasedDelivery<Body>> = [];
       for (const entry of held.values()) {
         if (deliveries.length >= max)
           break;

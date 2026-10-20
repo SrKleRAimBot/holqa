@@ -21,6 +21,7 @@ export {
 export type { BindingContractName, BindingProtocolVersion } from "@/binding/contracts";
 export { checkTriggerDelivery } from "@/binding/delivery-check";
 export type { DeliveredHandler } from "@/binding/delivery-check";
+export type { EventChannel, OpenedEventChannel } from "@/binding/event-channel";
 export {
   bindingFailure,
   bindingFailureCodes,

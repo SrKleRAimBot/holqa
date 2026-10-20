@@ -65,6 +65,8 @@ The runtime serves HTTP APIs and RPC procedures with standard Fetch `Request` an
 
 `sources.bucket(resource).subscribe(subscription)` returns a delivery source of `holqa.object-event/1` events for one handler's subscription (types and optional prefix). Every subscription settles its own copy. Event identifiers are stable across redeliveries. A provider advertises the event types it delivers in `BucketCapabilities.events`, and declares the `bucket.events` contract only when it does: reading and writing objects never implies event delivery. Against external services, a subscription is infrastructure created by provisioning; `subscribe` must fail with a classified failure when it is missing, never create it with data-plane credentials.
 
+When notifications travel over separate infrastructure, a storage provider reads them through an `EventChannel`: side-effect-free data plus `open(context)`, which resolves to `subscribe(subscription)` returning a `DeliverySource<Uint8Array>` of raw notification bodies. The storage provider opens and stops the channel and lists its credentials and settings as its own. See the [S3-compatible provider](providers/s3.md#object-events).
+
 ### `schedule`
 
 `sources.schedule(resource).start(listener)` reports due runs; the listener's promise resolves with the run's result, which the scheduler may record. The provider evaluates cron, time zone, daylight-saving and missed-run rules exactly as the [runtime reference](runtime.md#scheduled-runs) specifies, or refuses the schedule. The overlap policy is applied by the runtime per process. `ScheduleCapabilities`: `overlap`.

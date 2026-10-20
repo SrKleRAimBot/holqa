@@ -23,7 +23,8 @@ All packages use the `@holqa/` npm scope, are ESM-only, ship bundled `.d.ts` dec
 | `@holqa/runtime-bun` | `packages/runtime-bun` | **Implemented** (dispatcher, lifecycle, HTTP and RPC, queue, object event and schedule delivery, telemetry, `Bun.serve`) | Bun execution: invocation dispatcher, application lifecycle, HTTP, RPC and background transports. |
 | `@holqa/bindings` | `packages/bindings` | **Implemented** (binding configurations, resolution, composition) | Selects a provider for every resource and service and composes them into one runtime binding. |
 | `@holqa/conformance` | `packages/conformance` | **Implemented** (queue, bucket, object event and schedule suites) | Reusable provider conformance cases. |
-| `@holqa/rabbitmq` | `packages/providers/rabbitmq` | **Implemented** (queue provider) | RabbitMQ queues. |
+| `@holqa/rabbitmq` | `packages/providers/rabbitmq` | **Implemented** (queue provider, event channel) | RabbitMQ queues and storage notifications. |
+| `@holqa/s3` | `packages/providers/s3` | **Implemented** (bucket provider) | S3-compatible object storage. |
 | `@holqa/local` | `packages/local` | **Implemented** (local binding) | Local runtime drivers: SQLite-backed queues, filesystem object storage with events and signed URLs, a clock-driven scheduler, inspection, a local telemetry store. |
 | `@holqa/testing` | `packages/testing` | **Implemented** (`createTestApp` with recording and replay, in-memory telemetry, type assertions) | Deterministic integration tests on the local environment, and compile-time type assertions. |
 | `@holqa/client` | `packages/client` | Planned | Browser-safe generated-client runtime. |
@@ -222,8 +223,23 @@ Resource identifier grammar: `^[a-z][a-z0-9]*(?:[-.][a-z0-9]+)*$`, 1–63 charac
 | --- | --- | --- |
 | `rabbitmq.queues(options)`, `RabbitMqQueuesOptions` | Function, type | The queue provider. |
 | `queueTopology`, `topologyDeclarations`, `delaySteps`, `delayStep`, `maxDelaySeconds`, `QueueTopology`, `QueueDeclaration`, `TopologyOptions` | Functions, constants, types | The broker queues a Holqa queue uses and their declarations, for provisioning tools. |
-| `createQueueBinding`, `headers`, `QueueBindingSettings` | Function, constant, type | The queue driver and source on any `AmqpTransport`. |
+| `rabbitmq.eventChannel(options)`, `eventChannel`, `RabbitMqEventChannelOptions` | Function, type | An event channel delivering raw storage notifications per subscription. |
+| `createQueueBinding`, `createLeasedBinding`, `headers`, `QueueBindingSettings` | Functions, constant, type | The queue driver and source, and the generic leased source, on any `AmqpTransport`. |
 | `rabbitMqTransport`, `classifyAmqpError`, `AmqpTransport`, `AmqpMessage`, `AmqpSettlement`, `AmqpConsumer`, `AmqpPublishProperties`, `AmqpQueueArguments`, `RabbitMqTransportOptions` | Functions, types | The AMQP transport port and its `rabbitmq-client` implementation. |
+
+## `@holqa/s3`
+
+- **Path:** `packages/providers/s3`
+- **Status:** Implemented (bucket provider). Private. See the [S3-compatible provider reference](providers/s3.md).
+- **Entry point:** `@holqa/s3` → `dist/index.js`, `dist/index.d.ts`.
+- **Internal dependencies:** `@holqa/core`. No external dependencies.
+
+| Export | Kind | Description |
+| --- | --- | --- |
+| `s3.buckets(options)`, `S3BucketsOptions`, `S3EventsOptions` | Function, types | The bucket provider. |
+| `putObject`, `getObject`, `headObject`, `deleteObject`, `listObjects`, `headBucket`, `signObjectUrl`, `objectUrl`, `traceMeta`, `S3Connection` | Functions, constant, type | Signed S3 requests with classified failures. |
+| `readS3Notification`, `objectEventFromS3`, `objectEventSource`, `S3EventRecord` | Functions, type | S3 event notifications as Holqa object events. |
+| `signHeaders`, `presign`, `uriEncode`, `sha256Hex`, `amzDate`, `SignableRequest`, `SignedHeaders`, `SigningCredentials`, `SigningScope` | Functions, types | AWS Signature Version 4. |
 
 ## `@holqa/local`
 
