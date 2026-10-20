@@ -30,6 +30,10 @@ describe("generation protocol", () => {
     expect(readOperation({ kind: "invoke", handlerId: "a", attempt: 1.5 })).toBeUndefined();
     expect(readOperation({ kind: "queue.send", queueId: "q", message: null })).toEqual({ kind: "queue.send", queueId: "q", message: null });
     expect(readOperation({ kind: "queue.send", queueId: "q" })).toBeUndefined();
+    expect(readOperation({ kind: "queue.redrive", queueId: "q", messageId: "m", limit: 2, dryRun: true, newOperation: false })).toEqual({ kind: "queue.redrive", queueId: "q", messageId: "m", limit: 2, dryRun: true });
+    expect(readOperation({ kind: "queue.redrive", queueId: "q", limit: 0 })).toBeUndefined();
+    expect(readOperation({ kind: "queue.redrive", queueId: "q", dryRun: "yes" })).toBeUndefined();
+    expect(readOperation({ kind: "queue.redrive", queueId: "q", messageId: 1 })).toBeUndefined();
     expect(readOperation({ kind: "storage.put", bucketId: "b", key: "k", body: "aGk=", contentType: 3 })).toBeUndefined();
     expect(readOperation({ kind: "cron.run" })).toBeUndefined();
     expect(readOperation({ kind: "delete-everything" })).toBeUndefined();

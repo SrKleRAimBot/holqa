@@ -1,3 +1,4 @@
+import type { GuardedInvocation } from "@/dispatch/event-guard";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 /** A queue message an invocation sent. */
@@ -25,10 +26,8 @@ export interface EmittedObjectChange {
 export type EmittedEvent = EmittedQueueMessage | EmittedObjectChange;
 
 /** The invocation whose handler code is running in the current asynchronous context. */
-export interface ActiveInvocation {
-  readonly invocationId: string;
+export interface ActiveInvocation extends GuardedInvocation {
   readonly correlationId: string;
-  readonly handlerId: string;
   /** What the invocation has emitted so far, in order. */
   readonly emitted: EmittedEvent[];
 }

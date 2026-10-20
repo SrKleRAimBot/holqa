@@ -9,6 +9,11 @@ export {
   resolveDriver
 } from "@/binding/bind";
 export { checkTriggerDelivery } from "@/binding/delivery-check";
+export type {
+  OperationBudgetRequest,
+  OperationBudgetResult,
+  OperationBudgetStore
+} from "@/binding/operation-budgets";
 export { createBindingSlot } from "@/binding/runtime-binding";
 export type {
   BindingCapabilities,
@@ -35,7 +40,8 @@ export type {
   SkippedScheduleRun,
   SucceededScheduleRun
 } from "@/binding/sources";
-export type { DeliveryTrace } from "@/binding/trace";
+export { childTrace, lineageOfDelivery } from "@/binding/trace";
+export type { DeliveryTrace, InvocationLineage } from "@/binding/trace";
 export type { ConfigDescriptor } from "@/config/config-descriptor";
 export { diagnosticCodes } from "@/diagnostics/codes";
 export type { DiagnosticCode } from "@/diagnostics/codes";
@@ -52,6 +58,21 @@ export {
   isHolqaError
 } from "@/errors/holqa-error";
 export type { ApplicationScope, ScopedDefinition } from "@/handlers/application-scope";
+export {
+  defaultEventLimits,
+  eventPolicyProblems,
+  idempotencyPolicyProblems,
+  isEventGuardCode,
+  maxCycleJustificationLength,
+  maxIdempotencyLeaseSeconds,
+  maxIdempotencyRetentionSeconds
+} from "@/handlers/event-policy";
+export type {
+  HandlerCycleAllowance,
+  HandlerEventPolicy,
+  HandlerIdempotencyPolicy,
+  IdempotencyKeySource
+} from "@/handlers/event-policy";
 export type {
   HandlerDefinition,
   HandlerDefinitionOf,
@@ -104,6 +125,15 @@ export {
   routeShape
 } from "@/http/routes";
 export type { HttpEndpoint } from "@/http/routes";
+export { createIdempotencyKey, createMemoryIdempotencyStore } from "@/idempotency/idempotency-store";
+export type {
+  IdempotencyBeginOptions,
+  IdempotencyClaim,
+  IdempotencyCompleteOptions,
+  IdempotencyExtendOptions,
+  IdempotencyStore,
+  MemoryIdempotencyStoreOptions
+} from "@/idempotency/idempotency-store";
 export {
   isResourceId,
   maxResourceIdLength,

@@ -31,6 +31,12 @@ export interface LeasedDelivery<Body> {
   readonly body: Body;
   /** Where the delivery came from, when the binding recorded it. */
   readonly trace?: DeliveryTrace;
+  /**
+   * When the message was sent or the change happened (ISO 8601, UTC), when
+   * the binding knows it. Retries keep the original time. Runtimes compare it
+   * with `events.maxEventAgeMs`; without it, age limits cannot apply.
+   */
+  readonly sentAt?: string;
 }
 
 /** Settings of one receive call. */

@@ -109,6 +109,26 @@ describe("createRuntime", () => {
     await manual.stop();
   });
 
+  it("refuses to start when the binding lacks a store that event limits or idempotent handlers need", async () => {
+    const app = application([scheduleResource("nightly")]);
+    const handler = scheduleHandler("nightly.run", "nightly", () => undefined);
+    const budgeted = runtimeOf({ app, handlers: [handler], manualTriggers: true, binding: scheduleBinding, events: { maxEventsPerOperation: 10 } });
+    expect(await rejectedCodes(budgeted.start())).toEqual(["HOLQA_RUNTIME_START_FAILED", "HOLQA_BINDING_CAPABILITY_UNSUPPORTED"]);
+    const idempotent = { "~holqa": { ...handler["~holqa"], definition: { ...handler["~holqa"].definition, idempotency: { key: "delivery", retentionSeconds: 60, leaseSeconds: 30 } } } };
+    const unsupported = runtimeOf({ app: application([scheduleResource("nightly")]), handlers: [idempotent], manualTriggers: true, binding: scheduleBinding });
+    expect(await rejectedCodes(unsupported.start())).toEqual(["HOLQA_RUNTIME_START_FAILED", "HOLQA_BINDING_CAPABILITY_UNSUPPORTED"]);
+    expect(thrownCodes(() => runtimeOf({ app, handlers: [handler], events: { maxDepth: 0 } }))).toEqual(["HOLQA_RUNTIME_START_FAILED"]);
+  });
+
+  it("makes every direct invocation a root of its own lineage", async () => {
+    const app = application([scheduleResource("nightly")]);
+    const runtime = runtimeOf({ app, manualTriggers: true, handlers: [scheduleHandler("nightly.run", "nightly", () => "done")], binding: scheduleBinding });
+    await runtime.start();
+    const outcome = await runtime.invoke({ handlerId: "nightly.run", metadata: { scheduledTime: "2026-10-18T03:00:00Z" }, rootId: "someone-else", depth: 9 });
+    expect(outcome.lineage).toEqual({ correlationId: outcome.invocationId, rootId: outcome.invocationId, depth: 0 });
+    await runtime.stop();
+  });
+
   it("rejects values that are not applications", () => {
     expect(thrownCodes(() => runtimeOf({ app: { name: "shop" }, handlers: [] }))).toEqual(["HOLQA_APP_INVALID"]);
   });

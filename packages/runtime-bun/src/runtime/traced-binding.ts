@@ -6,27 +6,34 @@ import type {
   RuntimeBinding
 } from "@holqa/core";
 
+import type { EventGuard } from "@/dispatch/event-guard";
 import type { InvocationTracker } from "@/dispatch/invocation-tracker";
+
+import { childTrace } from "@holqa/core";
 
 /**
  * Wraps a binding's queue and bucket drivers so that every send, write and
- * delete performed by handler code carries the running invocation's trace
- * (`correlationId` and, as `causationId`, its `invocationId`) and is recorded
- * as something the invocation emitted. Operations outside an invocation pass
- * through unchanged. Capabilities, sources and configuration are not touched.
+ * delete performed by handler code is first admitted by the event guard
+ * (publication, depth and operation budget limits), then carries the running
+ * invocation's trace and lineage (`correlationId`, its `invocationId` as
+ * `causationId`, the root operation and one more hop of depth), and is
+ * recorded as something the invocation emitted. Operations outside an
+ * invocation pass through unchanged. Capabilities, sources and configuration
+ * are not touched.
  *
  * @param binding - The binding the runtime installs.
  * @param tracker - Knows which invocation is running.
+ * @param guard - Applies the event limits.
  * @returns A binding with traced drivers.
  */
-export function traceBinding(binding: RuntimeBinding, tracker: InvocationTracker): RuntimeBinding {
+export function traceBinding(binding: RuntimeBinding, tracker: InvocationTracker, guard: EventGuard): RuntimeBinding {
   const { queue, bucket } = binding.drivers;
   return Object.freeze({
     ...binding,
     drivers: Object.freeze({
       ...binding.drivers,
-      ...queue === undefined ? {} : { queue: (resource: ResourceDescriptorOf<"queue">) => traceQueue(resource.id, queue(resource), tracker) },
-      ...bucket === undefined ? {} : { bucket: (resource: ResourceDescriptorOf<"bucket">) => traceBucket(resource.id, bucket(resource), tracker) }
+      ...queue === undefined ? {} : { queue: (resource: ResourceDescriptorOf<"queue">) => traceQueue(resource.id, queue(resource), tracker, guard) },
+      ...bucket === undefined ? {} : { bucket: (resource: ResourceDescriptorOf<"bucket">) => traceBucket(resource.id, bucket(resource), tracker, guard) }
     })
   });
 }
@@ -42,7 +49,7 @@ function contextOf(tracker: InvocationTracker, given: DriverOperationContext | u
   if (given !== undefined)
     return given;
   const active = tracker.current();
-  return active === undefined ? undefined : { trace: { correlationId: active.correlationId, causationId: active.invocationId } };
+  return active === undefined ? undefined : { trace: childTrace(active.lineage, active.invocationId) };
 }
 
 /**
@@ -51,12 +58,15 @@ function contextOf(tracker: InvocationTracker, given: DriverOperationContext | u
  * @param resourceId - The queue's identifier.
  * @param driver - The binding's driver.
  * @param tracker - Knows which invocation is running.
- * @returns A driver that adds the trace and records sent messages.
+ * @param guard - Applies the event limits.
+ * @returns A driver that admits sends, adds the trace and records sent messages.
  */
-function traceQueue(resourceId: string, driver: QueueDriver, tracker: InvocationTracker): QueueDriver {
+function traceQueue(resourceId: string, driver: QueueDriver, tracker: InvocationTracker, guard: EventGuard): QueueDriver {
   return Object.freeze<QueueDriver>({
     send: async (envelope, options, given) => {
       const active = tracker.current();
+      if (active !== undefined)
+        await guard.admit(active, { resourceId, type: "queue.message" });
       const context = contextOf(tracker, given);
       const receipt = await (context === undefined ? driver.send(envelope, options) : driver.send(envelope, options, context));
       active?.emitted.push({ type: "queue.message", resourceId, messageId: receipt.messageId });
@@ -71,12 +81,15 @@ function traceQueue(resourceId: string, driver: QueueDriver, tracker: Invocation
  * @param resourceId - The bucket's identifier.
  * @param driver - The binding's driver.
  * @param tracker - Knows which invocation is running.
- * @returns A driver that adds the trace to writes and deletes and records them.
+ * @param guard - Applies the event limits.
+ * @returns A driver that admits writes and deletes, adds the trace to them and records them.
  */
-function traceBucket(resourceId: string, driver: BucketDriver, tracker: InvocationTracker): BucketDriver {
+function traceBucket(resourceId: string, driver: BucketDriver, tracker: InvocationTracker, guard: EventGuard): BucketDriver {
   return Object.freeze<BucketDriver>({
     put: async (key, body, options, given) => {
       const active = tracker.current();
+      if (active !== undefined)
+        await guard.admit(active, { resourceId, type: "object.created", key });
       const context = contextOf(tracker, given);
       const metadata = await (context === undefined ? driver.put(key, body, options) : driver.put(key, body, options, context));
       active?.emitted.push({ type: "object.created", resourceId, key });
@@ -84,6 +97,8 @@ function traceBucket(resourceId: string, driver: BucketDriver, tracker: Invocati
     },
     delete: async (key, given) => {
       const active = tracker.current();
+      if (active !== undefined)
+        await guard.admit(active, { resourceId, type: "object.deleted", key });
       const context = contextOf(tracker, given);
       const deleted = await (context === undefined ? driver.delete(key) : driver.delete(key, context));
       if (deleted)

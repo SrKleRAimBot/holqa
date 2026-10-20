@@ -15,6 +15,7 @@ import type {
   InvocationRequest,
   RegisteredHandler
 } from "@/dispatch/dispatcher";
+import type { RuntimeEventLimits } from "@/dispatch/event-guard";
 import type { CorsOptions } from "@/http/cors";
 import type { LogSink } from "@/logging/log";
 import type { EnvironmentVariables } from "@/runtime/environment-binding";
@@ -33,6 +34,10 @@ import {
 
 import { Transports } from "@/delivery/transports";
 import { Dispatcher } from "@/dispatch/dispatcher";
+import {
+  EventGuard,
+  eventLimitProblems
+} from "@/dispatch/event-guard";
 import { InvocationTracker } from "@/dispatch/invocation-tracker";
 import { Semaphore } from "@/dispatch/semaphore";
 import { CorsPolicy } from "@/http/cors";
@@ -96,6 +101,13 @@ export interface RuntimeOptions {
   /** Environment variables for the default binding. Defaults to `process.env`. Ignored when `binding` is given. */
   readonly env?: EnvironmentVariables;
   readonly limits?: RuntimeLimits;
+  /**
+   * Limits on event-driven work: how deep a causal chain may grow, how many
+   * events one invocation may publish, how old a delivery may be, and how
+   * many events one root operation may publish in total. Events beyond a
+   * limit are refused with a terminal outcome instead of being retried.
+   */
+  readonly events?: RuntimeEventLimits;
   readonly http?: RuntimeHttpOptions;
   /**
    * Run queue consumers, object event handlers and schedule handlers only
@@ -159,7 +171,7 @@ export interface Runtime {
    * and repeated calls share one stop.
    */
   readonly stop: (options?: StopOptions) => Promise<void>;
-  /** Runs one invocation of any registered handler; never rejects. */
+  /** Runs one invocation of any registered handler as a root of its own lineage (`rootId` and `depth` are ignored); never rejects. */
   readonly invoke: (request: InvocationRequest) => Promise<InvocationOutcome>;
   /** Serves one HTTP request with the application's routes and procedures; never rejects. */
   readonly fetch: (request: Request) => Promise<Response>;
@@ -196,6 +208,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const limits = readLimits(options.limits, problems);
   const handlers = registerHandlers(app, options.handlers, problems);
   checkDeliveryOptions(options.delivery, problems);
+  for (const problem of eventLimitProblems(options.events))
+    problems.push(createDiagnostic({ code: diagnosticCodes.runtimeStartFailed, severity: "error", message: problem }));
   const { table, problems: routeProblems } = buildRouteTable(app, [...handlers.values()].map(handler => handler.definition));
   problems.push(...routeProblems);
   let cors: CorsPolicy | undefined;
@@ -210,6 +224,8 @@ export function createRuntime(options: RuntimeOptions): Runtime {
   const logger = new StructuredLogger(options.log ?? jsonLineSink(), { application: app.name }, options.clock);
   const scope = new RuntimeScope(logger);
   const tracker = new InvocationTracker();
+  const guard = new EventGuard(app, [...handlers.values()].map(handler => handler.definition), options.events);
+  const wallClock = options.clock ?? (() => new Date());
   let state: RuntimeState = "idle";
   let unbind: (() => void) | undefined;
   let stopping: Promise<void> | undefined;
@@ -233,7 +249,9 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     timeoutMs: limits.timeoutMs,
     dispatch: request => dispatcher.dispatch(request),
     stopping: () => state !== "running",
-    logger
+    logger,
+    guard,
+    now: () => wallClock().getTime()
   });
   const fetch = createHttpHandler({ table, dispatcher, logger, ...cors === undefined ? {} : { cors }, trustCorrelationHeader: options.http?.trustCorrelationHeader ?? true });
 
@@ -248,9 +266,13 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     state = "starting";
     try {
       // Handler code's sends and writes carry the invocation's trace and are recorded as emitted.
-      const binding = traceBinding(options.binding ?? await createEnvironmentBinding(app, options.env ?? process.env), tracker);
+      const binding = traceBinding(options.binding ?? await createEnvironmentBinding(app, options.env ?? process.env), tracker, guard);
       if (state !== "starting")
         throw new HolqaError(createDiagnostic({ code: diagnosticCodes.runtimeNotRunning, severity: "error", message: `The runtime for "${app.name}" was stopped while it was starting.` }));
+      const unsupported = checkEventSafetySupport(binding, [...handlers.values()].map(handler => handler.definition), guard.needsOperationBudgets);
+      if (unsupported.length > 0)
+        throw new HolqaError(unsupported);
+      guard.attach(binding.operationBudgets);
       if (options.manualTriggers !== true) {
         const undeliverable = checkTriggerDelivery(app, [...handlers.values()].map(handler => handler.definition), binding);
         if (undeliverable.length > 0)
@@ -313,10 +335,44 @@ export function createRuntime(options: RuntimeOptions): Runtime {
     handlers: Object.freeze([...handlers.values()].map(handler => handler.definition).sort((left, right) => left.id < right.id ? -1 : left.id > right.id ? 1 : 0)),
     start,
     stop,
-    invoke: (request: InvocationRequest) => dispatcher.dispatch(request),
+    // Lineage is assigned by the runtime: a direct invocation is always a root.
+    invoke: ({ rootId: _rootId, depth: _depth, ...request }: InvocationRequest) => dispatcher.dispatch(request),
     fetch,
     stats: () => Object.freeze({ state, ...dispatcher.stats(), delivery: transports.stats() })
   });
+}
+
+/**
+ * Checks that a binding provides what the runtime's event limits and the
+ * handlers' idempotency policies need, so that nothing is enforced partially.
+ *
+ * @param binding - The binding being installed.
+ * @param handlers - The handlers' definitions.
+ * @param needsOperationBudgets - Whether a per-operation budget is configured.
+ * @returns One `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` diagnostic per problem.
+ */
+function checkEventSafetySupport(binding: RuntimeBinding, handlers: readonly HandlerDefinition[], needsOperationBudgets: boolean): Diagnostic[] {
+  const problems: Diagnostic[] = [];
+  if (needsOperationBudgets && binding.operationBudgets === undefined) {
+    problems.push(createDiagnostic({
+      code: diagnosticCodes.bindingCapabilityUnsupported,
+      severity: "error",
+      message: `Binding "${binding.name}" cannot enforce events.maxEventsPerOperation: it provides no atomic operation budget store.`,
+      hint: "Use a binding with operation budgets, such as the local binding from @holqa/local, or remove events.maxEventsPerOperation and rely on depth and publication limits."
+    }));
+  }
+  for (const definition of handlers) {
+    if (definition.idempotency !== undefined && binding.idempotency === undefined) {
+      problems.push(createDiagnostic({
+        code: diagnosticCodes.bindingCapabilityUnsupported,
+        severity: "error",
+        message: `Binding "${binding.name}" provides no idempotency store, which the handler "${definition.id}" declares.`,
+        hint: "Use a binding with an idempotency store, such as the local binding from @holqa/local, or remove the handler's idempotency option.",
+        details: { handler: definition.id }
+      }));
+    }
+  }
+  return problems;
 }
 
 /**

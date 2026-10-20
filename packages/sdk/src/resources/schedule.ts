@@ -1,11 +1,13 @@
 import type {
   HandlerInvoke,
+  InvocationLineage,
   InvocationLogger,
   ResourceDescriptorOf,
   ScheduleOverlap,
   ScheduleRunTrigger
 } from "@holqa/core";
 
+import type { HandlerEventOptions } from "@/internal/event-options";
 import type {
   HandlerRegistration,
   ResourceHandle
@@ -20,9 +22,11 @@ import {
 
 import {
   DeclarationProblems,
+  definedEntries,
   freezeJson,
   requireOptions
 } from "@/internal/declaration";
+import { readEventOptions } from "@/internal/event-options";
 
 /** The overlap policies a schedule may require. */
 const overlapPolicies: readonly ScheduleOverlap[] = ["skip", "allow"];
@@ -51,6 +55,8 @@ export interface ScheduleContext {
   readonly trigger: ScheduleRunTrigger;
   /** Identifies the run in the scheduler's records, when the run came from a scheduler. */
   readonly runId?: string;
+  /** The run's lineage; a scheduled run is the root of its operation (depth 0). Absent when the runtime does not track lineage. */
+  readonly lineage?: InvocationLineage;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
 }
@@ -64,6 +70,8 @@ export interface ScheduleHandlerOptions<HandlerId extends string> {
   /** The handler's persistent identity. */
   readonly id: HandlerId;
   readonly handler: (context: ScheduleContext) => Promise<void> | void;
+  /** Event safety declarations: publications analysis cannot see, and the publication limit. */
+  readonly events?: HandlerEventOptions;
 }
 
 /**
@@ -128,6 +136,7 @@ export function schedule<const Id extends string>(options: ScheduleOptions<Id> &
       const handlerIdCandidate = registrationProblems.identifier(rawRegistration.id, "handler id");
       if (typeof rawRegistration.handler !== "function")
         registrationProblems.invalid("\"handler\" must be a function.");
+      const events = readEventOptions(rawRegistration.events, registrationProblems);
       const handlerId = registrationProblems.valid(handlerIdCandidate);
 
       /**
@@ -139,7 +148,7 @@ export function schedule<const Id extends string>(options: ScheduleOptions<Id> &
        */
       const invoke: HandlerInvoke<"schedule.tick"> = async (_input, context) => {
         const { scheduledTime, runId, trigger = "cron" } = context.metadata;
-        await registration.handler({ scheduledTime, trigger, ...runId === undefined ? {} : { runId }, signal: context.signal, log: context.log });
+        await registration.handler({ scheduledTime, trigger, ...runId === undefined ? {} : { runId }, ...context.lineage === undefined ? {} : { lineage: context.lineage }, signal: context.signal, log: context.log });
         return undefined;
       };
       const handler: ScheduleHandler<Id, HandlerId> = Object.freeze({
@@ -148,7 +157,8 @@ export function schedule<const Id extends string>(options: ScheduleOptions<Id> &
           type: "handler" as const,
           definition: freezeJson({
             id: handlerId,
-            trigger: { kind: "schedule.tick" as const, resource: { kind: "schedule" as const, id }, options: {} }
+            trigger: { kind: "schedule.tick" as const, resource: { kind: "schedule" as const, id }, options: {} },
+            ...definedEntries({ events })
           }),
           schemas: Object.freeze({}),
           invoke

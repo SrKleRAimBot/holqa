@@ -1,4 +1,7 @@
-import type { CliHost } from "@/analysis/host";
+import type {
+  AnalysisSuccess,
+  CliHost
+} from "@/analysis/host";
 
 import {
   createDiagnostic,
@@ -6,6 +9,7 @@ import {
 } from "@holqa/core";
 import {
   compiledOutcome,
+  cyclicOutcome,
   fakeHost
 } from "@test/support/fake-host";
 import {
@@ -45,7 +49,7 @@ describe("runCli", () => {
     const result = await run([]);
     expect(result.code).toBe(exitCodes.success);
     expect(result.stdout).toContain("Usage: holqa");
-    expect(result.stdout).toContain("holqa inspect [--app <path>]");
+    expect(result.stdout).toContain("holqa inspect [--cycles] [--app <path>]");
     expect(result.stdout).toContain("not implemented yet");
     expect(result.stdout).toContain("runs their code");
     expect(result.stderr).toBe("");
@@ -108,6 +112,29 @@ describe("holqa inspect", () => {
     expect(text).toEqual({ code: 1, stdout: "", stderr: "src/a.handler.ts:3:7 error HOLQA_RESOURCE_NOT_FOUND: missing" });
     const json = await run(["inspect", "--json"], host);
     expect(JSON.parse(json.stderr)).toEqual({ diagnostics: [failure] });
+  });
+
+  it("prints the event graph and its cycles with --cycles, exiting 0 because cycles are warnings", async () => {
+    const host = fakeHost(await cyclicOutcome());
+    const text = await run(["inspect", "--cycles"], host);
+    expect(text.code).toBe(exitCodes.success);
+    expect(text.stdout).toContain("Event graph of \"basic\"");
+    expect(text.stdout).toContain("orders.process  queue.message <- \"orders\"  analysis complete");
+    expect(text.stdout).toContain("send \"orders\"  known  resources.orders.send()  src/orders.handler.ts:4:43");
+    expect(text.stdout).toContain("warning  known      orders.process → resources.orders.send() → orders.process");
+    expect(text.stderr).toContain("warning HOLQA_EVENT_CYCLE");
+    const json = await run(["inspect", "--cycles", "--json"], host);
+    expect(json.code).toBe(exitCodes.success);
+    const document = JSON.parse(json.stdout) as Record<string, unknown>;
+    expect(Object.keys(document)).toEqual(["cycles", "diagnostics", "events"]);
+    expect(document).toMatchObject({ cycles: [{ status: "reported", certainty: "known", handlers: ["orders.process"] }], diagnostics: expect.arrayContaining([expect.objectContaining({ code: "HOLQA_EVENT_CYCLE", severity: "warning" })]), events: { nodes: expect.any(Array), edges: expect.any(Array), unresolved: [] } });
+  });
+
+  it("fails --cycles with a diagnostic when the host provides no event analysis", async () => {
+    const { events: _events, ...withoutEvents } = await cyclicOutcome() as AnalysisSuccess;
+    const result = await run(["inspect", "--cycles", "--json"], fakeHost(withoutEvents));
+    expect(result.code).toBe(exitCodes.failure);
+    expect(JSON.parse(result.stderr)).toMatchObject({ diagnostics: [{ code: "HOLQA_ANALYSIS_FAILED" }] });
   });
 
   it("rejects unknown options with exit code 2 without analyzing", async () => {

@@ -1,6 +1,6 @@
 # Local environment
 
-> **Status:** **Implemented** in `@holqa/local` (private, unpublished). `holqa dev` and the operation commands (`invoke`, `queue send`, `storage put`, `cron run`, `state`) run applications on it ([CLI reference](cli.md)), and `createTestApp` in `@holqa/testing` runs it in tests ([local development guide](../guides/local-development.md)); it can also be created in code, as below.
+> **Status:** **Implemented** in `@holqa/local` (private, unpublished). `holqa dev` and the operation commands (`invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`, `state`) run applications on it ([CLI reference](cli.md)), and `createTestApp` in `@holqa/testing` runs it in tests ([local development guide](../guides/local-development.md)); it can also be created in code, as below.
 
 `@holqa/local` is a runtime binding that fulfils an application's queues, buckets and schedules on one machine, without cloud credentials. It implements the same driver and source contracts as any other binding ([ADR 0024](../architecture/decisions/0024-event-delivery-sources-and-local-drivers.md)), so handler code does not change between local runs and other bindings. The delivery policy (retries, backoff, dead-lettering, concurrency) is applied by `@holqa/runtime-bun` and is the same for every binding ([runtime reference](runtime.md#queue-delivery)).
 
@@ -44,6 +44,8 @@ The binding advertises what it implements, and never more than common production
 | `bucket` | `private` and `public-read` access, `object.created` and `object.deleted` events, signed URLs valid for up to 7 days. |
 | `schedule` | `skip` and `allow` overlap policies. |
 | `http.api` | Served by the runtime. |
+| Operation budgets | `binding.operationBudgets`: each request is one SQLite transaction, so every process that shares the state directory counts against one budget per root operation. Enables the runtime's `events.maxEventsPerOperation`. |
+| Idempotency keys | `binding.idempotency`: claims and completed keys in the state database, durable across restarts and shared by every process using the directory. |
 
 A declaration that needs more fails when the runtime starts: `HOLQA_RUNTIME_START_FAILED`, followed by one `HOLQA_BINDING_CAPABILITY_UNSUPPORTED` diagnostic per shortfall.
 
@@ -58,7 +60,7 @@ A declaration that needs more fails when the runtime starts: `HOLQA_RUNTIME_STAR
 | Events | Written in the same transaction as the metadata change, as one delivery per matching subscription, and due at once. Notifications from storage services are asynchronous and can arrive late; do not rely on an event being delivered before a later request reads the object. A subscription keeps receiving events while its runtime is stopped and catches up when it starts again. `storage.retainSubscriptions` removes the subscriptions of handlers that no longer exist, and every `holqa dev` generation calls it when it starts; deliveries already recorded for a removed subscription are kept. An environment created in code keeps subscriptions until they are removed this way. |
 | Leases | Sources implement `extend`, so the runtime renews leases while a handler runs. |
 | Scheduler | Driven by the environment's clock. Each run is reported once, which is stronger than many scheduler services. Runs due while no runtime is subscribed are not backfilled; after a late wake-up the latest due run starts and the earlier ones are recorded as `missed` (at most 10 000 occurrences are examined per wake-up). Cron and daylight-saving rules are those of the [runtime reference](runtime.md#scheduled-runs). |
-| Traces | When the runtime passes a trace with a send, write or delete (`DriverOperationContext.trace`: the sending invocation's `correlationId` and, as `causationId`, its `invocationId`), the trace is stored with each resulting delivery, kept by redeliveries and duplicates, and returned as `LeasedDelivery.trace`, so the receiving invocation joins the trace. Operations without a trace (signed uploads, the CLI's `queue send`) store none. |
+| Traces | When the runtime passes a trace with a send, write or delete (`DriverOperationContext.trace`: the sending invocation's `correlationId`, its `invocationId` as `causationId`, and the lineage `rootId` and `depth`), the trace is stored with each resulting delivery, kept by redeliveries, duplicates and redrives (unless a redrive starts a new operation), and returned as `LeasedDelivery.trace`, so the receiving invocation joins the trace and lineage. Every delivery also reports `sentAt`, the time it was first stored (or redriven as a new operation), for the runtime's `maxEventAgeMs`. Operations without a trace (signed uploads, the CLI's `queue send`) store none. |
 | Not simulated | Network partitions, throttling, service outages and storage quotas. |
 
 ## Signed URLs
@@ -83,7 +85,7 @@ Bindings for external storage services validate their own signatures and documen
 | --- | --- |
 | `queues.messages(queueId, states?)` | Lists messages with `messageId`, `state` (`ready`, `delayed`, `in-flight`, `acknowledged`, `dead-lettered`), `attempts`, `schemaVersion`, `payload`, times, the last failure and the sender's `trace`, when one was recorded. |
 | `queues.deadLetters(queueId)` | Lists dead-lettered messages. |
-| `queues.redrive(queueId, messageId?)` | Makes dead-lettered messages due again with a fresh attempt count. |
+| `queues.redrive(queueId, selection?)` | Makes dead-lettered messages due again with a fresh attempt count, oldest first, in one transaction: all of them, the one a message identifier (a string) names, or the ones `{ messageId?, limit?, newOperation? }` selects. Messages keep their trace and lineage unless `newOperation` gives each a new root operation (depth 0, a fresh budget, a new send time, the same correlation). Returns how many. |
 | `queues.duplicate(queueId, messageId)` | Delivers a known message once more, with the same message identifier. |
 | `queues.purge(queueId)` | Deletes every message that is not in flight. |
 | `storage.events(bucketId)` | Lists events with their `trace` (when the writing invocation recorded one and a subscription received the event) and each subscription's delivery `state`, `attempts`, `visibleAt` (when it is due again or its lease ends) and last failure. |
@@ -122,11 +124,12 @@ expect(local.queues.deadLetters("document-jobs")).toEqual([]);
 
 ## State format
 
-The state directory has format version 2 (`stateVersion`), which adds the sender's trace to deliveries. A format 1 directory is upgraded in place when it is opened; its existing deliveries have no trace. Opening a directory written by a newer format fails with `HOLQA_LOCAL_STATE_UNSUPPORTED`; after an upgrade, older versions of the local drivers therefore refuse the directory. The format is not a public contract: it can change before 1.0, and inspection should go through the APIs above.
+The state directory has format version 3 (`stateVersion`). Format 2 added the sender's trace to deliveries; format 3 adds their lineage (`root_id`, `depth`) and the `operation_budgets` and `idempotency_keys` tables. Format 1 and 2 directories are upgraded in place when they are opened; their existing deliveries have no lineage, so each starts a new root operation when it is delivered. Opening a directory written by a newer format fails with `HOLQA_LOCAL_STATE_UNSUPPORTED`; after an upgrade, older versions of the local drivers therefore refuse the directory. The format is not a public contract: it can change before 1.0, and inspection should go through the APIs above.
 
 ## Related
 
 - [Runtime reference](runtime.md)
+- [Event safety](../concepts/event-safety.md)
 - [Local development](../concepts/local-development.md)
 - [Local development guide](../guides/local-development.md)
 - [CLI reference](cli.md)

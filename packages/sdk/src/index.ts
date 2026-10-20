@@ -55,6 +55,11 @@ export type {
   RouteReplyValue,
   RouteResult
 } from "@/http/route";
+export type {
+  HandlerEventOptions,
+  IdempotencyOptions,
+  PublishableResource
+} from "@/internal/event-options";
 export { bucket } from "@/resources/bucket";
 export type {
   BucketHandle,
@@ -66,6 +71,7 @@ export type {
   ObjectDeletedContext,
   ObjectDeletedHandler,
   ObjectDeletedOptions,
+  ObjectEventIdempotencyContext,
   ObjectEventInfo,
   ObjectInfo
 } from "@/resources/bucket";
@@ -89,6 +95,7 @@ export type {
   QueueConsumerOptions,
   QueueDeliveryOptions,
   QueueHandle,
+  QueueIdempotencyContext,
   QueueMessageContext,
   QueueMessageInput,
   QueueMessageOutput,

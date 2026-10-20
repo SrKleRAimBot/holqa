@@ -103,7 +103,7 @@ describe("traced drivers", () => {
     await runtime.stop();
 
     expect(outcome.ok).toBe(true);
-    const trace = { trace: { correlationId: "trace-1", causationId: outcome.invocationId } };
+    const trace = { trace: { correlationId: "trace-1", causationId: outcome.invocationId, rootId: outcome.invocationId, depth: 1 } };
     expect(calls.sends).toEqual([trace]);
     expect(calls.writes).toEqual([
       { operation: "put", key: "report.txt", context: trace },

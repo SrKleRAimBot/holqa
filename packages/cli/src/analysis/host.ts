@@ -1,5 +1,6 @@
 import type {
   EntrypointMap,
+  EventAnalysis,
   Manifest
 } from "@holqa/compiler";
 import type { Diagnostic } from "@holqa/core";
@@ -20,6 +21,13 @@ export interface AnalysisSuccess {
   readonly ok: true;
   readonly manifest: Manifest;
   readonly entrypoints: EntrypointMap;
+  /**
+   * The event dependency graph and its cycles. Locations are relative to the
+   * application root. The process host always provides it; it is optional so
+   * that hosts written before event analysis existed still type-check, and
+   * `holqa inspect --cycles` reports `HOLQA_ANALYSIS_FAILED` without it.
+   */
+  readonly events?: EventAnalysis;
   /** Warnings and information, sorted. Locations are relative to the application root. */
   readonly diagnostics: readonly Diagnostic[];
   /** Text the application's modules printed while they were evaluated. */

@@ -37,10 +37,15 @@ it("retries a failed order after its backoff", async () => {
 | `advance(ms)` | Moves virtual time, stopping at every timer on the way (delays, retries, schedules) to run what became due. |
 | `drain({ maxMs? })` | Moves time until no queue message or object event a handler receives is waiting. |
 | `failNext(handlerId, { times?, error?, when? })` | Injects failures before the handler's own code runs. |
-| `duplicate(queueId, messageId)`, `duplicateEvent(bucketId, handlerId, eventId)`, `redrive(queueId, messageId?)` | Duplicate delivery and redrive. |
+| `duplicate(queueId, messageId)`, `duplicateEvent(bucketId, handlerId, eventId)`, `redrive(queueId, selection?)` | Duplicate delivery and redrive (all, one, or `{ messageId?, limit?, newOperation? }`). |
 | `messages`, `deadLetters`, `events`, `objects`, `read`, `runs` | Inspect queues, buckets and schedules. |
-| `logs`, `invocations(filter?)`, `trace(correlationId)` | Structured logs, and the finished invocations read from them (`InvocationRecord`: trigger, attempt, outcome, code, `causationId`, `emitted`). |
+| `logs`, `invocations(filter?)`, `trace(correlationId)` | Structured logs, and the finished invocations read from them (`InvocationRecord`: trigger, attempt, outcome, code, `causationId`, `rootId`, `depth`, `emitted`, `blocked`). |
+| `lineage(invocationId)`, `operation(rootId)` | The publication chain that led to an invocation, and everything one root operation caused. |
 | `dispose()`, `[Symbol.asyncDispose]` | Stops the runtime, closes the state and removes the temporary directory. |
+
+`events` sets the runtime's [event limits](../../docs/reference/runtime.md#event-lineage-and-limits) for the test.
+`maxInvocations` (default 10 000) bounds the work a test runs: beyond it, `flush`, `advance` and `drain` throw
+`HOLQA_SIMULATION_BUDGET_EXCEEDED` with the busiest handlers and the deepest chain instead of hanging on an event cycle.
 
 Configuration comes from `env` (default `{}`), never from the test process's environment. Identifiers are sequential
 by default (`id-1`, `id-2`, ...). One application instance can be bound to one runtime at a time, so dispose of a test

@@ -72,7 +72,14 @@ describe("diagnosticCodes", () => {
       devStartFailed: "HOLQA_DEV_START_FAILED",
       fileUnreadable: "HOLQA_FILE_UNREADABLE",
       doctorCheckFailed: "HOLQA_DOCTOR_CHECK_FAILED",
-      localOperationFailed: "HOLQA_LOCAL_OPERATION_FAILED"
+      localOperationFailed: "HOLQA_LOCAL_OPERATION_FAILED",
+      eventCycle: "HOLQA_EVENT_CYCLE",
+      eventDepthExceeded: "HOLQA_EVENT_DEPTH_EXCEEDED",
+      eventPublicationLimitExceeded: "HOLQA_EVENT_PUBLICATION_LIMIT_EXCEEDED",
+      eventAgeExceeded: "HOLQA_EVENT_AGE_EXCEEDED",
+      executionBudgetExceeded: "HOLQA_EXECUTION_BUDGET_EXCEEDED",
+      idempotencyInProgress: "HOLQA_IDEMPOTENCY_IN_PROGRESS",
+      simulationBudgetExceeded: "HOLQA_SIMULATION_BUDGET_EXCEEDED"
     });
   });
 });

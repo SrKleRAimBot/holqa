@@ -1,5 +1,7 @@
+import type { OperationBudgetStore } from "@/binding/operation-budgets";
 import type { ResourceSources } from "@/binding/sources";
 import type { ConfigDescriptor } from "@/config/config-descriptor";
+import type { IdempotencyStore } from "@/idempotency/idempotency-store";
 import type {
   DrivenResourceKind,
   ResourceKind,
@@ -44,6 +46,18 @@ export interface RuntimeBinding {
    * its drivers can still be used, for example to send messages from an HTTP service.
    */
   readonly sources?: ResourceSources;
+  /**
+   * Atomic accounting of the events each root operation published, shared by
+   * every process serving the application. Absent means the binding cannot
+   * enforce per-operation budgets, and a runtime configured with one refuses
+   * to start rather than enforce it partially.
+   */
+  readonly operationBudgets?: OperationBudgetStore;
+  /**
+   * The deduplication store handlers with an `idempotency` policy use.
+   * Absent means such handlers cannot run on this binding.
+   */
+  readonly idempotency?: IdempotencyStore;
   /**
    * Returns the value of a configuration entry. The binding is responsible for
    * supplying it, applying the declared default and validating it against the

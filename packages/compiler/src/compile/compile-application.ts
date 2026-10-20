@@ -13,6 +13,11 @@ import type {
   EvaluatedModule
 } from "@/discovery/discover-handlers";
 import type {
+  AnalyzedHandler,
+  EventAnalysis
+} from "@/events/event-analysis";
+import type { ModuleResolver } from "@/events/publications";
+import type {
   EntrypointMap,
   HandlerEntrypoint
 } from "@/manifest/entrypoints";
@@ -53,6 +58,10 @@ import {
   compareCodeUnits,
   portableModulePath
 } from "@/discovery/module-path";
+import {
+  analyzeEvents,
+  checkEventPolicies
+} from "@/events/event-analysis";
 import { entrypointsFormat } from "@/manifest/entrypoints";
 import {
   manifestRuntimes,
@@ -80,6 +89,18 @@ export interface CompileApplicationInput {
    * and column numbers to diagnostics; they never change the manifest.
    */
   readonly sources?: Readonly<Record<string, string>>;
+  /**
+   * The application module's other exports (besides `default`), for example
+   * `resources`. Event analysis reads resource handles from them; they never
+   * change the manifest.
+   */
+  readonly appExports?: Readonly<Record<string, unknown>>;
+  /**
+   * Resolves import specifiers of the application's modules, so that event
+   * analysis can follow imports the way the runtime does. Without it, only
+   * relative and `@/`-style specifiers of known modules are followed.
+   */
+  readonly resolveModule?: ModuleResolver;
 }
 
 /** A successful compilation: no diagnostic is an error. */
@@ -88,6 +109,8 @@ export interface CompileApplicationSuccess {
   readonly manifest: Manifest;
   /** Build metadata locating each handler's module, tied to `manifest` by its fingerprint. */
   readonly entrypoints: EntrypointMap;
+  /** The event dependency graph and its cycles. Not part of the manifest. */
+  readonly events: EventAnalysis;
   /** Warnings and information, sorted. */
   readonly diagnostics: readonly Diagnostic[];
 }
@@ -190,6 +213,8 @@ export async function compileApplication(input: CompileApplicationInput): Promis
   diagnostics.push(...discovery.diagnostics);
   const handlers = await analyzeHandlers(discovery.handlers, resourcesById, table, locator, capabilities, report);
   const config = await analyzeConfig(app, table, locator, appModule, report);
+  const eventHandlers = uniqueHandlers(discovery.handlers, locator);
+  diagnostics.push(...checkEventPolicies(eventHandlers, new Map([...resourcesById].map(([id, entry]) => [id, entry.descriptor.kind]))));
 
   if (hasErrors(diagnostics))
     return fail();
@@ -213,7 +238,43 @@ export async function compileApplication(input: CompileApplicationInput): Promis
     },
     handlers: handlers.map(handler => handler.entrypoint)
   };
-  return { ok: true, manifest, entrypoints, diagnostics: sortDiagnostics(diagnostics) };
+  const namespaces = new Map<string, Readonly<Record<string, unknown>>>();
+  for (const module of input.modules) {
+    const path = portableModulePath(module.path);
+    if (path !== undefined)
+      namespaces.set(path, module.exports);
+  }
+  namespaces.set(appModule, { ...input.appExports, default: input.app });
+  const events = await analyzeEvents({
+    manifest,
+    handlers: eventHandlers,
+    sources: input.sources ?? {},
+    namespaces,
+    ...input.resolveModule === undefined ? {} : { resolve: input.resolveModule }
+  });
+  diagnostics.push(...events.diagnostics);
+  return { ok: true, manifest, entrypoints, events: events.analysis, diagnostics: sortDiagnostics(diagnostics) };
+}
+
+/**
+ * Picks the first discovered registration of every handler identifier, with
+ * the location of its registration, for event analysis.
+ *
+ * @param discovered - Discovered handlers, sorted by identifier then module.
+ * @param locator - Finds identifiers in source.
+ * @returns One handler per identifier.
+ */
+function uniqueHandlers(discovered: readonly DiscoveredHandler[], locator: SourceLocator): AnalyzedHandler[] {
+  const seen = new Set<string>();
+  const handlers: AnalyzedHandler[] = [];
+  for (const handler of discovered) {
+    const { id } = handler.descriptor.definition;
+    if (seen.has(id))
+      continue;
+    seen.add(id);
+    handlers.push({ descriptor: handler.descriptor, module: handler.module, location: locator.locate(id, handler.module, handler.module) });
+  }
+  return handlers;
 }
 
 /**

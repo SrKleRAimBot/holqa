@@ -2,8 +2,9 @@
 
 The `holqa` command-line interface.
 
-> **Status:** Implemented: `--help`, `--version`, `--json`, `holqa inspect`, `holqa build --manifest`, `holqa dev`,
-> `holqa invoke`, `holqa queue send`, `holqa storage put`, `holqa cron run`, `holqa state` and `holqa doctor`.
+> **Status:** Implemented: `--help`, `--version`, `--json`, `holqa inspect` (with `--cycles`), `holqa build --manifest`,
+> `holqa dev`, `holqa invoke`, `holqa queue send`, `holqa queue redrive`, `holqa storage put`, `holqa cron run`,
+> `holqa state` and `holqa doctor`.
 > Bundling executable artifacts (`holqa build` without `--manifest`) and `holqa openapi generate` are proposed and
 > report `HOLQA_CLI_NOT_IMPLEMENTED`. Private and unpublished. Runs on Bun.
 
@@ -11,6 +12,7 @@ The `holqa` command-line interface.
 pnpm --filter @holqa/cli build
 bun packages/cli/dist/bin.js --help
 bun packages/cli/dist/bin.js inspect --app path/to/infra.ts          # print resources, handlers, configuration
+bun packages/cli/dist/bin.js inspect --cycles --app path/to/infra.ts # print the event graph and its cycles
 bun packages/cli/dist/bin.js build --manifest --app path/to/infra.ts # write .holqa/build/manifest.json and entrypoints.json
 bun packages/cli/dist/bin.js dev --app path/to/infra.ts              # run locally on http://127.0.0.1:3000/, rebuild on changes
 bun packages/cli/dist/bin.js invoke orders.process --input '{"orderId":"123"}' --app path/to/infra.ts --json
@@ -21,6 +23,7 @@ bun packages/cli/dist/bin.js invoke orders.process --input '{"orderId":"123"}' -
 | `holqa dev` | Analyzes the application, writes `.holqa/dev/build`, and runs it on Bun with the `@holqa/local` drivers behind one stable address. Watches files, classifies each change (handler code, handlers, resources, environment files), restarts the application process, and reports contract changes. A broken change is reported while the previous generation keeps serving. |
 | `holqa invoke <handler>` | Invokes a queue, object event or schedule handler once with `--input` JSON and generated trusted metadata. |
 | `holqa queue send <queue>` | Sends `--data` JSON to a local queue, validated against its schema. |
+| `holqa queue redrive <queue>` | Redrives dead-lettered messages (`--message`, `--limit`), lists them with `--dry-run`, or gives each a fresh lineage with `--new-operation`. |
 | `holqa storage put <bucket> <file>` | Stores a file in a local bucket (`--key`, `--content-type`), which emits `object.created`. |
 | `holqa cron run <schedule>` | Starts a manual run of a schedule through the runtime and its overlap policy. |
 | `holqa state` | Prints queue messages and their attempts, stored objects and events, and schedule runs. |

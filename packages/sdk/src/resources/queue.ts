@@ -2,6 +2,7 @@ import type {
   HandlerInvoke,
   InferInput,
   InferOutput,
+  InvocationLineage,
   InvocationLogger,
   QueueBackoff,
   QueueMessageTriggerOptions,
@@ -11,6 +12,10 @@ import type {
   StandardSchemaV1
 } from "@holqa/core";
 
+import type {
+  HandlerEventOptions,
+  IdempotencyOptions
+} from "@/internal/event-options";
 import type {
   HandlerRegistration,
   ResourceHandle
@@ -36,6 +41,11 @@ import {
   optionalObject,
   requireOptions
 } from "@/internal/declaration";
+import {
+  readEventOptions,
+  readIdempotencyOptions,
+  runIdempotently
+} from "@/internal/event-options";
 import { ownerOf } from "@/internal/ownership";
 
 /** Redelivery behaviour a queue requires from its binding. */
@@ -80,9 +90,22 @@ export interface QueueMessageContext<Message> {
     /** The `schemaVersion` the producer sent the message with, when the runtime knows it. */
     readonly schemaVersion?: number;
   };
+  /**
+   * The delivery's event lineage (root operation, cause and depth), when the
+   * runtime tracks it. Retries keep it; messages this consumer sends are one
+   * hop deeper. Useful for termination conditions in intentional cycles.
+   */
+  readonly lineage?: InvocationLineage;
   readonly signal: AbortSignal;
   readonly log: InvocationLogger;
 }
+
+/**
+ * What an idempotency key function of a queue consumer receives.
+ *
+ * @typeParam Message - The validated message type.
+ */
+export type QueueIdempotencyContext<Message> = Pick<QueueMessageContext<Message>, "message" | "delivery">;
 
 /**
  * A queue consumer function. Throwing requests redelivery; delivery is at
@@ -102,6 +125,14 @@ export interface QueueConsumerOptions<HandlerId extends string, Message> extends
   /** The handler's persistent identity. */
   readonly id: HandlerId;
   readonly handler: QueueConsumerFunction<Message>;
+  /** Event safety declarations: publications analysis cannot see, an intentional cycle, limits. */
+  readonly events?: HandlerEventOptions;
+  /**
+   * Skips deliveries whose idempotency key (default: the message identifier)
+   * already completed. Requires a binding with an idempotency store; see
+   * {@link IdempotencyOptions} for what it does and does not guarantee.
+   */
+  readonly idempotency?: boolean | IdempotencyOptions<QueueIdempotencyContext<Message>>;
 }
 
 /**
@@ -223,6 +254,8 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
       consumerProblems.positiveInteger(rawConsumer.concurrency, "concurrency");
       if (typeof rawConsumer.handler !== "function")
         consumerProblems.invalid("\"handler\" must be a function.");
+      const events = readEventOptions(rawConsumer.events, consumerProblems);
+      const idempotency = readIdempotencyOptions<QueueIdempotencyContext<InferOutput<Message>>>(rawConsumer.idempotency, consumerProblems);
       const handlerId = consumerProblems.valid(handlerIdCandidate);
 
       /**
@@ -234,16 +267,27 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
        */
       const invoke: HandlerInvoke<"queue.message"> = async (input, context) => {
         const validated = await validateInput(options.message, input, subject);
-        await consumer.handler({
+        const delivery = Object.freeze({
+          attempt: context.metadata.attempt,
+          messageId: context.metadata.messageId,
+          ...context.metadata.schemaVersion === undefined ? {} : { schemaVersion: context.metadata.schemaVersion }
+        });
+        /**
+         * Runs the user's consumer with the validated message.
+         *
+         * @returns What the consumer returns.
+         */
+        const run = (): Promise<void> | void => consumer.handler({
           message: validated,
-          delivery: {
-            attempt: context.metadata.attempt,
-            messageId: context.metadata.messageId,
-            ...context.metadata.schemaVersion === undefined ? {} : { schemaVersion: context.metadata.schemaVersion }
-          },
+          delivery,
+          ...context.lineage === undefined ? {} : { lineage: context.lineage },
           signal: context.signal,
           log: context.log
         });
+        if (idempotency === undefined)
+          await run();
+        else
+          await runIdempotently({ app: ownerOf(handle, `consumer "${handlerId}"`), handlerId, policy: idempotency.policy, key: idempotency.key === undefined ? delivery.messageId : idempotency.key({ message: validated, delivery }), log: context.log }, run);
         return undefined;
       };
       const registration: QueueConsumer<Id, HandlerId, Message> = Object.freeze({
@@ -252,7 +296,8 @@ export function queue<const Id extends string, Message extends StandardSchemaV1>
           type: "handler" as const,
           definition: freezeJson({
             id: handlerId,
-            trigger: { kind: "queue.message" as const, resource: { kind: "queue" as const, id }, options: definedEntries({ concurrency: consumer.concurrency }) }
+            trigger: { kind: "queue.message" as const, resource: { kind: "queue" as const, id }, options: definedEntries({ concurrency: consumer.concurrency }) },
+            ...definedEntries({ events, idempotency: idempotency?.policy })
           }),
           schemas: Object.freeze({ message: options.message }),
           invoke

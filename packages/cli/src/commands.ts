@@ -14,11 +14,12 @@ export interface ProposedCommand {
  * artifacts is planned.
  */
 export const implementedCommands: readonly ProposedCommand[] = [
-  { name: "inspect", summary: "Analyze the application and print its resources, handlers, configuration and graph." },
+  { name: "inspect", summary: "Analyze the application and print its resources, handlers, configuration and graph; --cycles prints its event graph and cycles." },
   { name: "build --manifest", summary: "Write the application's manifest and entry point map." },
   { name: "dev", summary: "Run the application locally with emulated resources, and rebuild on changes." },
   { name: "invoke", summary: "Invoke a queue, object event or schedule handler once with a test input." },
   { name: "queue send", summary: "Send a message to a local queue." },
+  { name: "queue redrive", summary: "Redrive (or list, with --dry-run) dead-lettered messages of a local queue." },
   { name: "storage put", summary: "Upload a file to a local bucket." },
   { name: "cron run", summary: "Run a schedule's handler now." },
   { name: "state", summary: "Print local queue messages, objects, events and schedule runs." },

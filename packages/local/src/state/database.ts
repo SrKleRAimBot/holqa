@@ -12,22 +12,29 @@ import { Database } from "bun:sqlite";
 
 /**
  * The state format this version of the local drivers reads and writes.
- * Format 2 adds the sender's trace to deliveries; format 1 directories are
- * upgraded in place when they are opened.
+ * Format 2 adds the sender's trace to deliveries; format 3 adds the event
+ * lineage (root operation and depth) to deliveries, per-operation budgets
+ * and idempotency keys. Older directories are upgraded in place when they
+ * are opened; deliveries written before format 3 start a new lineage.
  */
-export const stateVersion = 2;
+export const stateVersion = 3;
 
 /** The file the state lives in, inside the state directory. */
 export const stateFileName = "state.sqlite";
 
 /**
- * The tables of state version 2. Every time is epoch milliseconds of the
+ * The tables of state version 3. Every time is epoch milliseconds of the
  * environment's clock.
  *
  * - `deliveries`: leased deliveries of queue messages and object events. A
  *   row is due when its `state` is `ready` or `leased` and `visible_at` has
  *   passed; a leased row's `visible_at` is the end of its lease.
- *   `correlation_id` and `causation_id` record the sender's trace.
+ *   `correlation_id`, `causation_id`, `root_id` and `depth` record the
+ *   sender's trace and lineage.
+ * - `operation_budgets`: events published per root operation, for
+ *   `maxEventsPerOperation`; updated in transactions, so every process that
+ *   shares the directory sees one count.
+ * - `idempotency_keys`: claimed and completed idempotency keys by scope.
  * - `objects`: object metadata; the bytes live in files named by `blob`.
  * - `object_events`: every object event, for inspection.
  * - `event_subscriptions`: which handlers receive which events of a bucket.
@@ -51,7 +58,9 @@ CREATE TABLE IF NOT EXISTS deliveries (
   last_error_message TEXT,
   last_invocation_id TEXT,
   correlation_id TEXT,
-  causation_id TEXT
+  causation_id TEXT,
+  root_id TEXT,
+  depth INTEGER
 ) STRICT;
 CREATE INDEX IF NOT EXISTS deliveries_due ON deliveries (channel, state, visible_at);
 CREATE INDEX IF NOT EXISTS deliveries_identity ON deliveries (channel, delivery_id);
@@ -80,6 +89,20 @@ CREATE TABLE IF NOT EXISTS event_subscriptions (
   types TEXT NOT NULL,
   prefix TEXT NOT NULL,
   PRIMARY KEY (bucket, subscription)
+) STRICT;
+CREATE TABLE IF NOT EXISTS operation_budgets (
+  root_id TEXT PRIMARY KEY,
+  used INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+  scope TEXT NOT NULL,
+  key TEXT NOT NULL,
+  state TEXT NOT NULL CHECK (state IN ('held', 'completed')),
+  token TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  PRIMARY KEY (scope, key)
 ) STRICT;
 CREATE TABLE IF NOT EXISTS schedule_runs (
   seq INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -142,11 +165,11 @@ export function openStateDatabase(directory: string): Database {
     }
     database.transaction(() => {
       database.run(schema);
-      // Format 1 had no trace columns; `CREATE TABLE IF NOT EXISTS` does not add them to an existing table.
+      // Formats 1 and 2 lack trace and lineage columns; `CREATE TABLE IF NOT EXISTS` does not add them to an existing table.
       const columns = new Set(database.query<{ name: string }, []>("PRAGMA table_info(deliveries)").all().map(column => column.name));
-      for (const column of ["correlation_id", "causation_id"]) {
+      for (const [column, type] of [["correlation_id", "TEXT"], ["causation_id", "TEXT"], ["root_id", "TEXT"], ["depth", "INTEGER"]] as const) {
         if (!columns.has(column))
-          database.run(`ALTER TABLE deliveries ADD COLUMN ${column} TEXT`);
+          database.run(`ALTER TABLE deliveries ADD COLUMN ${column} ${type}`);
       }
       database.run(`PRAGMA user_version = ${stateVersion}`);
     })();

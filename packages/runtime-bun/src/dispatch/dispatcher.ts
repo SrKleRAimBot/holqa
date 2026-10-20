@@ -3,9 +3,11 @@ import type {
   HandlerDefinition,
   HandlerDescriptor,
   InvocationContext,
+  InvocationLineage,
   JsonObject
 } from "@holqa/core";
 
+import type { EventGuardViolation } from "@/dispatch/event-guard";
 import type { InvocationFailure } from "@/dispatch/failure";
 import type {
   ActiveInvocation,
@@ -57,6 +59,14 @@ export interface InvocationRequest {
   readonly correlationId?: string;
   /** The invocation that caused this one, for example the one that sent the message being delivered. Logged as `causationId`. */
   readonly causationId?: string;
+  /**
+   * The root operation the invocation descends from, for event lineage and
+   * per-operation budgets. Only delivery transports set it; `runtime.invoke`
+   * ignores it. Absent means the invocation is a root and its own identifier is the root.
+   */
+  readonly rootId?: string;
+  /** How many event hops separate the invocation from its root; 0 (the default) for a root. */
+  readonly depth?: number;
   /** Overrides the runtime's default time limit for this invocation. */
   readonly timeoutMs?: number;
   /** Extra fields for this invocation's log entries, such as the HTTP method and path. */
@@ -72,6 +82,14 @@ interface OutcomeBase {
   readonly durationMs: number;
   /** Messages the handler sent and objects it changed before the outcome, in order. Empty when the handler did not run. */
   readonly emitted: readonly EmittedEvent[];
+  /** The invocation's event lineage. */
+  readonly lineage: InvocationLineage;
+  /**
+   * Set when an event guard refused something the handler tried to publish.
+   * A failed invocation with a refusal ends its delivery terminally (it is
+   * not retried), even when the handler wrapped or replaced the guard's error.
+   */
+  readonly blocked?: EventGuardViolation;
 }
 
 /** A successful invocation and the value its handler resolved to. */
@@ -180,6 +198,9 @@ export class Dispatcher {
     const { options } = this;
     const invocationId = options.createId();
     const correlationId = request.correlationId ?? invocationId;
+    const depth = typeof request.depth === "number" && Number.isSafeInteger(request.depth) && request.depth >= 0 ? request.depth : 0;
+    const rootId = typeof request.rootId === "string" && request.rootId !== "" ? request.rootId : invocationId;
+    const lineage: InvocationLineage = Object.freeze({ correlationId, ...request.causationId === undefined ? {} : { causationId: request.causationId }, rootId, depth });
     const started = options.now();
     const handler = options.handlers.get(request.handlerId);
     const trigger = handler?.definition.trigger;
@@ -188,10 +209,12 @@ export class Dispatcher {
       invocationId,
       correlationId,
       ...request.causationId === undefined ? {} : { causationId: request.causationId },
+      // A root invocation is its own root at depth 0; only descendants log their lineage.
+      ...rootId === invocationId && depth === 0 ? {} : { rootId, depth },
       ...trigger === undefined ? {} : { triggerKind: trigger.kind, resourceId: trigger.resource.id },
       ...request.logFields
     });
-    const base = { invocationId, correlationId, handlerId: request.handlerId };
+    const base = { invocationId, correlationId, handlerId: request.handlerId, lineage };
     const source = options.sources.get(request.handlerId);
 
     /**
@@ -201,22 +224,25 @@ export class Dispatcher {
      * @param outcome.value - The handler's result.
      * @param outcome.failure - The normalized failure.
      * @param emitted - What the handler emitted before the outcome.
+     * @param blocked - What an event guard refused, if anything.
      * @returns The outcome.
      */
-    const finish = (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[] = []): InvocationOutcome => {
+    const finish = (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[] = [], blocked?: EventGuardViolation): InvocationOutcome => {
       const durationMs = options.now() - started;
       const effects = Object.freeze([...emitted]);
       const emittedField: JsonObject = effects.length === 0 ? {} : { emitted: effects.map(event => ({ ...event })) };
+      const blockedField: JsonObject = blocked === undefined ? {} : { blocked: blocked.code };
+      const refusal = blocked === undefined ? {} : { blocked };
       if ("failure" in outcome) {
         this.failed += 1;
         const { failure } = outcome;
-        const fields: JsonObject = { outcome: "failed", code: failure.code, durationMs, ...emittedField, ...source === undefined ? {} : { source }, ...failure.error === undefined ? {} : { error: describeError(failure.error) } };
+        const fields: JsonObject = { outcome: "failed", code: failure.code, durationMs, ...emittedField, ...blockedField, ...source === undefined ? {} : { source }, ...failure.error === undefined ? {} : { error: describeError(failure.error) } };
         log.write(failure.status >= 500 ? "error" : "info", "invocation failed", fields);
-        return Object.freeze({ ...base, ok: false, failure, durationMs, emitted: effects });
+        return Object.freeze({ ...base, ok: false, failure, durationMs, emitted: effects, ...refusal });
       }
       this.succeeded += 1;
-      log.write("info", "invocation completed", { outcome: "ok", durationMs, ...emittedField });
-      return Object.freeze({ ...base, ok: true, value: outcome.value, durationMs, emitted: effects });
+      log.write("info", "invocation completed", { outcome: "ok", durationMs, ...emittedField, ...blockedField });
+      return Object.freeze({ ...base, ok: true, value: outcome.value, durationMs, emitted: effects, ...refusal });
     };
 
     if (!options.accepting())
@@ -276,6 +302,7 @@ export class Dispatcher {
       return await this.execute(handler, request, controller.signal, releases, log, finish, {
         invocationId,
         correlationId,
+        lineage,
         signal: controller.signal,
         metadata: (request.metadata ?? {}) as never,
         log: log.forHandler(),
@@ -301,12 +328,12 @@ export class Dispatcher {
    * @param context - The invocation context passed to the handler.
    * @returns The outcome.
    */
-  private async execute(handler: RegisteredHandler, request: InvocationRequest, signal: AbortSignal, releases: ReadonlyArray<() => void>, log: StructuredLogger, finish: (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[]) => InvocationOutcome, context: InvocationContext<never>): Promise<InvocationOutcome> {
+  private async execute(handler: RegisteredHandler, request: InvocationRequest, signal: AbortSignal, releases: ReadonlyArray<() => void>, log: StructuredLogger, finish: (outcome: { readonly value: unknown } | { readonly failure: InvocationFailure }, emitted: readonly EmittedEvent[], blocked?: EventGuardViolation) => InvocationOutcome, context: InvocationContext<never> & { readonly lineage: InvocationLineage }): Promise<InvocationOutcome> {
     this.running += 1;
     let settled = false;
     let orphan = false;
     const started = this.options.now();
-    const active: ActiveInvocation = { invocationId: context.invocationId, correlationId: context.correlationId ?? context.invocationId, handlerId: handler.definition.id, emitted: [] };
+    const active: ActiveInvocation = { invocationId: context.invocationId, correlationId: context.correlationId ?? context.invocationId, handlerId: handler.definition.id, lineage: context.lineage, publications: 0, emitted: [] };
     // A handler that throws synchronously becomes a rejected execution, like an async one.
     // Running it inside the tracker attributes its resource operations to this invocation.
     const execution = Promise.resolve().then(() => this.options.tracker.run(active, () => handler.invoke(request.input, context)));
@@ -339,11 +366,11 @@ export class Dispatcher {
           orphan = true;
           this.orphaned += 1;
         }
-        return finish({ failure: failureFromError(winner.reason) }, active.emitted);
+        return finish({ failure: failureFromError(winner.reason) }, active.emitted, active.blocked);
       }
-      return finish({ value: winner.value }, active.emitted);
+      return finish({ value: winner.value }, active.emitted, active.blocked);
     } catch (error) {
-      return finish({ failure: failureFromError(error) }, active.emitted);
+      return finish({ failure: failureFromError(error) }, active.emitted, active.blocked);
     } finally {
       signal.removeEventListener("abort", onAbort!);
     }

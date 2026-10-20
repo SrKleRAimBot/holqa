@@ -18,6 +18,49 @@ export type { GlobMatcher } from "@/discovery/glob";
 export { portableModulePath } from "@/discovery/module-path";
 export { selectHandlerModules } from "@/discovery/select-handler-modules";
 export type { HandlerModuleSelection } from "@/discovery/select-handler-modules";
+export {
+  analyzeEventCycles,
+  describeCyclePath,
+  eventCycleDiagnostics
+} from "@/events/cycles";
+export type {
+  CycleAllowance,
+  EventCycle,
+  EventCycleStep
+} from "@/events/cycles";
+export { analyzeEvents, checkEventPolicies } from "@/events/event-analysis";
+export type {
+  AnalyzedHandler,
+  AnalyzeEventsInput,
+  EventAnalysis
+} from "@/events/event-analysis";
+export { buildEventGraph } from "@/events/event-graph";
+export type {
+  ConsumedEvent,
+  ConsumptionEdge,
+  EventGraph,
+  EventGraphEdge,
+  EventGraphHandlerNode,
+  EventGraphNode,
+  EventGraphResourceNode,
+  EventPublication,
+  HandlerAnalysisCoverage,
+  HandlerEventFacts,
+  PublicationCertainty,
+  PublicationEdge,
+  PublicationOperation,
+  PublicationOrigin,
+  PublicationTarget
+} from "@/events/event-graph";
+export { analyzePublications } from "@/events/publications";
+export type {
+  HandlerPublications,
+  HandlerToAnalyze,
+  ModuleResolver,
+  PublicationAnalysisInput,
+  ResolvedModule
+} from "@/events/publications";
+export { validateEventAnalysis } from "@/events/validate-event-analysis";
 export { buildResourceGraph } from "@/graph/resource-graph";
 export type {
   GraphEdge,

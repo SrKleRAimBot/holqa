@@ -38,6 +38,31 @@ export async function compiledOutcome(): Promise<AnalysisOutcome> {
 }
 
 /**
+ * Compiles an application whose consumer sends to its own queue, found in its
+ * source, so that event analysis reports a cycle.
+ *
+ * @returns A successful analysis outcome with one event cycle warning.
+ * @throws {Error} When the fixture does not compile, which indicates a broken test.
+ */
+export async function cyclicOutcome(): Promise<AnalysisOutcome> {
+  const orders = queue("orders");
+  const result = await compileApplication({
+    app: application("basic", [orders], []),
+    appModule: "infra.ts",
+    appExports: { resources: { orders: { "~holqa": orders } } },
+    modules: [{ path: "src/orders.handler.ts", exports: { default: consumer("orders.process", "orders") } }],
+    runtime: "bun",
+    sources: {
+      "infra.ts": "export default app;\nexport const resources = app.resources;",
+      "src/orders.handler.ts": "import { resources } from \"../infra\";\nexport default resources.orders.consume({\n  id: \"orders.process\",\n  handler: async ({ message }) => { await resources.orders.send(message); }\n});"
+    }
+  });
+  if (!result.ok)
+    throw new Error(JSON.stringify(result.diagnostics));
+  return { ...result, output: "" };
+}
+
+/**
  * Creates a fake host.
  *
  * @param outcome - What every analysis returns.

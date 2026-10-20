@@ -3,8 +3,9 @@
 Transforms a Holqa application's declarations and handlers into a deterministic, versioned, infrastructure-neutral
 manifest with structured diagnostics.
 
-> **Status:** Handler discovery, graph validation, manifest version 1, the entry point map, the resource graph and
-> schema contracts (normalization, fingerprints, compatibility checks) are implemented. Client generation, bundling of
+> **Status:** Handler discovery, graph validation, manifest version 1, the entry point map, the resource graph,
+> schema contracts (normalization, fingerprints, compatibility checks) and event analysis (the event dependency graph
+> and cycle detection) are implemented. Client generation, bundling of
 > executable artifacts and comparison with a deployed manifest are planned. Private and unpublished.
 
 The compiler is deliberately separate from the runtime ([ADR 0007](../../docs/architecture/decisions/0007-separate-compiler-and-runtime.md))
@@ -42,6 +43,7 @@ conflicting routes, unknown settings and unsupported schemas.
 | `validateManifest`, `validateEntrypoints` | Readers for untrusted documents. |
 | `manifestJsonSchema`, `entrypointsJsonSchema` | The formats, also published as `@holqa/compiler/manifest-v1.schema.json` and `@holqa/compiler/entrypoints-v1.schema.json`. |
 | `buildResourceGraph(manifest)` | Nodes and declared relationships. |
+| `analyzeEvents`, `analyzePublications`, `buildEventGraph`, `analyzeEventCycles`, `validateEventAnalysis` | The [event analysis](../../docs/reference/compiler-specification.md#event-analysis) `compileApplication` returns as `events`: what handlers publish (with certainty and locations) and the cycles among them (`HOLQA_EVENT_CYCLE`). |
 
 ## Canonical JSON
 

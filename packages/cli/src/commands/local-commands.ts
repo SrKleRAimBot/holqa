@@ -32,7 +32,7 @@ import {
 } from "@/output/dev-output";
 
 /** The commands this module implements, by their words. */
-export const localCommandNames = ["dev", "invoke", "queue send", "storage put", "cron run", "state", "doctor"] as const;
+export const localCommandNames = ["dev", "invoke", "queue send", "queue redrive", "storage put", "cron run", "state", "doctor"] as const;
 
 /** One of {@link localCommandNames}. */
 export type LocalCommandName = (typeof localCommandNames)[number];
@@ -45,6 +45,7 @@ export const localCommandOptions: Readonly<Record<LocalCommandName, OptionSpec>>
   "dev": { flags: ["no-watch"], values: [...common, "port", "host"] },
   "invoke": { flags: [], values: [...common, "input", "attempt"], positionals: ["handler"] },
   "queue send": { flags: [], values: [...common, "data", "delay"], positionals: ["queue"] },
+  "queue redrive": { flags: ["dry-run", "new-operation"], values: [...common, "message", "limit"], positionals: ["queue"] },
   "storage put": { flags: [], values: [...common, "key", "content-type"], positionals: ["bucket", "file"] },
   "cron run": { flags: [], values: common, positionals: ["schedule"] },
   "state": { flags: [], values: common },
@@ -116,7 +117,7 @@ export async function localCommand(host: CliHost, io: CliIo, json: boolean, name
     return exitCodes.success;
   }
 
-  const operation = await buildOperation(host, io, json, name, values, positionals);
+  const operation = await buildOperation(host, io, json, name, values, positionals, flags);
   if (typeof operation === "number")
     return operation;
   if (host.operate === undefined)
@@ -134,9 +135,10 @@ export async function localCommand(host: CliHost, io: CliIo, json: boolean, name
  * @param name - The command.
  * @param values - The option values.
  * @param positionals - The positional arguments.
+ * @param flags - The flags given.
  * @returns The operation, or the exit code after reporting a problem.
  */
-async function buildOperation(host: CliHost, io: CliIo, json: boolean, name: Exclude<LocalCommandName, "dev" | "doctor">, values: ReadonlyMap<string, string>, positionals: readonly string[]): Promise<LocalOperation | number> {
+async function buildOperation(host: CliHost, io: CliIo, json: boolean, name: Exclude<LocalCommandName, "dev" | "doctor">, values: ReadonlyMap<string, string>, positionals: readonly string[], flags: ReadonlySet<string>): Promise<LocalOperation | number> {
   switch (name) {
     case "invoke": {
       const input = values.has("input") ? parseJson(values.get("input")!) : undefined;
@@ -157,6 +159,13 @@ async function buildOperation(host: CliHost, io: CliIo, json: boolean, name: Exc
       if (values.has("delay") && delay === undefined)
         return usage(io, json, name, ["The option \"--delay\" must be a whole number of seconds of at least 0."]);
       return { kind: "queue.send", queueId: positionals[0]!, message: data.value, ...delay === undefined || delay === 0 ? {} : { delaySeconds: delay } };
+    }
+    case "queue redrive": {
+      const limit = values.has("limit") ? integer(values.get("limit")!, 1, Number.MAX_SAFE_INTEGER) : undefined;
+      if (values.has("limit") && limit === undefined)
+        return usage(io, json, name, ["The option \"--limit\" must be a whole number of at least 1."]);
+      const messageId = values.get("message");
+      return { kind: "queue.redrive", queueId: positionals[0]!, ...messageId === undefined ? {} : { messageId }, ...limit === undefined ? {} : { limit }, ...flags.has("dry-run") ? { dryRun: true } : {}, ...flags.has("new-operation") ? { newOperation: true } : {} };
     }
     case "storage put": {
       const path = resolve(host.cwd, positionals[1]!);
@@ -224,7 +233,7 @@ function reportOperation(io: CliIo, json: boolean, root: string, operation: Loca
 }
 
 /** The names of the result fields the CLI reads to describe operations. */
-type FieldName = "outcome" | "ok" | "failure" | "diagnostics" | "code" | "message" | "handlerId" | "invocationId" | "correlationId" | "run" | "status" | "runId" | "durationMs" | "value" | "messageId" | "queueId" | "object" | "bucketId" | "key" | "size" | "contentType" | "application" | "queues" | "counts" | "id" | "messages" | "state" | "lastError" | "attempts" | "buckets" | "objects" | "lastModified" | "events" | "event" | "deliveries" | "subscription" | "type" | "schedules" | "cron" | "timezone" | "nextRun" | "runs" | "scheduledTime" | "trigger" | "logs";
+type FieldName = "dryRun" | "newOperation" | "count" | "outcome" | "ok" | "failure" | "diagnostics" | "code" | "message" | "handlerId" | "invocationId" | "correlationId" | "run" | "status" | "runId" | "durationMs" | "value" | "messageId" | "queueId" | "object" | "bucketId" | "key" | "size" | "contentType" | "application" | "queues" | "counts" | "id" | "messages" | "state" | "lastError" | "attempts" | "buckets" | "objects" | "lastModified" | "events" | "event" | "deliveries" | "subscription" | "type" | "schedules" | "cron" | "timezone" | "nextRun" | "runs" | "scheduledTime" | "trigger" | "logs";
 
 /** An unchecked view of a JSON result: every field the CLI reads, as `unknown`. */
 type Fields = { readonly [Name in FieldName]?: unknown };
@@ -287,6 +296,16 @@ function describeResult(operation: LocalOperation, result: Fields, target: strin
     }
     case "queue.send":
       return `Sent message ${String(result.messageId)} to queue ${String(result.queueId)} ${where}.${target === "dev" ? "" : " It is delivered when holqa dev runs."}`;
+    case "queue.redrive": {
+      const messages = (Array.isArray(result.messages) ? result.messages as readonly unknown[] : []).map(fields);
+      const head = result.dryRun === true
+        ? `Would redrive ${String(result.count)} dead-lettered message(s) of queue ${String(result.queueId)} ${where}.`
+        : `Redrove ${String(result.count)} dead-lettered message(s) of queue ${String(result.queueId)} ${where}${result.newOperation === true ? ", each as a new operation" : ""}.`;
+      return [head, ...messages.map((message) => {
+        const error = message.lastError === undefined ? undefined : fields(message.lastError);
+        return `  ${String(message.messageId)}  attempts ${String(message.attempts)}${error === undefined ? "" : `  last error ${String(error.code)}: ${String(error.message)}`}`;
+      })].join("\n");
+    }
     case "storage.put": {
       const object = fields(result.object);
       return `Stored ${String(result.bucketId)}/${String(object.key)} (${String(object.size)} bytes, ${String(object.contentType ?? "no content type")}) ${where}.`;

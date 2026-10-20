@@ -52,8 +52,9 @@ With the local binding (`@holqa/local`), inspect delivery state directly: `env.q
    - *Logic error* — fix the handler, add a test reproducing the payload.
    - *Duplicate side effects* — handler is not idempotent → see `add-queue-consumer`.
    - *Missing capability* — binding cannot satisfy a requirement → see `validate-infrastructure-bindings`.
+   - *Event limit* (`HOLQA_EVENT_DEPTH_EXCEEDED`, `HOLQA_EVENT_PUBLICATION_LIMIT_EXCEEDED`, `HOLQA_EXECUTION_BUDGET_EXCEEDED`, `HOLQA_EVENT_AGE_EXCEEDED`) — the delivery was ended without retries, usually by an event cycle or a fan-out. Run `holqa inspect --cycles` to see which handlers trigger each other, and read the dead letter's `trace` (`rootId`, `depth`) for the chain.
 4. **Fix and test** with the failing payload as a fixture (`testing-event-driven-apps`).
-5. **Replay dead-lettered messages** only after the fix is deployed and only if the handler is idempotent. Locally, `env.queues.redrive(queueId)` or `createTestApp(...).redrive(queueId)` does it; replay elsewhere is a deliberate, reviewed action.
+5. **Replay dead-lettered messages** only after the fix is deployed and only if the handler is idempotent. Locally, `holqa queue redrive <queue> --dry-run` lists what would be replayed, `holqa queue redrive <queue>` (or `env.queues.redrive(queueId)`, `createTestApp(...).redrive(queueId)`) replays it, and `--new-operation` gives messages refused by an event limit a fresh lineage; replay elsewhere is a deliberate, reviewed action.
 
 ## Pitfalls
 

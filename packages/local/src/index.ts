@@ -11,7 +11,8 @@ export type { ManualTriggerOptions } from "@/manual-trigger";
 export type {
   LocalMessageState,
   LocalQueueMessage,
-  LocalQueues
+  LocalQueues,
+  RedriveOptions
 } from "@/queue/local-queue";
 export type {
   LocalRunStatus,

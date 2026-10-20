@@ -13,7 +13,7 @@ import { DeliveryWorker } from "@/delivery/delivery-worker";
 import { StructuredLogger } from "@/logging/log";
 
 /** A successful outcome. */
-const succeeded: InvocationOutcome = { ok: true, value: undefined, invocationId: "inv", correlationId: "c", handlerId: "h", durationMs: 0, emitted: [] };
+const succeeded: InvocationOutcome = { ok: true, value: undefined, invocationId: "inv", correlationId: "c", handlerId: "h", durationMs: 0, emitted: [], lineage: { correlationId: "c", rootId: "inv", depth: 0 } };
 
 /**
  * Creates a worker over a source with a fixed policy.
@@ -83,5 +83,58 @@ describe("DeliveryWorker", () => {
     await source.drained();
     await worker.stopReceiving();
     expect(source.settlements.map(settlement => `${settlement.kind}:${settlement.failure?.code}`)).toEqual(["deadLetter:HOLQA_PAYLOAD_MALFORMED"]);
+  });
+
+  it("ends a delivery an event guard refuses without running or retrying it", async () => {
+    const source = new MemorySource<string>();
+    let dispatched = 0;
+    const worker = workerOf(source, {
+      admit: () => ({ code: "HOLQA_EVENT_DEPTH_EXCEEDED", message: "too deep" }),
+      dispatch: async () => {
+        dispatched += 1;
+        return succeeded;
+      }
+    });
+    source.add("d-1", "x");
+    worker.start();
+    await source.drained();
+    await worker.stopReceiving();
+    expect(dispatched).toBe(0);
+    expect(source.settlements.map(settlement => `${settlement.kind}:${settlement.failure?.code}`)).toEqual(["deadLetter:HOLQA_EVENT_DEPTH_EXCEEDED"]);
+    expect(worker.stats()).toMatchObject({ blocked: 1, deadLettered: 1, retried: 0 });
+  });
+
+  it("ends a delivery terminally when its handler failed after a refused publication, whatever the handler threw", async () => {
+    const source = new MemorySource<string>();
+    const worker = workerOf(source, {
+      policy: { maxAttempts: 5, backoff: { strategy: "fixed", delaySeconds: 1 }, deadLetter: false },
+      dispatch: async () => ({ ...succeeded, ok: false, failure: { code: "HOLQA_HANDLER_FAILED", message: "wrapped", status: 500, headers: {}, issues: [], diagnostics: [] }, blocked: { code: "HOLQA_EXECUTION_BUDGET_EXCEEDED", message: "budget spent" } })
+    });
+    source.add("d-1", "x");
+    worker.start();
+    await source.drained();
+    await worker.stopReceiving();
+    expect(source.settlements.map(settlement => `${settlement.kind}:${settlement.failure?.code}`)).toEqual(["discard:HOLQA_EXECUTION_BUDGET_EXCEEDED"]);
+  });
+
+  it("passes the delivery's lineage to the invocation, and starts a lineage for untraced deliveries", async () => {
+    const source = new MemorySource<string>();
+    const requests: unknown[] = [];
+    const worker = workerOf(source, {
+      concurrency: 2,
+      dispatch: async (request) => {
+        requests.push({ correlationId: request.correlationId, causationId: request.causationId, rootId: request.rootId, depth: request.depth });
+        return succeeded;
+      }
+    });
+    source.add("d-1", "x", 0, { correlationId: "c-1", causationId: "inv-1", rootId: "inv-0", depth: 2 });
+    source.add("d-2", "y");
+    worker.start();
+    await source.drained();
+    await worker.stopReceiving();
+    expect(requests).toEqual(expect.arrayContaining([
+      { correlationId: "c-1", causationId: "inv-1", rootId: "inv-0", depth: 2 },
+      { correlationId: "d-2", causationId: undefined, rootId: "d-2", depth: 0 }
+    ]));
   });
 });

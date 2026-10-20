@@ -1,0 +1,29 @@
+{
+  "name": "@holqa/example-event-safety",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Event safety example: static cycle analysis with holqa inspect --cycles, runtime depth limits, an intentional cycle and idempotent processing, tested with the built CLI and createTestApp.",
+  "license": "Apache-2.0",
+  "scripts": {
+    "cycles": "holqa inspect --cycles --app app/infra.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@holqa/cli": "workspace:*",
+    "@holqa/core": "workspace:*",
+    "@holqa/sdk": "workspace:*",
+    "@holqa/zod": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@holqa/local": "workspace:*",
+    "@holqa/runtime-bun": "workspace:*",
+    "@holqa/testing": "workspace:*",
+    "@types/bun": "catalog:",
+    "typescript": "catalog:"
+  }
+}

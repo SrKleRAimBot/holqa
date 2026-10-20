@@ -1,4 +1,9 @@
+import type { InvocationLineage } from "@/binding/trace";
 import type { ApplicationScope } from "@/handlers/application-scope";
+import type {
+  HandlerEventPolicy,
+  HandlerIdempotencyPolicy
+} from "@/handlers/event-policy";
 import type {
   TriggerKind,
   TriggerKindMap
@@ -36,6 +41,10 @@ export interface HandlerDefinitionOf<Trigger extends TriggerKind> {
   /** The handler's persistent logical identity (resource identifier grammar). */
   readonly id: ResourceId;
   readonly trigger: TriggerOf<Trigger>;
+  /** Event safety declarations: publication targets static analysis cannot see, an intentional cycle, and limits. Absent means none. */
+  readonly events?: HandlerEventPolicy;
+  /** Duplicate suppression for queue consumers and object event handlers. Absent means none. */
+  readonly idempotency?: HandlerIdempotencyPolicy;
 }
 
 /** Any handler definition, discriminated by `trigger.kind`. */
@@ -62,6 +71,12 @@ export interface InvocationContext<Metadata = EmptyObject> {
    * `invocationId`. Absent when the caller provides none.
    */
   readonly correlationId?: string;
+  /**
+   * The invocation's event lineage: its root operation, what caused it and
+   * its depth. Runtimes that track lineage set it; absent otherwise, for
+   * example when a test calls `invoke` directly.
+   */
+  readonly lineage?: InvocationLineage;
   /** Aborted when the invocation is cancelled, times out, or the runtime shuts down. */
   readonly signal: AbortSignal;
   readonly metadata: Metadata;

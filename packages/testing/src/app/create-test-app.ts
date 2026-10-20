@@ -9,7 +9,8 @@ import type {
   LocalObjectEvent,
   LocalQueueMessage,
   LocalScheduleRun,
-  ManualClock
+  ManualClock,
+  RedriveOptions
 } from "@holqa/local";
 import type {
   InvocationOutcome,
@@ -17,6 +18,7 @@ import type {
   LogSink,
   Runtime,
   RuntimeDeliveryOptions,
+  RuntimeEventLimits,
   RuntimeLimits
 } from "@holqa/runtime-bun";
 
@@ -43,6 +45,10 @@ import { createRuntime } from "@holqa/runtime-bun";
 
 import { FaultPlan } from "@/app/faults";
 import { invocationRecords } from "@/app/invocation-records";
+import {
+  lineageOf,
+  SimulationBudget
+} from "@/app/simulation-budget";
 
 /** Settings of {@link createTestApp}. */
 export interface TestAppOptions {
@@ -64,6 +70,16 @@ export interface TestAppOptions {
   readonly limits?: RuntimeLimits;
   /** Delivery settings; see `createRuntime`. */
   readonly delivery?: RuntimeDeliveryOptions;
+  /** Event limits (depth, publications, age, per-operation budget); see `createRuntime`. The local binding enforces all of them. */
+  readonly events?: RuntimeEventLimits;
+  /**
+   * The most handler invocations the test application runs. Beyond it every
+   * invocation fails before its handler runs, and `flush`, `advance` and
+   * `drain` throw `HOLQA_SIMULATION_BUDGET_EXCEEDED` with the busiest
+   * handlers and the deepest causal chain, instead of hanging on an event
+   * cycle. Default 10 000.
+   */
+  readonly maxInvocations?: number;
   /** Attempts of queues that declare no `maxAttempts`. Default 5, as in the local environment. */
   readonly defaultMaxAttempts?: number;
   /** Also receives every log entry, for example to print them while debugging a test. */
@@ -168,8 +184,8 @@ export interface TestApp {
   readonly duplicate: (queueId: string, messageId: string) => boolean;
   /** Delivers a known object event once more to one handler. */
   readonly duplicateEvent: (bucketId: string, handlerId: string, eventId: string) => boolean;
-  /** Makes dead-lettered messages due again with a fresh attempt count. Returns how many. */
-  readonly redrive: (queueId: string, messageId?: string) => number;
+  /** Makes dead-lettered messages due again with a fresh attempt count: all, one by message identifier, or a selection. Returns how many. */
+  readonly redrive: (queueId: string, selection?: string | RedriveOptions) => number;
   readonly messages: (queueId: string, states?: readonly LocalMessageState[]) => LocalQueueMessage[];
   readonly deadLetters: (queueId: string) => LocalQueueMessage[];
   readonly events: (bucketId: string) => LocalObjectEvent[];
@@ -181,6 +197,10 @@ export interface TestApp {
   readonly invocations: (filter?: InvocationFilter) => InvocationRecord[];
   /** Every finished invocation of one causal chain, in order. */
   readonly trace: (correlationId: string) => InvocationRecord[];
+  /** The publication chain that led to an invocation: its causes back to the root operation, root first. */
+  readonly lineage: (invocationId: string) => InvocationRecord[];
+  /** Every finished invocation that descends from one root operation, the root included, in order. */
+  readonly operation: (rootId: string) => InvocationRecord[];
   /** Stops the runtime, closes the local state and removes a temporary state directory. Idempotent. */
   readonly dispose: () => Promise<void>;
   readonly [Symbol.asyncDispose]: () => Promise<void>;
@@ -216,7 +236,7 @@ const defaultStart = Date.UTC(2026, 0, 1);
  *
  * @param options - The application, handlers and test settings.
  * @returns The started test application.
- * @throws {HolqaError} `HOLQA_APP_INVALID`, `HOLQA_DECLARATION_INVALID` for an invalid `startTime`, the errors of `createRuntime`, or `HOLQA_RUNTIME_START_FAILED` with its causes.
+ * @throws {HolqaError} `HOLQA_APP_INVALID`, `HOLQA_DECLARATION_INVALID` for an invalid `startTime` or `maxInvocations`, the errors of `createRuntime`, or `HOLQA_RUNTIME_START_FAILED` with its causes.
  */
 export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
   const descriptor = getAppDescriptor(options.app);
@@ -233,6 +253,10 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
   const temporary = options.directory === undefined;
   const directory = options.directory ?? mkdtempSync(join(tmpdir(), "holqa-test-app-"));
   const faults = new FaultPlan();
+  const maxInvocations = options.maxInvocations ?? 10_000;
+  if (!Number.isSafeInteger(maxInvocations) || maxInvocations < 1)
+    failWith(diagnosticCodes.declarationInvalid, `"maxInvocations" must be a positive integer, not ${JSON.stringify(options.maxInvocations)}.`);
+  const budget = new SimulationBudget(maxInvocations);
   const logs: LogEntry[] = [];
 
   let local: LocalEnvironment | undefined;
@@ -250,11 +274,12 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
     });
     runtime = createRuntime({
       app: options.app,
-      handlers: options.handlers.map(handler => faults.instrument(handler)),
+      handlers: options.handlers.map(handler => budget.instrument(faults.instrument(handler))),
       ...options.handlerSources === undefined ? {} : { handlerSources: options.handlerSources },
       binding: local.binding,
       ...options.limits === undefined ? {} : { limits: options.limits },
       ...options.delivery === undefined ? {} : { delivery: options.delivery },
+      ...options.events === undefined ? {} : { events: options.events },
       log: (entry) => {
         logs.push(entry);
         options.log?.(entry);
@@ -291,8 +316,20 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
    * Runs the work that is due now.
    *
    * @returns A promise that settles once nothing due is left.
+   * @throws {HolqaError} `HOLQA_SIMULATION_BUDGET_EXCEEDED` once the simulation budget ran out, or `HOLQA_INVOCATION_TIMEOUT`.
    */
-  const flush = async (): Promise<void> => environment.settle({ timeoutMs: flushTimeoutMs });
+  const flush = async (): Promise<void> => {
+    try {
+      await environment.settle({ timeoutMs: flushTimeoutMs });
+    } catch (error) {
+      // A spent budget explains a timeout better than the timeout does.
+      if (budget.exceeded)
+        throw budget.failure(invocationRecords(logs));
+      throw error;
+    }
+    if (budget.exceeded)
+      throw budget.failure(invocationRecords(logs));
+  };
 
   /**
    * Moves the clock forward, running due work at every timer on the way.
@@ -448,7 +485,7 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
     failNext: (handlerId: string, failureOptions?: FailureOptions) => faults.add(handlerId, failureOptions),
     duplicate: (queueId: string, messageId: string) => environment.queues.duplicate(queueId, messageId),
     duplicateEvent: (bucketId: string, handlerId: string, eventId: string) => environment.storage.duplicateEvent(bucketId, handlerId, eventId),
-    redrive: (queueId: string, messageId?: string) => environment.queues.redrive(queueId, messageId),
+    redrive: (queueId: string, selection?: string | RedriveOptions) => environment.queues.redrive(queueId, selection),
     messages: (queueId: string, states?: readonly LocalMessageState[]) => environment.queues.messages(queueId, states),
     deadLetters: (queueId: string) => environment.queues.deadLetters(queueId),
     events: (bucketId: string) => environment.storage.events(bucketId),
@@ -460,6 +497,8 @@ export async function createTestApp(options: TestAppOptions): Promise<TestApp> {
     runs: (scheduleId: string, limit?: number) => environment.scheduler.runs(scheduleId, limit),
     invocations,
     trace: (correlationId: string) => invocations({ correlationId }),
+    lineage: (invocationId: string) => lineageOf(invocationRecords(logs), invocationId),
+    operation: (rootId: string) => invocationRecords(logs).filter(record => record.rootId === rootId),
     dispose,
     [Symbol.asyncDispose]: dispose
   });

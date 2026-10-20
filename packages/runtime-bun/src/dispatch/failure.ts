@@ -8,6 +8,7 @@ import {
   createDiagnostic,
   diagnosticCodes,
   diagnosticsOf,
+  isEventGuardCode,
   isHttpRejectedError
 } from "@holqa/core";
 
@@ -90,6 +91,10 @@ export function runtimeFailure(code: DiagnosticCode, message: string, headers: R
  * - an `HttpRejectedError` keeps its status, code, message, headers and issues;
  * - an abort caused by the runtime becomes a timeout or cancellation;
  * - `HOLQA_RESPONSE_INVALID` stays a server error with a generic message;
+ * - an event guard's refusal (for example `HOLQA_EVENT_DEPTH_EXCEEDED`) keeps
+ *   its code, with a generic message: the guard's own message names internal
+ *   resources and is recorded with the outcome's `blocked` and in logs;
+ * - `HOLQA_IDEMPOTENCY_IN_PROGRESS` keeps its code, with status 503;
  * - everything else becomes `HOLQA_HANDLER_FAILED` with a generic message.
  *
  * The original error is kept for logs only.
@@ -107,6 +112,11 @@ export function failureFromError(error: unknown): InvocationFailure {
   }
   if (diagnostics[0]?.code === diagnosticCodes.responseInvalid)
     return Object.freeze({ ...serverFailure(diagnosticCodes.responseInvalid, "The handler produced a response that does not match its contract.", diagnostics), error });
+  const guard = diagnostics[0]?.code;
+  if (guard !== undefined && isEventGuardCode(guard))
+    return Object.freeze({ ...serverFailure(guard, "An event safety limit refused something the handler tried to publish. Details were logged with the invocation identifier.", diagnostics), error });
+  if (guard === diagnosticCodes.idempotencyInProgress)
+    return Object.freeze({ ...serverFailure(guard, "Another delivery with the same idempotency key is being processed; this one is retried.", diagnostics), status: 503, error });
   const failed = createDiagnostic({ code: diagnosticCodes.handlerFailed, severity: "error", message: "The handler failed." });
   return Object.freeze({ ...serverFailure(diagnosticCodes.handlerFailed, "The handler failed. Details were logged with the invocation identifier.", [failed, ...diagnostics]), error });
 }

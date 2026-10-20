@@ -1,4 +1,7 @@
-import type { EvaluatedModule } from "@holqa/compiler";
+import type {
+  EvaluatedModule,
+  ModuleResolver
+} from "@holqa/compiler";
 import type {
   Diagnostic,
   SchemaAdapter
@@ -13,6 +16,8 @@ import {
   statSync
 } from "node:fs";
 import {
+  dirname,
+  isAbsolute,
   join,
   relative,
   sep
@@ -83,8 +88,11 @@ export async function runAnalysis(request: AnalysisRequest): Promise<AnalysisRep
   }
 
   let app: unknown;
+  let appExports: Record<string, unknown>;
   try {
-    app = (await import(pathToFileURL(appPath).href) as { readonly default?: unknown }).default;
+    const { default: exported, ...others } = await import(pathToFileURL(appPath).href) as Record<string, unknown>;
+    app = exported;
+    appExports = others;
   } catch (error) {
     return report(false, [moduleEvaluationFailure(request.appModule, error)]);
   }
@@ -110,12 +118,49 @@ export async function runAnalysis(request: AnalysisRequest): Promise<AnalysisRep
     modules,
     runtime: "bun",
     adapters: await loadAdapters(request.root, schemaVendors(app, modules)),
-    sources: readSources(request.root, files)
+    sources: readSources(request.root, files),
+    appExports,
+    resolveModule: moduleResolver(request.root)
   });
   const all = sortDiagnostics([...diagnostics, ...result.diagnostics]);
   if (!result.ok || hasErrors(all))
     return report(false, all);
-  return { ...report(true, all), manifest: result.manifest, entrypoints: result.entrypoints };
+  return { ...report(true, all), manifest: result.manifest, entrypoints: result.entrypoints, events: result.events };
+}
+
+/**
+ * Creates the import resolver event analysis uses: Bun resolves a
+ * specifier the way the runtime does (including `tsconfig` path aliases),
+ * and only modules inside the application root, outside `node_modules`, are
+ * returned, with their namespace. Modules the application already imported
+ * come from Bun's module cache; importing one that is not loaded yet runs it,
+ * like the rest of analysis runs application code.
+ *
+ * @param root - The application root.
+ * @returns A resolver that returns root-relative paths and evaluated namespaces.
+ */
+function moduleResolver(root: string): ModuleResolver {
+  return async (specifier, from) => {
+    let resolved: string;
+    try {
+      resolved = Bun.resolveSync(specifier, join(root, dirname(from)));
+    } catch {
+      // A specifier Bun cannot resolve is unresolved; analysis reports what it publishes as unknown.
+      return undefined;
+    }
+    const path = relative(root, resolved);
+    if (path === "" || path.startsWith("..") || isAbsolute(path) || path.split(sep).includes("node_modules"))
+      return undefined;
+    const portable = path.split(sep).join("/");
+    try {
+      return { path: portable, exports: { ...await import(pathToFileURL(resolved).href) as Record<string, unknown> } };
+    } catch (error) {
+      // The module's source can still be read; only its evaluated values are
+      // missing. Say so in the analysis output instead of hiding the failure.
+      console.error(`holqa: event analysis could not import "${portable}" (${error instanceof Error ? error.message : String(error)}); publications through it may be reported as unknown.`);
+      return { path: portable };
+    }
+  };
 }
 
 /**

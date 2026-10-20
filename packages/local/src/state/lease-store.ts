@@ -52,6 +52,22 @@ interface DeliveryRow {
   readonly last_invocation_id: string | null;
   readonly correlation_id: string | null;
   readonly causation_id: string | null;
+  readonly root_id: string | null;
+  readonly depth: number | null;
+}
+
+/** Settings of {@link LeaseStore.redrive}. */
+export interface RedriveSettings {
+  /** Only the deliveries with this identity. */
+  readonly id?: string;
+  /** At most this many, oldest first. */
+  readonly limit?: number;
+  /**
+   * Start a new root operation for each redriven delivery (depth 0, a fresh
+   * budget, and a new send time for age limits), keeping its correlation. By default a redriven delivery keeps
+   * its lineage, so a delivery refused for its depth or budget is refused again.
+   */
+  readonly newOperation?: boolean;
 }
 
 /** Settings of a {@link LeaseStore}. */
@@ -103,8 +119,8 @@ export class LeaseStore {
    */
   add(channel: string, id: string, body: string, delayMs = 0, trace?: DeliveryTrace): void {
     const now = this.options.clock.now();
-    this.options.database.query("INSERT INTO deliveries (channel, delivery_id, body, state, attempts, visible_at, created_at, updated_at, correlation_id, causation_id) VALUES (?, ?, ?, 'ready', 0, ?, ?, ?, ?, ?)")
-      .run(channel, id, body, now + Math.max(0, delayMs), now, now, trace?.correlationId ?? null, trace?.causationId ?? null);
+    this.options.database.query("INSERT INTO deliveries (channel, delivery_id, body, state, attempts, visible_at, created_at, updated_at, correlation_id, causation_id, root_id, depth) VALUES (?, ?, ?, 'ready', 0, ?, ?, ?, ?, ?, ?, ?)")
+      .run(channel, id, body, now + Math.max(0, delayMs), now, now, trace?.correlationId ?? null, trace?.causationId ?? null, trace?.rootId ?? null, trace?.depth ?? null);
   }
 
   /**
@@ -162,20 +178,29 @@ export class LeaseStore {
   }
 
   /**
-   * Makes dead-lettered deliveries due again with a fresh attempt count.
+   * Makes dead-lettered deliveries due again with a fresh attempt count,
+   * oldest first, in one transaction.
    *
    * @param channel - The channel name, for example `queue:orders`.
-   * @param id - Only the deliveries with this identity; all dead deliveries when absent.
+   * @param settings - Which deliveries, how many, and whether they start a new operation.
    * @returns How many deliveries were redriven.
    */
-  redrive(channel: string, id?: string): number {
-    const now = this.options.clock.now();
-    const { changes } = id === undefined
-      ? this.options.database.query("UPDATE deliveries SET state = 'ready', attempts = 0, visible_at = ?, updated_at = ? WHERE channel = ? AND state = 'dead'").run(now, now, channel)
-      : this.options.database.query("UPDATE deliveries SET state = 'ready', attempts = 0, visible_at = ?, updated_at = ? WHERE channel = ? AND state = 'dead' AND delivery_id = ?").run(now, now, channel, id);
-    if (changes > 0)
+  redrive(channel: string, settings: RedriveSettings = {}): number {
+    const { database, clock, createId } = this.options;
+    const redriven = database.transaction(() => {
+      const now = clock.now();
+      const rows = database.query<DeliveryRow, [string]>("SELECT * FROM deliveries WHERE channel = ? AND state = 'dead' ORDER BY seq").all(channel).filter(row => settings.id === undefined || row.delivery_id === settings.id).slice(0, settings.limit ?? Number.POSITIVE_INFINITY);
+      for (const row of rows) {
+        if (settings.newOperation === true)
+          database.query("UPDATE deliveries SET state = 'ready', attempts = 0, visible_at = ?, updated_at = ?, created_at = ?, causation_id = NULL, root_id = ?, depth = 0, correlation_id = COALESCE(correlation_id, delivery_id) WHERE seq = ?").run(now, now, now, `redrive-${createId()}`, row.seq);
+        else
+          database.query("UPDATE deliveries SET state = 'ready', attempts = 0, visible_at = ?, updated_at = ? WHERE seq = ?").run(now, now, row.seq);
+      }
+      return rows.length;
+    })();
+    if (redriven > 0)
       this.notify(channel);
-    return changes;
+    return redriven;
   }
 
   /**
@@ -248,7 +273,7 @@ export class LeaseStore {
         database.query("UPDATE deliveries SET state = 'leased', attempts = attempts + 1, lease_token = ?, visible_at = ?, updated_at = ? WHERE seq = ?")
           .run(token, now + Math.max(1, request.leaseMs), now, row.seq);
         const trace = traceOf(row);
-        return [{ receipt: `${row.seq}:${token}`, id: row.delivery_id, attempt: row.attempts + 1, body, ...trace === undefined ? {} : { trace } }];
+        return [{ receipt: `${row.seq}:${token}`, id: row.delivery_id, attempt: row.attempts + 1, body, sentAt: new Date(row.created_at).toISOString(), ...trace === undefined ? {} : { trace } }];
       });
     })();
     return leased;
@@ -339,7 +364,11 @@ function failureFields(failure: DeliveryFailure): Readonly<Record<string, string
 function traceOf(row: DeliveryRow): DeliveryTrace | undefined {
   if (row.correlation_id === null)
     return undefined;
-  return Object.freeze({ correlationId: row.correlation_id, ...row.causation_id === null ? {} : { causationId: row.causation_id } });
+  return Object.freeze({
+    correlationId: row.correlation_id,
+    ...row.causation_id === null ? {} : { causationId: row.causation_id },
+    ...row.root_id === null || row.depth === null ? {} : { rootId: row.root_id, depth: row.depth }
+  });
 }
 
 /**

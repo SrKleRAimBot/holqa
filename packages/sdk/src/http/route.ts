@@ -18,9 +18,10 @@ import type {
   HeaderRecord,
   QueryRecord
 } from "@/http/request";
+import type { HandlerEventOptions } from "@/internal/event-options";
 import type { HandlerRegistration } from "@/resources/handle";
-import type { HolqaTypeError } from "@/types/checks";
 
+import type { HolqaTypeError } from "@/types/checks";
 import {
   descriptorKey,
   descriptorProtocol,
@@ -47,6 +48,7 @@ import {
   freezeJson,
   requireOptions
 } from "@/internal/declaration";
+import { readEventOptions } from "@/internal/event-options";
 
 /** Methods that must not declare a request body. */
 export type BodylessMethod = "GET" | "DELETE";
@@ -180,6 +182,8 @@ export interface RouteOptions<
    * influencing inference of `responses`.
    */
   readonly handler: (context: RouteContext<Path, Params, Query, Body, Headers, Responses, MiddlewareChainContext<Context, Middleware>>) => NoInfer<RouteResult<Responses> | Promise<RouteResult<Responses>>>;
+  /** Event safety declarations: publications analysis cannot see, and the publication limit. */
+  readonly events?: HandlerEventOptions;
 }
 
 /**
@@ -238,6 +242,7 @@ interface RuntimeRouteOptions {
   readonly responses: Readonly<Record<number, StandardSchemaV1>>;
   readonly middleware?: readonly AnyHttpMiddleware[];
   readonly handler: (context: never) => unknown;
+  readonly events?: HandlerEventOptions;
 }
 
 /**
@@ -270,6 +275,7 @@ export function createRoute(host: RouteHost, options: RuntimeRouteOptions): Http
   const ownMiddleware = middlewareList(raw.middleware, problems);
   if (typeof raw.handler !== "function")
     problems.invalid("\"handler\" must be a function.");
+  const events = readEventOptions(raw.events, problems);
   const id = problems.valid(idCandidate);
   const subject = `${options.method} ${options.path} (route "${id}")`;
 
@@ -298,7 +304,8 @@ export function createRoute(host: RouteHost, options: RuntimeRouteOptions): Http
       type: "handler" as const,
       definition: freezeJson({
         id,
-        trigger: { kind: "http.route" as const, resource: { kind: "http.api" as const, id: host.apiId }, options: { method: options.method, path: options.path } }
+        trigger: { kind: "http.route" as const, resource: { kind: "http.api" as const, id: host.apiId }, options: { method: options.method, path: options.path } },
+        ...definedEntries({ events })
       }),
       schemas: Object.freeze({ ...definedEntries({ params: options.params, query: options.query, headers: options.headers, body: options.body }), responses }),
       invoke

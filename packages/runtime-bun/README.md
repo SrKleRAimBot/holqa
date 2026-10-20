@@ -1,6 +1,6 @@
 # @holqa/runtime-bun
 
-> **Status:** Implemented (invocation dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve` adapter, queue, object event and schedule delivery). Private; not published. `holqa dev` reloads by restarting one process per generation ([ADR 0025](../../docs/architecture/decisions/0025-dev-supervisor-and-process-generations.md)); worker isolation is planned.
+> **Status:** Implemented (invocation dispatcher, lifecycle, HTTP routes, RPC procedures, `Bun.serve` adapter, queue, object event and schedule delivery, event lineage and limits). Private; not published. `holqa dev` reloads by restarting one process per generation ([ADR 0025](../../docs/architecture/decisions/0025-dev-supervisor-and-process-generations.md)); worker isolation is planned.
 
 Runs a Holqa application on Bun. Every invocation, whatever triggered it, goes through one dispatcher that assigns
 invocation and correlation identifiers, applies time limits, cancellation and concurrency limits, normalizes errors
@@ -9,6 +9,12 @@ what the invocation emitted. Messages a handler sends and objects it writes carr
 trigger join the same trace. HTTP routes, RPC procedures, queue consumers, object event handlers and schedule handlers
 are transports built on it. Background deliveries come from a binding's `sources`; the runtime applies retries,
 backoff, dead-lettering, consumer concurrency and overlap policies the same way for every binding.
+
+Every invocation also has an event lineage (root operation, cause, depth). Before handler code's send, write or
+delete reaches the binding, the runtime checks it against the event limits (`events` option: `maxDepth`, default 16;
+`maxPublications`, default 1000; `maxEventAgeMs`; `maxEventsPerOperation`, which needs a binding with atomic
+operation budgets), and deliveries past a limit end terminally instead of being retried. See
+[event lineage and limits](../../docs/reference/runtime.md#event-lineage-and-limits).
 
 ```ts
 import { createRuntime, loadCompiledApplication, serve, stopOnSignals } from "@holqa/runtime-bun";

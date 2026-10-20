@@ -1,6 +1,6 @@
 # Triggers and execution
 
-> **Status:** Partly implemented. Handler registration for every trigger is **Implemented** in `@holqa/sdk`; execution of HTTP routes, RPC procedures, queue messages, object events and scheduled runs, the common dispatcher and manual invocation (`runtime.invoke`) are **Implemented** in `@holqa/runtime-bun` ([runtime reference](../reference/runtime.md)), with local drivers in `@holqa/local` ([local environment](../reference/local.md)). Drivers for external services, topics and the CLI workflow commands are not implemented.
+> **Status:** Partly implemented. Handler registration for every trigger is **Implemented** in `@holqa/sdk`; execution of HTTP routes, RPC procedures, queue messages, object events and scheduled runs, the common dispatcher and manual invocation (`runtime.invoke`) are **Implemented** in `@holqa/runtime-bun` ([runtime reference](../reference/runtime.md)), with local drivers in `@holqa/local` ([local environment](../reference/local.md)). The CLI's local commands (`holqa dev`, `invoke`, `queue send`, `queue redrive`, `storage put`, `cron run`) run them locally ([CLI reference](../reference/cli.md)). Drivers for external services and topics are not implemented.
 
 A **trigger** is an event source that invokes a handler. Every handler in Holqa responds to exactly one trigger, receives a typed, validated input, and runs in a Bun-based execution environment. This page describes each trigger type, its intended semantics, and the execution model.
 
@@ -84,6 +84,8 @@ Handlers should assume **at-least-once** delivery: a message may be delivered mo
 - The delivery context exposes the attempt number (`delivery.attempt`), the queue-assigned `delivery.messageId` (the same for every delivery of one sent message) and the producer's `delivery.schemaVersion`.
 - The local environment can deliver a message again on demand (`queues.duplicate`), so idempotency can be tested ([local environment](../reference/local.md)).
 - Publishing a message and writing to a database are separate operations; Holqa does not make them atomic. Use a transactional outbox and idempotent consumers ([publishing and database writes](../reference/runtime.md#publishing-and-database-writes)).
+- A consumer can declare `idempotency` to skip deliveries whose key already completed (**Implemented**); this suppresses duplicate deliveries, not repeated side effects ([event safety](event-safety.md#idempotency)).
+- Handlers that publish events which trigger themselves, directly or through others, are reported as event cycles at build time, and runtime limits stop chains that grow too deep or too wide ([event safety](event-safety.md)).
 
 Exactly-once delivery is not promised. A binding that offers stronger guarantees is welcome, but application code must not depend on them unless the requirement is declared and verified.
 

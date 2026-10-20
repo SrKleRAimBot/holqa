@@ -1,6 +1,6 @@
 # Roadmap
 
-> **Status:** Phase 0 to phase 3 are in progress. Later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
+> **Status:** Phase 0 to phase 3 and the event safety milestone (M8) are in progress. Later phases are **Planned**. This roadmap has no dates; phases are ordered by dependency, not by calendar.
 
 This roadmap distinguishes the current bootstrap state from future implementation work. Status terms follow the [status model](architecture/status-model.md). Each phase lists its goals and the exit criteria that must hold before the phase is considered complete. Later phases may start before earlier ones finish when the dependency allows it.
 
@@ -13,6 +13,7 @@ This roadmap distinguishes the current bootstrap state from future implementatio
 | 1 | Core resource model and SDK | In progress |
 | 2 | Compiler | In progress (manifest, discovery, validation, `inspect` and `build --manifest` **Implemented**) |
 | 3 | Bun runtime and local development | In progress (runtime, `@holqa/local` drivers, `holqa dev`, the operation commands and `createTestApp` **Implemented**; hot-swapping and worker isolation Planned) |
+| M8 | Event safety, reliability and execution safeguards | In progress (cycle analysis, event lineage, runtime limits, idempotency, controlled redrive and test utilities **Implemented**; backlog thresholds and budgets on other bindings Planned) |
 | 4 | Clients and integrations | Planned |
 | 5 | Providers and bindings | Planned |
 | Future | Extended triggers and tooling | Planned |
@@ -157,6 +158,40 @@ Outcome: the baseline passes, the package layers are confirmed and extended ([AD
 - Local emulators document their delivery and concurrency semantics and do not promise stronger guarantees than production drivers are expected to offer. **Met** for `@holqa/local` ([local environment](reference/local.md)).
 - Runtime validation runs at every trust boundary (incoming HTTP, queue messages, storage events). **Met**.
 - A developer can clone an example, install dependencies, run `holqa dev` and exercise the application without infrastructure credentials; a changed handler serves the next execution, a schema change reports contract diagnostics, and repeated restarts leave one generation process and one consumer per queue. **Met** by `examples/order-pipeline` and the CLI's dev session tests.
+
+## M8: Event safety, reliability and execution safeguards
+
+**Goal:** Applications cannot accidentally cause unbounded work, overwhelm their resources, or silently corrupt asynchronous processing through incorrect event-handling logic. See [event safety](concepts/event-safety.md) and [ADR 0026](architecture/decisions/0026-event-safety-analysis-lineage-and-execution-guards.md).
+
+### Done
+
+| Item | Status |
+| --- | --- |
+| Event dependency graph: resource and handler nodes, consumption and publication edges with `known`, `potential` and `unknown` certainty, from static analysis of handler code and declared `events.publishes` | **Implemented** |
+| Cycle analyzer: direct and indirect cycles as strongly connected components, `HOLQA_EVENT_CYCLE` warnings (known) and information (potential) with paths and locations; justified cycles (`events.cycle`) reported as allowed | **Implemented** |
+| `holqa inspect --cycles`, text and `--json` | **Implemented** |
+| Event lineage: `rootId`, `causationId`, `correlationId` and `depth` in every trace, with propagation rules; `context.lineage` in handlers | **Implemented** |
+| Runtime execution guards: depth and publication limits in every runtime, event age where the binding reports send times, per-operation budgets where the binding provides atomic accounting; terminal outcomes instead of retries | **Implemented** |
+| Idempotency: the `IdempotencyStore` contract, key conventions, an in-memory store, the local SQLite store, and handler-level `idempotency` | **Implemented** |
+| Controlled replay: `holqa queue redrive` with `--message`, `--limit`, `--dry-run` and `--new-operation` | **Implemented** |
+| Test utilities: `maxInvocations` simulation budget, `lineage` and `operation` inspection, event limits in `createTestApp`, cycle fixtures | **Implemented** |
+| Reliability documentation: limits, guarantees, intentional cycles and unsupported cases | **Implemented** (as documents) |
+
+### Remaining goals
+
+- Queue backlog thresholds and backpressure on producers.
+- Per-operation budgets for bindings to external services, with atomic accounting in the service.
+- Declared event policies in a future manifest version, so tools can read them without loading code.
+- An HTTP `Idempotency-Key` convention for routes and procedures.
+
+### Exit criteria
+
+- A direct self-publishing queue handler produces a clear compiler diagnostic. **Met** (`HOLQA_EVENT_CYCLE`, compiler tests and `examples/event-safety`).
+- An indirect queue A → B → A cycle is detected when its edges are statically known. **Met.**
+- A legitimate terminating cycle can be permitted without disabling all safety features. **Met** (`events.cycle`: other cycles are still reported, runtime limits still apply).
+- A runaway chain is stopped by an enforceable runtime policy and produces a terminal diagnostic. **Met** (`HOLQA_EVENT_DEPTH_EXCEEDED`, `HOLQA_EXECUTION_BUDGET_EXCEEDED`; dead-lettered without retries).
+- Duplicate delivery and retry tests demonstrate the documented idempotency guarantees and limitations. **Met** (`@holqa/testing` and `examples/event-safety`).
+- Independent invocations do not accidentally share lineage or execution-budget state. **Met** (roots are runtime-assigned; requests sharing a caller's correlation identifier get separate budgets).
 
 ## Phase 4: Clients and integrations
 

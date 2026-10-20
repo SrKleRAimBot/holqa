@@ -14,7 +14,11 @@ import type {
   StoredDelivery
 } from "@/state/lease-store";
 
-import { decodeMessageEnvelope } from "@holqa/core";
+import {
+  decodeMessageEnvelope,
+  diagnosticCodes,
+  failWith
+} from "@holqa/core";
 
 /** Where a local queue message is, as inspection reports it. */
 export type LocalMessageState = "ready" | "delayed" | "in-flight" | "acknowledged" | "dead-lettered";
@@ -47,12 +51,33 @@ export interface LocalQueues {
   readonly messages: (queueId: string, states?: readonly LocalMessageState[]) => LocalQueueMessage[];
   /** Lists a queue's dead-lettered messages. */
   readonly deadLetters: (queueId: string) => LocalQueueMessage[];
-  /** Makes dead-lettered messages due again with a fresh attempt count; all of them when `messageId` is absent. Returns how many. */
-  readonly redrive: (queueId: string, messageId?: string) => number;
+  /**
+   * Makes dead-lettered messages due again with a fresh attempt count, oldest
+   * first: all of them, the one with a message identifier (a string), or
+   * those {@link RedriveOptions} select. Returns how many.
+   *
+   * @throws {HolqaError} `HOLQA_OPERATION_INVALID` for a `limit` that is not a positive whole number.
+   */
+  readonly redrive: (queueId: string, selection?: string | RedriveOptions) => number;
   /** Delivers a known message once more, with the same message identifier, to test that consumers are idempotent. */
   readonly duplicate: (queueId: string, messageId: string) => boolean;
   /** Deletes every message that is not in flight. Returns how many. */
   readonly purge: (queueId: string) => number;
+}
+
+/** Which dead-lettered messages {@link LocalQueues.redrive} makes due again, and how. */
+export interface RedriveOptions {
+  /** Only the message with this identifier. */
+  readonly messageId?: string;
+  /** At most this many messages, oldest first. */
+  readonly limit?: number;
+  /**
+   * Start a new root operation for every redriven message: depth 0, a fresh
+   * operation budget and a new send time (so `maxEventAgeMs` counts from the
+   * redrive), keeping its correlation. Without it, a message
+   * keeps its lineage, so one refused for its depth or budget is refused again.
+   */
+  readonly newOperation?: boolean;
 }
 
 /** Settings of {@link createLocalQueues}. */
@@ -138,7 +163,16 @@ export function createLocalQueues(settings: LocalQueueSettings): {
         return states === undefined ? messages : messages.filter(message => states.includes(message.state));
       },
       deadLetters: (queueId: string) => store.list(queueChannel(queueId), ["dead"]).map(toMessage),
-      redrive: (queueId: string, messageId?: string) => store.redrive(queueChannel(queueId), messageId),
+      redrive: (queueId: string, selection?: string | RedriveOptions) => {
+        const options = typeof selection === "string" ? { messageId: selection } : selection ?? {};
+        if (options.limit !== undefined && !(Number.isSafeInteger(options.limit) && options.limit >= 1))
+          failWith(diagnosticCodes.operationInvalid, `Redriving queue "${queueId}" needs "limit" to be a whole number of at least 1, not ${String(options.limit)}.`);
+        return store.redrive(queueChannel(queueId), {
+          ...options.messageId === undefined ? {} : { id: options.messageId },
+          ...options.limit === undefined ? {} : { limit: options.limit },
+          ...options.newOperation === undefined ? {} : { newOperation: options.newOperation }
+        });
+      },
       duplicate: (queueId: string, messageId: string) => store.duplicate(queueChannel(queueId), messageId),
       purge: (queueId: string) => store.purge(queueChannel(queueId))
     })
